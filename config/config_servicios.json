@@ -1,0 +1,33 @@
+{
+    "catalogo_servicios": [
+        "Gestión en el Sistema de Protección Social Patria",
+        "Actividades de educación o aprendizaje",
+        "Operaciones bancarias por Internet",
+        "Interacción con organizaciones gubernamentales en general",
+        "Préstamo de espacios del Infocentro",
+        "Descarga de películas, imágenes y música, programas de televisión o videos, programas de radio o música",
+        "Interacción y producción de contenidos en redes sociales y medios digitales de comunicación",
+        "Envío o recepción de mensajes electrónicos",
+        "Lectura o descarga de periódicos, revistas en línea o libros electrónicos",
+        "Obtención de información sobre organizaciones gubernamentales en general",
+        "Obtención de información relacionada con la salud o con servicios médicos",
+        "Compra o pedido de bienes y servicios",
+        "Descarga de programas informáticos",
+        "Llamadas telefónicas a través del Protocolo de Internet",
+        "Publicación de información o de mensajes instantáneos",
+        "Registro/Actualización enmarcados en las Políticas de Gobierno",
+        "Uso o descarga de video juegos",
+        "Reunión Sede Central",
+        "Visita Sede Central"
+    ],
+    "servicio_por_defecto": "Gestión en el Sistema de Protección Social Patria",
+    "infocentro": {
+        "user_id": "1325",
+        "code_info": "NRYAR24",
+        "estado_nombre": "Yaracuy",
+        "estado_id": "22",
+        "municipio_nombre": "San Felipe",
+        "municipio_id": "1",
+        "direccion": "Av. principal El Jovito, Antigua Sede Del Inan"
+    }
+}

@@ -1,0 +1,34 @@
+JsBOT/
+├── run.bat                      # Acceso directo para el facilitador (permisos + dependencias)
+├── estudiantes.csv              # Respaldo temporal de la última normalización de datos
+├── requirements.txt             # Dependencias técnicas optimizadas
+├── AGENTS.md                    # Protocolo de ingeniería iterativa de ciclo rápido
+│
+├── config/                      # 📂 CONFIGURACIONES Y PLANTILLA BASE
+│   ├── config.ini               # Credenciales de acceso a InfoApp
+│   ├── datos_actividad.json     # Metadatos del facilitador e Infocentro
+│   ├── settings.json            # Configuración general y timeouts
+│   └── plantilla_base.ods       # Plantilla oficial en blanco con logos y estilos
+│
+├── logs/                        # 📂 AUDITORÍA, CHECKPOINTS Y EVIDENCIAS
+│   ├── [COMPLETADO]_Actividad_...log
+│   ├── [INCOMPLETO]_Actividad_...log
+│   ├── session_state.json       # Punto de control ante cortes eléctricos
+│   ├── normalizacion.log        # Registro técnico del motor ETL
+│   ├── Auditoria_Carga_*.xlsx   # Reportes de auditoría en Excel
+│   └── screenshots/             # 📸 Capturas de pantalla automáticas de incidencias
+│
+├── modulos/                     # 📂 MOTOR TÉCNICO MODULAR (Arquitectura Limpia)
+│   ├── __init__.py              # Metadatos del paquete v3.0.0
+│   ├── orquestador.py           # Orquestador del flujo, control de estados y métricas
+│   ├── normalizador_datos.py    # Motor ETL universal, data sniffing y conversión serial
+│   ├── automatizador_web.py     # Automatizador web multi-navegador con verificación en tabla
+│   ├── gestor_sesion.py         # Gestor de credenciales, checkpoints y reportes Excel
+│   ├── generador_planilla.py    # Inyector XML para generación nativa de planillas ODS
+│   └── interfaz_usuario.py      # Interfaz de consola agéntica (Rich + InquirerPy)
+│
+└── funcionamiento/              # 📂 MANUALES Y DOCUMENTACIÓN TÉCNICA
+    ├── version.txt              # Historial de versiones y registro de cambios
+    ├── funcionamiento.txt       # Manual de funcionamiento técnico
+    ├── diagrama de flujo.txt    # Diagrama de flujo integral del sistema
+    └── matriz.txt               # Árbol y matriz de componentes

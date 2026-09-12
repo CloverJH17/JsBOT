@@ -1,0 +1,96 @@
+===============================================================================
+                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.0.0
+===============================================================================
+
+1. normalizador_datos.py (Motor ETL y Clasificación Tripartita de Documentos):
+-------------------------------------------------------------------------------
+- Procesa hojas en formatos .xlsx, .xls, .ods y .csv (bloqueo preventivo de .pdf).
+- Mapeo Regex bilingüe tolerante a typos con jerarquización estricta de nombres y apellidos.
+- Data Sniffing para clasificar columnas genéricas evaluando patrones telefónicos venezolanos (0412, 0414, 0416, 0424, 0426).
+- Conversión automática de números seriales de Excel (ej. 42595) a formato ISO YYYY-MM-DD.
+- Formateo inteligente de nombres en Title Case respetando partículas menores en minúsculas (de, del, la, las, los, y, e, en, o).
+- Normalización obligatoria de teléfonos a formato nacional de 11 dígitos (04XX-XXXXXXX).
+- CLASIFICACIÓN DE DOCUMENTOS EN 3 CATEGORÍAS (MPPE / INFOAPP):
+  * Cedulados (C.I. SAIME propia): `cedulado = 'si'`.
+  * Cédula Escolar (>= 10 años sin SAIME): `cedulado = 'escolar'`. Genera automáticamente:
+    1 (Orden Parto) + YY (Año Nacimiento) + C.I. Representante a 8 dígitos (ej. 11607579666).
+  * Menores no escolarizados (< 10 años sin SAIME): `cedulado = 'no'`. Vinculados a C.I. del padre.
+- Compuertas interactivas de seguridad: deduplicación asistida en terminal, resolución de huérfanos, estimación de fechas por edad o fija y asignación de género.
+- Respaldo preventivo en disco: 'estudiantes.csv' en la raíz.
+
+2. gestor_sesion.py (Persistencia, Auditoría y Firma Digital):
+-------------------------------------------------------------------------------
+- Metadatos de autoría y firma digital criptográfica integrada en Base64.
+- Control de estados mediante prefijos dinámicos ([EN_PROCESO], [COMPLETADO], [INCOMPLETO]).
+- Administración del punto de control en vivo 'logs/session_state.json' para recuperación exacta tras interrupciones.
+- Auditoría histórica en 'logs/' para correlativos de menores (child_number) y prevención de duplicados.
+- Generación automática de reportes de auditoría en Excel ('logs/Auditoria_Carga_Actividad_*.xlsx') con hojas de Exitosos e Incidencias.
+- Anclaje seguro de rutas con BASE_DIR.
+- Gestión interactiva y actualización de credenciales ante errores de login.
+
+3. automatizador_web.py (Automatización Web Resiliente y Verificación DOM):
+-------------------------------------------------------------------------------
+- Cascada de arranque multi-navegador: Mozilla Firefox (Prioridad 1) -> Google Chrome -> Microsoft Edge.
+- Búsqueda superior inteligente:
+  * Si es Cedulado -> busca por `document_id`.
+  * Si es Cédula Escolar -> busca por `cedula_escolar`.
+  * Si es Menor no escolarizado -> busca por `parent_ref`.
+- Desbloqueo AJAX y eliminación proactiva de spinner (<div id="cover-spin">) y overlays/toasts para evitar ElementClickInterceptedException.
+- Inyección JavaScript segura de parámetros AJAX con saneamiento de caracteres especiales (comillas, apóstrofes).
+- Saneamiento de cédula escolar vacía ("") para evitar falsos avisos de duplicidad con 'No aplica' en el servidor.
+- VERIFICACIÓN ESTRICTA EN TABLA DOM:
+  * Recarga forzada de la actividad tras cada envío y escaneo en vivo de la tabla HTML de InfoApp para confirmar el registro real.
+  * Cero falsos positivos: Si el participante no aparece en la tabla, se captura pantalla en 'logs/screenshots/' y se detiene para consultar al usuario (Reintentar / Saltar / Pausar).
+- Resurrección en caliente de ventana si el navegador colapsa o es cerrado.
+
+4. generador_planilla.py (Generación de Planillas Formativas Oficiales):
+-------------------------------------------------------------------------------
+- Desempaquetado y modificación nativa del XML interno ('content.xml') de 'config/plantilla_base.ods', preservando membretes, logotipos vectoriales, estilos y notas al pie de Infocentro.
+- Formateo de Cédula Escolar con prefijo oficial 'CE' (ej. CE11607579666).
+- Editor interactivo de metadatos pedagógicos e institucionales (Facilitador, Cédula, Módulo, Contenido, Horario e Infocentro) con persistencia en 'config/datos_actividad.json'.
+- Diálogo estándar del sistema operativo para seleccionar la ubicación de guardado del archivo .ods.
+
+5. interfaz_usuario.py (Experiencia de Usuario en Terminal):
+-------------------------------------------------------------------------------
+- Interfaz CLI estilizada construida sobre Rich e InquirerPy.
+- Renderizado de tablas de datos con paleta de alto contraste.
+- Panel interactivo en tiempo real con barra de progreso, tiempo transcurrido, ETA, métricas de rendimiento y participante actual.
+- Refresco dinámico de consola que evita la acumulación o duplicación de cajas hacia abajo.
+
+6. orquestador.py (Flujo Maestro del Agente RPA):
+-------------------------------------------------------------------------------
+- Orquestación integral de todas las fases del ciclo ETL + Selenium + Exportación + Auditoría.
+- Detección y manejo fluido de reanudación de sesiones previas.
+- Protección de checkpoints ante pausas manuales (KeyboardInterrupt).
+- Presentación de resumen estadístico consolidado al finalizar la carga.
+
+7. verificador_entorno.py (Diagnóstico Pre-vuelo y Checklist de Integridad):
+-------------------------------------------------------------------------------
+- Paso 0 mandatorio previo a la ejecución de cualquier menú de JsBOT.
+- Detección precisa de plataforma (Windows vs Canaima GNU/Linux, Debian y derivadas).
+- Chequeo de versión mínima de Python (>= 3.10) y auditoría de navegadores (Firefox, Chrome/Chromium, Edge).
+- Auto-sincronización desatendida de dependencias desde requirements.txt con animación Rich.
+- Chequeo de suite ofimática instalada y validación física de archivos esenciales (config/settings.json y config/plantilla_base.ods).
+- Renderizado de panel de control estilo videojuego con esquinas redondeadas en Rich.
+
+8. Entrada Principal y Lanzadores Multiplataforma (main.py, windows.bat y linux.sh):
+-------------------------------------------------------------------------------
+- main.py: Punto de entrada raíz bimodal con soporte para flags --gui y --cli.
+- windows.bat: Lanzador oficial optimizado para Microsoft Windows con propagación de parámetros (%*).
+- linux.sh: Script de arranque nativo Bash para Canaima GNU/Linux, Debian y derivados con propagación ("$@").
+- run.bat: Lanzador histórico conservado con elevación de privilegios para compatibilidad regresiva.
+
+9. interfaz_grafica.py (Interfaz Gráfica Nativa de Escritorio — CustomTkinter):
+-------------------------------------------------------------------------------
+- Aplicación de escritorio moderna basada en CustomTkinter con tema oscuro (Dark-Blue).
+- Navegación desacoplada por pestañas laterales:
+  * Formación: Carga de participantes para actividades de formación presencial/virtual.
+  * Servicios: Carga de beneficiarios y usuarios atendidos en servicios institucionales.
+  * Reportes: Generación directa de planillas formativas oficiales (.ods) y acceso rápido a logs.
+  * Diagnóstico: Cuadrícula de tarjetas visuales de estado del sistema (Python, SO, librerías, conectividad, navegadores, resolución).
+  * Ajustes: Calibración interactiva de timeouts (Login, AJAX, DOM) y gestión de credenciales con banner de advertencia reactivo.
+  * Créditos: Reconocimiento institucional, autoría, soporte comunitario y licencias.
+- Tarjeta de pre-vuelo reactiva con métricas automáticas al seleccionar hojas de cálculo (.xlsx, .xls, .ods, .csv).
+- Visor modal 'CTkToplevel' con tabla de datos estructurada por participantes y resaltado por categorías.
+- Telemetría en tiempo real: Redirección thread-safe mediante cola de eventos ('queue.Queue') para sincronizar logs, progreso interpolado y estados del motor Selenium sin congelar la UI.
+- Arquitectura bimodal: Coexistencia con la consola CLI histórica, gobernada por Feature Flag ('settings.json' o flags de línea de comandos).

@@ -1,0 +1,26 @@
+================================================================================
+REGISTRO DE AUDITORÍA — JsBOT RPA v3.1.0
+Actividad ID : 525182
+URL          : https://infoapp2.infocentro.gob.ve/admin/index.php?view=participants_list&user_id=1325&line_action=Comunidades%20de%20aprendizaje&report_type=Formaci%C3%B3n%20en%20TIC&code_info=NRYAR24&estate=Yaracuy&id_activity=525182&date_activity=17-08-2026/17-08-2026&activity=Promover%20la%20creatividad,%20el%20trabajo%20en%20equipo%20y%20la%20resoluci%C3%B3n%20de%20problemas%20a%20trav%C3%A9s%20de%20rob%C3%B3tica.
+Fecha Inicio : 2026-08-25 23:08:09
+Facilitador  : jairhernandez
+================================================================================
+
+[23:08:46] [EXITOSO ] Doc: CE:12621302079     | Adrismar Milagros Bracovite Pereira | Registrado y verificado en la tabla de InfoApp
+[23:08:50] [EXITOSO ] Doc: CE:11819454212     | Faiza Jabra                      | Registrado y verificado en la tabla de InfoApp
+[23:08:55] [EXITOSO ] Doc: CE:11911275624     | Arantza Sofia Peraza Martinez    | Registrado y verificado en la tabla de InfoApp
+[23:09:00] [EXITOSO ] Doc: CE:11816482158     | Isabella Lucia Rivero Vargas     | Registrado y verificado en la tabla de InfoApp
+[23:09:04] [EXITOSO ] Doc: CE:12322306118     | Isabella Valentina Rebgalado Materan | Registrado y verificado en la tabla de InfoApp
+[23:09:09] [EXITOSO ] Doc: 37128898           | Alessa Antonella Sequera Camacho | Registrado y verificado en la tabla de InfoApp
+[23:09:13] [EXITOSO ] Doc: CE:11920176024     | Luna Mercedes Villavicencio Muñoz | Registrado y verificado en la tabla de InfoApp
+[23:09:17] [EXITOSO ] Doc: CE:11916823939     | Camila Valentina Olivares Muñoz  | Registrado y verificado en la tabla de InfoApp
+[23:09:22] [EXITOSO ] Doc: CE:11719345932     | Hilary Andreina Camacho Ruiz     | Registrado y verificado en la tabla de InfoApp
+[23:09:26] [EXITOSO ] Doc: CE:11718759782     | Leonardo Jose Sosa Muñoz         | Registrado y verificado en la tabla de InfoApp
+[23:09:30] [EXITOSO ] Doc: CE:12115389941     | Fabian Gael Cardera Herrera      | Registrado y verificado en la tabla de InfoApp
+[23:09:34] [EXITOSO ] Doc: CE:12028207394     | Mathias Emanuel Isea Herrera     | Registrado y verificado en la tabla de InfoApp
+[23:09:39] [EXITOSO ] Doc: CE:12230348681     | Sammyr Josue Riera Tarazona      | Registrado y verificado en la tabla de InfoApp
+[23:09:43] [EXITOSO ] Doc: CE:1192742923      | Adrian Jose Herrera Rivas        | Registrado y verificado en la tabla de InfoApp
+
+================================================================================
+PROCESO FINALIZADO EXITOSAMENTE: 2026-08-25 23:09:46
+================================================================================

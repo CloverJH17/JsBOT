@@ -1,0 +1,11 @@
+================================================================================
+REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v3.1.0
+Fecha Inicio : 2026-08-25 00:05:34
+Servicio     : Actividades de educación o aprendizaje
+Fecha Reg.   : 2026-08-25
+Operador     : jairhernandez
+================================================================================
+
+[00:05:58] [FALLIDO ] Doc: CE:12621302079     | Adrismar Milagros Bracovite Pereira | El servicio para la cédula 213020791 no aparece en la tabla de InfoApp (no se guardó)
+[00:07:32] [FALLIDO ] Doc: CE:11819454212     | Faiza Jabra                      | El servicio para la cédula 194542121 no aparece en la tabla de InfoApp (no se guardó)
+[00:09:47] [FALLIDO ] Doc: CE:11819454212     | Faiza Jabra                      | El servicio para la cédula 194542121 no aparece en la tabla de InfoApp (no se guardó)

@@ -1,0 +1,12 @@
+# ===============================================================================
+# DEPENDENCIAS DEL SISTEMA - JsBOT (Robotic Process Automation) — v4.0.0
+# ===============================================================================
+selenium>=4.20.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+xlrd>=2.0.1
+odfpy>=1.4.1
+rich>=13.7.0
+InquirerPy>=0.3.4
+customtkinter>=5.2.0
+pillow>=9.5.0

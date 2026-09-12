@@ -1,0 +1,27 @@
+{
+    "app": {
+        "name": "JsBOT (Robotic Process Automation)",
+        "version": "4.0.0",
+        "interfaz_predeterminada": "gui",
+        "author": "Jair Alejandro Hernández González",
+        "location": "San Felipe, Yaracuy, Venezuela",
+        "organization": "Fundación Infocentro"
+    },
+    "interfaz_predeterminada": "gui",
+    "urls": {
+        "base_login": "https://infoapp2.infocentro.gob.ve/admin/index.php"
+    },
+    "timeouts": {
+        "login_wait_seconds": 15,
+        "ajax_wait_seconds": 15,
+        "element_wait_seconds": 12
+    },
+    "browser": {
+        "priority": ["firefox", "chrome", "edge"],
+        "start_maximized": true
+    },
+    "validation": {
+        "default_phone": "0412-0000000",
+        "capture_screenshots_on_error": true
+    }
+}

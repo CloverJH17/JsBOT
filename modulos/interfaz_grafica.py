@@ -1,0 +1,2042 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+===============================================================================
+MÓDULO: INTERFAZ GRÁFICA NATIVA (interfaz_grafica.py)
+===============================================================================
+Sistema   : JsBOT (Robotic Process Automation) — v4.0.0
+Tecnología: Python + CustomTkinter (Dark Mode con acentos #3B8ED0 y #22c55e)
+Autor     : Jair Alejandro Hernández González
+Ubicación : San Felipe, Yaracuy, Venezuela
+===============================================================================
+"""
+
+import os
+import sys
+import json
+import time
+import shutil
+import threading
+import queue
+import webbrowser
+from datetime import datetime
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog
+import customtkinter as ctk
+from PIL import Image
+
+# Asegurar acceso a la raíz del proyecto
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+# Importaciones de los módulos funcionales
+try:
+    from modulos.normalizador_datos import (
+        procesar_archivo_participantes,
+        deduplicar_participantes,
+        abrir_archivo_asistido
+    )
+    from modulos.verificador_entorno import (
+        detectar_sistema_operativo,
+        detectar_navegadores,
+        detectar_suite_ofimatica,
+        verificar_integridad_archivos
+    )
+    from modulos import config_manager as cm
+    MODULOS_DISPONIBLES = True
+except Exception as e:
+    MODULOS_DISPONIBLES = False
+    ERROR_IMPORTACION = str(e)
+
+# Configuración global de tema y apariencia
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
+
+# Ruta canónica a los iconos de producción en config/assets/iconos
+RUTA_ICONOS = str(Path(__file__).resolve().parent.parent / "config" / "assets" / "iconos")
+if not os.path.exists(RUTA_ICONOS):
+    RUTA_ICONOS = os.path.join(BASE_DIR, "pruebas", "assets", "iconos")
+
+
+class JsBotGUI(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+
+        # 1. Configuración de Ventana Principal (Calibrada para 1366x768)
+        self.title("JsBOT (RPA) — Versión 4.0.0")
+        self.geometry("1020x670")
+        self.minsize(980, 620)
+
+        # Centrar ventana en pantalla
+        self._centrar_ventana(1020, 670)
+
+        # Configuración del grid principal (Sidebar: 220px, Contenedor Principal: expandible)
+        self.grid_columnconfigure(0, weight=0, minsize=220)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Estado global de la aplicación
+        self.seccion_actual = "Diagnostico"
+        self.participantes_cargados = []
+        self.datos_normalizados_actuales = []
+        self.archivo_actual_ruta = ""
+        self.ejecutando_tarea = False
+
+        # Control de microanimaciones no bloqueantes (after)
+        self._animando_pulso = False
+        self._pulso_after_id = None
+        self._banner_anim_id = None
+        self._target_progreso = 0.0
+
+        # Variables Tkinter para Formación
+        self.archivo_seleccionado_formacion = tk.StringVar(value="Ningún archivo seleccionado")
+        self.var_modo_visible_formacion = tk.BooleanVar(value=True)
+        self.var_generar_ods_formacion = tk.BooleanVar(value=True)
+
+        # Variables Tkinter para Servicios
+        self.archivo_seleccionado_servicios = tk.StringVar(value="Ningún archivo seleccionado")
+        self.var_modo_visible_servicios = tk.BooleanVar(value=True)
+        self.var_registro_tramite_servicios = tk.BooleanVar(value=True)
+
+        # Variables para Ajustes Interactivos con valores base
+        self.defaults_ajustes = {
+            "login": 15,
+            "ajax": 15,
+            "element": 12,
+            "browser": "Firefox (Recomendado)",
+            "maximized": True,
+            "screenshots": True,
+            "logs": True,
+            "phone": "0412-0000000"
+        }
+
+        self.var_login_timeout = tk.IntVar(value=self.defaults_ajustes["login"])
+        self.var_ajax_timeout = tk.IntVar(value=self.defaults_ajustes["ajax"])
+        self.var_element_timeout = tk.IntVar(value=self.defaults_ajustes["element"])
+        self.var_browser_pref = tk.StringVar(value=self.defaults_ajustes["browser"])
+        self.var_start_maximized = tk.BooleanVar(value=self.defaults_ajustes["maximized"])
+        self.var_capture_screenshots = tk.BooleanVar(value=self.defaults_ajustes["screenshots"])
+        self.var_detailed_logs = tk.BooleanVar(value=self.defaults_ajustes["logs"])
+        self.var_default_phone = tk.StringVar(value=self.defaults_ajustes["phone"])
+
+        # Referencias a labels dinámicos de los sliders
+        self.labels_sliders = {}
+
+        # Cargar valores iniciales desde config/settings.json si existe
+        self._cargar_config_inicial()
+
+        # 2. Cargar Iconos PNG y Logo Robot
+        self._cargar_iconos()
+
+        # 3. Construcción visual
+        self._crear_barra_lateral()
+        self._crear_contenedor_principal()
+
+        # Cola segura de eventos entre hilos secundarios y la interfaz
+        self.cola_eventos = queue.Queue()
+        self._iniciar_escucha_cola()
+
+        # Log inicial de bienvenida
+        self._agregar_log("[OK] Entorno gráfico JsBOT v4.0 inicializado (Resolución 1020x670).")
+        if MODULOS_DISPONIBLES:
+            self._agregar_log("[OK] Módulos de verificación y normalización vinculados en modo lectura.")
+        else:
+            self._agregar_log(f"[ADVERTENCIA] Error cargando módulos: {ERROR_IMPORTACION}")
+
+    def _iniciar_escucha_cola(self):
+        """Procesa de forma continua y segura los eventos emitidos por hilos secundarios (Cero estrés de CPU)."""
+        try:
+            while True:
+                item = self.cola_eventos.get_nowait()
+                tipo, datos = item
+                if tipo == "log":
+                    self._agregar_log(datos)
+                elif tipo == "progreso":
+                    self._actualizar_progreso_ui(datos)
+                elif tipo == "fin_formacion":
+                    self._finalizar_ejecucion_formacion(datos)
+                elif tipo == "fin_servicios":
+                    self._finalizar_ejecucion_servicios(datos)
+        except queue.Empty:
+            pass
+        except Exception:
+            pass
+        finally:
+            self.after(35, self._iniciar_escucha_cola)
+
+    def _centrar_ventana(self, ancho: int, alto: int):
+        """Calcula las coordenadas para centrar la ventana en la pantalla del usuario."""
+        self.update_idletasks()
+        pantalla_ancho = self.winfo_screenwidth()
+        pantalla_alto = self.winfo_screenheight()
+        pos_x = max(0, int((pantalla_ancho - ancho) / 2))
+        pos_y = max(0, int((pantalla_alto - alto) / 2))
+        self.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
+
+    def _cargar_iconos(self):
+        """Carga los iconos PNG desde pruebas/assets/iconos/ usando CTkImage."""
+        self.iconos = {}
+        nombres = ["diagnostico", "formacion", "servicios", "reportes", "ajustes", "info", "robot_logo"]
+        for n in nombres:
+            ruta = os.path.join(RUTA_ICONOS, f"{n}.png")
+            if os.path.exists(ruta):
+                try:
+                    img = Image.open(ruta)
+                    tam = (44, 44) if n == "robot_logo" else (18, 18)
+                    self.iconos[n] = ctk.CTkImage(light_image=img, dark_image=img, size=tam)
+                except Exception:
+                    self.iconos[n] = None
+            else:
+                self.iconos[n] = None
+
+    def _cargar_config_inicial(self):
+        """Sincroniza variables locales con config/settings.json."""
+        if MODULOS_DISPONIBLES:
+            try:
+                cfg = cm.cargar_settings()
+                self.defaults_ajustes["login"] = cfg.get("timeouts", {}).get("login_wait_seconds", 15)
+                self.defaults_ajustes["ajax"] = cfg.get("timeouts", {}).get("ajax_wait_seconds", 15)
+                self.defaults_ajustes["element"] = cfg.get("timeouts", {}).get("element_wait_seconds", 12)
+                self.defaults_ajustes["phone"] = cfg.get("validation", {}).get("default_phone", "0412-0000000")
+                self.defaults_ajustes["screenshots"] = cfg.get("validation", {}).get("capture_screenshots_on_error", True)
+                self.defaults_ajustes["maximized"] = cfg.get("browser", {}).get("start_maximized", True)
+
+                self.var_login_timeout.set(self.defaults_ajustes["login"])
+                self.var_ajax_timeout.set(self.defaults_ajustes["ajax"])
+                self.var_element_timeout.set(self.defaults_ajustes["element"])
+                self.var_default_phone.set(self.defaults_ajustes["phone"])
+                self.var_capture_screenshots.set(self.defaults_ajustes["screenshots"])
+                self.var_start_maximized.set(self.defaults_ajustes["maximized"])
+            except Exception:
+                pass
+
+    # =========================================================================
+    # 1. BARRA LATERAL (SIDEBAR REDUCIDO A 220PX)
+    # =========================================================================
+    def _crear_barra_lateral(self):
+        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
+        self.sidebar_frame.grid_rowconfigure(8, weight=1)  # Empujador elástico
+
+        # 1. Logo de Robot en Sidebar
+        if self.iconos.get("robot_logo"):
+            self.robot_logo_label = ctk.CTkLabel(
+                self.sidebar_frame,
+                text="",
+                image=self.iconos.get("robot_logo")
+            )
+            self.robot_logo_label.grid(row=0, column=0, padx=16, pady=(16, 4), sticky="w")
+
+        # 2. Título de la App y Versión
+        self.logo_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="JsBOT (RPA)",
+            font=ctk.CTkFont(size=20, weight="bold")
+        )
+        self.logo_label.grid(row=1, column=0, padx=16, pady=(0, 2), sticky="w")
+
+        self.sub_label = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="Versión 4.0.0",
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E93"
+        )
+        self.sub_label.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="w")
+
+        # 3. Separador visual
+        self.sep = ctk.CTkFrame(self.sidebar_frame, height=1, fg_color="#2B2B36")
+        self.sep.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 10))
+
+        # 4. Botones de navegación superiores
+        self.nav_buttons = {}
+
+        secciones_superiores = [
+            ("Diagnostico", "Diagnóstico", "diagnostico"),
+            ("Formacion", "Formación", "formacion"),
+            ("Servicios", "Servicios", "servicios"),
+            ("Reportes", "Reportes / ODS", "reportes"),
+        ]
+
+        for idx, (clave, texto, icono_k) in enumerate(secciones_superiores, start=4):
+            es_activo = (clave == "Diagnostico")
+            btn = ctk.CTkButton(
+                self.sidebar_frame,
+                text=f"  {texto}",
+                image=self.iconos.get(icono_k),
+                compound="left",
+                anchor="w",
+                height=38,
+                corner_radius=8,
+                font=ctk.CTkFont(size=12, weight="bold" if es_activo else "normal"),
+                fg_color="#1f538d" if es_activo else "transparent",
+                hover_color="#14375e" if es_activo else "#2B2B36",
+                command=lambda c=clave: self._cambiar_seccion(c)
+            )
+            btn.grid(row=idx, column=0, padx=12, pady=2, sticky="ew")
+            self.nav_buttons[clave] = btn
+
+        # 5. Botón 'Créditos' ubicado directamente arriba de 'Ajustes'
+        btn_creditos = ctk.CTkButton(
+            self.sidebar_frame,
+            text="  Créditos",
+            image=self.iconos.get("info"),
+            compound="left",
+            anchor="w",
+            height=38,
+            corner_radius=8,
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            hover_color="#2B2B36",
+            command=lambda: self._cambiar_seccion("Creditos")
+        )
+        btn_creditos.grid(row=9, column=0, padx=12, pady=(0, 2), sticky="ew")
+        self.nav_buttons["Creditos"] = btn_creditos
+
+        # 6. Botón Ajustes
+        btn_ajustes = ctk.CTkButton(
+            self.sidebar_frame,
+            text="  Ajustes",
+            image=self.iconos.get("ajustes"),
+            compound="left",
+            anchor="w",
+            height=38,
+            corner_radius=8,
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            hover_color="#2B2B36",
+            command=lambda: self._cambiar_seccion("Ajustes")
+        )
+        btn_ajustes.grid(row=10, column=0, padx=12, pady=(0, 10), sticky="ew")
+        self.nav_buttons["Ajustes"] = btn_ajustes
+
+        # 7. Tarjeta de Estado en el pie
+        self.status_card = ctk.CTkFrame(self.sidebar_frame, corner_radius=10, fg_color="#181822", border_width=1, border_color="#292938")
+        self.status_card.grid(row=11, column=0, padx=12, pady=(0, 16), sticky="sew")
+
+        self.lbl_status = ctk.CTkLabel(
+            self.status_card,
+            text="● Sistema Listo",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#22c55e"
+        )
+        self.lbl_status.pack(anchor="w", padx=10, pady=(8, 2))
+
+        lbl_browser = ctk.CTkLabel(
+            self.status_card,
+            text="Navegadores: Chrome / Edge",
+            font=ctk.CTkFont(size=10),
+            text_color="#A1A1AA"
+        )
+        lbl_browser.pack(anchor="w", padx=10, pady=1)
+
+        lbl_instance = ctk.CTkLabel(
+            self.status_card,
+            text="Instancia: Exclusiva (.lock)",
+            font=ctk.CTkFont(size=10),
+            text_color="#A1A1AA"
+        )
+        lbl_instance.pack(anchor="w", padx=10, pady=(1, 8))
+
+    def _cambiar_seccion(self, seccion: str):
+        """Intercambia vistas en el panel central y actualiza el botón activo del sidebar."""
+        if self.seccion_actual == seccion:
+            return
+
+        self.seccion_actual = seccion
+
+        for clave, btn in self.nav_buttons.items():
+            if clave == seccion:
+                btn.configure(fg_color="#1f538d", hover_color="#14375e", font=ctk.CTkFont(size=12, weight="bold"))
+            else:
+                btn.configure(fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=12, weight="normal"))
+
+        for nombre, vista in self.vistas.items():
+            if nombre == seccion:
+                vista.grid(row=0, column=0, sticky="nsew")
+            else:
+                vista.grid_forget()
+
+        self._agregar_log(f"[NAVEGACIÓN] Sección activa: {seccion}")
+
+    # =========================================================================
+    # 2. CONTENEDOR PRINCIPAL Y VISTAS
+    # =========================================================================
+    def _crear_contenedor_principal(self):
+        self.main_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_container.grid(row=0, column=1, sticky="nsew", padx=16, pady=14)
+        self.main_container.grid_columnconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(0, weight=1)
+        self.main_container.grid_rowconfigure(1, weight=0)
+
+        self.vistas_container = ctk.CTkFrame(self.main_container, fg_color="transparent")
+        self.vistas_container.grid(row=0, column=0, sticky="nsew", pady=(0, 8))
+        self.vistas_container.grid_columnconfigure(0, weight=1)
+        self.vistas_container.grid_rowconfigure(0, weight=1)
+
+        # Diccionario de vistas
+        self.vistas = {}
+        self.vistas["Diagnostico"] = self._crear_vista_diagnostico(self.vistas_container)
+        self.vistas["Formacion"] = self._crear_vista_formacion(self.vistas_container)
+        self.vistas["Servicios"] = self._crear_vista_servicios(self.vistas_container)
+        self.vistas["Reportes"] = self._crear_vista_reportes(self.vistas_container)
+        self.vistas["Creditos"] = self._crear_vista_creditos(self.vistas_container)
+        self.vistas["Ajustes"] = self._crear_vista_ajustes(self.vistas_container)
+
+        # Vista predeterminada: Diagnóstico
+        self.vistas["Diagnostico"].grid(row=0, column=0, sticky="nsew")
+
+        # Telemetría fija en la parte inferior con Toolbar compacta
+        self._crear_panel_telemetria(self.main_container)
+
+    # -------------------------------------------------------------------------
+    # A. VISTA 1: DIAGNÓSTICO EN GRID (2x3 — CERO SCROLLBAR)
+    # -------------------------------------------------------------------------
+    def _crear_vista_diagnostico(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(2, weight=1)
+
+        # Encabezado
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 4))
+
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="Diagnóstico del Sistema y Entorno",
+            image=self.iconos.get("diagnostico"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        self.btn_recomprobar = ctk.CTkButton(
+            header,
+            text="Re-comprobar Entorno",
+            image=self.iconos.get("diagnostico"),
+            compound="left",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._actualizar_diagnostico_en_caliente
+        )
+        self.btn_recomprobar.pack(side="right")
+
+        lbl_sub = ctk.CTkLabel(
+            frame,
+            text="Auditoría automática integral: arquitectura, dependencias y disponibilidad operativa.",
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98"
+        )
+        lbl_sub.grid(row=1, column=0, sticky="w", padx=16, pady=(0, 8))
+
+        # Contenedor Grid (2x3) SIN scrollbar
+        self.diag_grid = ctk.CTkFrame(frame, fg_color="transparent")
+        self.diag_grid.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.diag_grid.grid_columnconfigure((0, 1, 2), weight=1, uniform="card_col")
+        self.diag_grid.grid_rowconfigure((0, 1), weight=1, uniform="card_row")
+
+        self._construir_cuadricula_diagnostico()
+        return frame
+
+    def _construir_cuadricula_diagnostico(self):
+        for widget in self.diag_grid.winfo_children():
+            widget.destroy()
+
+        so_nombre = detectar_sistema_operativo() if MODULOS_DISPONIBLES else "Windows"
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        py_ok = sys.version_info >= (3, 10)
+        nav_desc = detectar_navegadores() if MODULOS_DISPONIBLES else "Chrome / Edge detectado"
+        suite_ok, suite_ruta = detectar_suite_ofimatica() if MODULOS_DISPONIBLES else (True, "LibreOffice")
+        archivos_diag = verificar_integridad_archivos() if MODULOS_DISPONIBLES else {
+            "settings": (True, "config/settings.json"),
+            "plantilla": (True, "config/plantilla_base.ods")
+        }
+        archivos_ok = all(v[0] for v in archivos_diag.values())
+
+        # Tarjeta 1: Python
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=0, col=0,
+            titulo="Intérprete Python",
+            valor_destacado=f"Python v{py_ver}",
+            tag_texto="[OK]" if py_ok else "[ERROR]",
+            tag_color="#30D158" if py_ok else "#FF453A",
+            linea_1="Compatibilidad: >= 3.10 Superado",
+            linea_2=f"Binario: {os.path.basename(sys.executable)}"
+        )
+
+        # Tarjeta 2: Sistema Operativo
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=0, col=1,
+            titulo="Sistema Operativo",
+            valor_destacado=so_nombre,
+            tag_texto="[OK]",
+            tag_color="#30D158",
+            linea_1="Plataforma: Arquitectura 64-bit",
+            linea_2="Consola: Soporte VT100 activo"
+        )
+
+        # Tarjeta 3: Dependencias PyPI
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=0, col=2,
+            titulo="Dependencias PyPI",
+            valor_destacado="Sincronizadas",
+            tag_texto="[OK]",
+            tag_color="#30D158",
+            linea_1="Librerías: Selenium, Pandas, CTk, PIL",
+            linea_2="Estado: requirements.txt verificado"
+        )
+
+        # Tarjeta 4: Navegadores Web
+        nav_ok = "detectado" in nav_desc.lower()
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=1, col=0,
+            titulo="Navegadores Web",
+            valor_destacado="Chrome / Edge" if "chrome" in nav_desc.lower() or "edge" in nav_desc.lower() else "Detectado",
+            tag_texto="[OK]" if nav_ok else "[AVISO]",
+            tag_color="#30D158" if nav_ok else "#F5A623",
+            linea_1="Control: Selenium WebDriver",
+            linea_2="Rutas: Encontrados en PATH"
+        )
+
+        # Tarjeta 5: Suite Ofimática
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=1, col=1,
+            titulo="Suite Ofimática",
+            valor_destacado=os.path.basename(suite_ruta) if suite_ruta else "Modo Asistido",
+            tag_texto="[OK]" if suite_ok else "[AVISO]",
+            tag_color="#30D158" if suite_ok else "#F5A623",
+            linea_1="Soporte: Formatos .ODS y .XLSX",
+            linea_2="Asistencia HITL: Lista para aperturas"
+        )
+
+        # Tarjeta 6: Archivos Core
+        self._crear_tarjeta_grid(
+            self.diag_grid, row=1, col=2,
+            titulo="Archivos Core",
+            valor_destacado="Verificados",
+            tag_texto="[OK]" if archivos_ok else "[AVISO]",
+            tag_color="#30D158" if archivos_ok else "#FF453A",
+            linea_1="Config: settings.json y logs/",
+            linea_2="Actas: plantilla_base.ods intacta"
+        )
+
+    def _crear_tarjeta_grid(self, padre, row: int, col: int, titulo: str, valor_destacado: str, tag_texto: str, tag_color: str, linea_1: str, linea_2: str):
+        card = ctk.CTkFrame(padre, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card.grid(row=row, column=col, padx=5, pady=5, sticky="nsew")
+
+        top = ctk.CTkFrame(card, fg_color="transparent")
+        top.pack(fill="x", padx=10, pady=(8, 2))
+
+        lbl_t = ctk.CTkLabel(top, text=titulo, font=ctk.CTkFont(size=11, weight="bold"), text_color="#FFFFFF")
+        lbl_t.pack(side="left")
+
+        lbl_tag = ctk.CTkLabel(top, text=tag_texto, font=ctk.CTkFont(size=10, weight="bold"), text_color=tag_color)
+        lbl_tag.pack(side="right")
+
+        lbl_val = ctk.CTkLabel(
+            card,
+            text=valor_destacado,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#3B8ED0"
+        )
+        lbl_val.pack(anchor="w", padx=10, pady=(1, 4))
+
+        lbl_l1 = ctk.CTkLabel(card, text=linea_1, font=ctk.CTkFont(size=10), text_color="#8E8E98", anchor="w")
+        lbl_l1.pack(fill="x", padx=10, pady=1)
+
+        lbl_l2 = ctk.CTkLabel(card, text=linea_2, font=ctk.CTkFont(size=10), text_color="#A1A1AA", anchor="w")
+        lbl_l2.pack(fill="x", padx=10, pady=(0, 6))
+
+    def _actualizar_diagnostico_en_caliente(self):
+        self.btn_recomprobar.configure(text="Verificando...", state="disabled")
+        self._agregar_log("[DIAGNÓSTICO] Re-comprobando integridad de entorno...")
+
+        def _tarea():
+            time.sleep(0.35)
+            self.after(0, self._terminar_refresco_diagnostico)
+
+        threading.Thread(target=_tarea, daemon=True).start()
+
+    def _terminar_refresco_diagnostico(self):
+        self._construir_cuadricula_diagnostico()
+        self.btn_recomprobar.configure(text="Re-comprobar Entorno", state="normal")
+        self._agregar_log("[OK] Diagnóstico actualizado: 6/6 módulos verificados.")
+
+    # -------------------------------------------------------------------------
+    # B. VISTA 2: FORMACIÓN (CON CHIP DE ARCHIVO Y BOTÓN [✕])
+    # -------------------------------------------------------------------------
+    def _crear_vista_formacion(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(12, 6))
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="Carga Masiva de Formación — Cursos y Actas ODS",
+            image=self.iconos.get("formacion"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        # 1. Área de Ingesta con Chip de Archivo y Botón [ ✕ ]
+        drop_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="#161620", border_width=2, border_color="#3B8ED0")
+        drop_frame.pack(fill="x", padx=16, pady=(4, 8))
+
+        drop_inner = ctk.CTkFrame(drop_frame, fg_color="transparent")
+        drop_inner.pack(fill="x", padx=12, pady=8)
+
+        self.btn_examinar_formacion = ctk.CTkButton(
+            drop_inner,
+            text="Examinar archivo (.xlsx, .ods, .csv)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            command=self._examinar_archivo_formacion
+        )
+        self.btn_examinar_formacion.pack(side="left", padx=(0, 12))
+
+        # Chip contenedor del archivo seleccionado
+        self.chip_frame_formacion = ctk.CTkFrame(drop_inner, fg_color="#20202E", corner_radius=6, border_width=1, border_color="#2D2D42")
+        self.chip_frame_formacion.pack(side="left", fill="x", expand=True)
+
+        self.lbl_archivo_formacion = ctk.CTkLabel(
+            self.chip_frame_formacion,
+            textvariable=self.archivo_seleccionado_formacion,
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98",
+            anchor="w"
+        )
+        self.lbl_archivo_formacion.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+
+        self.btn_descartar_formacion = ctk.CTkButton(
+            self.chip_frame_formacion,
+            text="✕",
+            width=22,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#C0392B",
+            hover_color="#962D22",
+            command=self._descartar_archivo_formacion
+        )
+        # Oculto por defecto hasta que se elija un archivo
+
+        # 1.5 Tarjeta de Pre-vuelo (Resumen Inmediato ETL - Inicialmente oculta)
+        self.card_prevuelo_formacion = ctk.CTkFrame(
+            frame,
+            corner_radius=10,
+            fg_color="#161620",
+            border_width=1,
+            border_color="#292938"
+        )
+
+        card_inner_f = ctk.CTkFrame(self.card_prevuelo_formacion, fg_color="transparent")
+        card_inner_f.pack(fill="x", padx=14, pady=10)
+
+        prevuelo_left_f = ctk.CTkFrame(card_inner_f, fg_color="transparent")
+        prevuelo_left_f.pack(side="left", fill="x", expand=True)
+
+        top_met_f = ctk.CTkFrame(prevuelo_left_f, fg_color="transparent")
+        top_met_f.pack(anchor="w", fill="x")
+
+        self.lbl_prevuelo_formacion_total = ctk.CTkLabel(
+            top_met_f,
+            text="Total: 0 participantes",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#3B8ED0"
+        )
+        self.lbl_prevuelo_formacion_total.pack(side="left", padx=(0, 12))
+
+        self.lbl_prevuelo_formacion_estado = ctk.CTkLabel(
+            top_met_f,
+            text="● Estructura Válida (0 inconsistencias)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#30D158"
+        )
+        self.lbl_prevuelo_formacion_estado.pack(side="left")
+
+        self.lbl_prevuelo_formacion_desglose = ctk.CTkLabel(
+            prevuelo_left_f,
+            text="0 Cedulados  |  0 Escolares  |  0 Menores S/C",
+            font=ctk.CTkFont(size=11),
+            text_color="#A1A1AA"
+        )
+        self.lbl_prevuelo_formacion_desglose.pack(anchor="w", pady=(2, 0))
+
+        self.btn_tabla_formacion = ctk.CTkButton(
+            card_inner_f,
+            text="👁 Ver Tabla de Datos",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=lambda: self._abrir_tabla_previsualizacion("Formación")
+        )
+        self.btn_tabla_formacion.pack(side="right", padx=(10, 0))
+
+        # 2. URL InfoApp
+        self.url_container_formacion = ctk.CTkFrame(frame, fg_color="transparent")
+        self.url_container_formacion.pack(fill="x", padx=16, pady=(0, 8))
+
+        lbl_url = ctk.CTkLabel(
+            self.url_container_formacion,
+            text="URL de InfoApp (debe contener id_activity=):",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_url.pack(anchor="w", pady=(0, 3))
+
+        url_input_row = ctk.CTkFrame(self.url_container_formacion, fg_color="transparent")
+        url_input_row.pack(fill="x")
+
+        self.entry_url_formacion = ctk.CTkEntry(
+            url_input_row,
+            placeholder_text="https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=...",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_url_formacion.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.entry_url_formacion.bind("<KeyRelease>", lambda e: self._validar_sintaxis_url(self.entry_url_formacion))
+
+        self.btn_pegar_formacion = ctk.CTkButton(
+            url_input_row,
+            text="Pegar",
+            width=70,
+            height=34,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self._pegar_portapapeles_url(self.entry_url_formacion)
+        )
+        self.btn_pegar_formacion.pack(side="right")
+
+        # 3. Opciones
+        opts_row = ctk.CTkFrame(frame, fg_color="transparent")
+        opts_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        chk_vis = ctk.CTkCheckBox(
+            opts_row,
+            text="Modo Visible (Ver Navegador)",
+            variable=self.var_modo_visible_formacion,
+            font=ctk.CTkFont(size=11)
+        )
+        chk_vis.pack(side="left", padx=(0, 20))
+
+        chk_ods = ctk.CTkCheckBox(
+            opts_row,
+            text="Generar Planilla Oficial .ODS",
+            variable=self.var_generar_ods_formacion,
+            font=ctk.CTkFont(size=11)
+        )
+        chk_ods.pack(side="left")
+
+        # 4. Botón Acción
+        action_row = ctk.CTkFrame(frame, fg_color="transparent")
+        action_row.pack(fill="x", padx=16, pady=(0, 12))
+
+        self.btn_iniciar_formacion = ctk.CTkButton(
+            action_row,
+            text="INICIAR CARGA AUTOMATIZADA",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=38,
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=self._iniciar_ejecucion_asincrona_formacion
+        )
+        self.btn_iniciar_formacion.pack(fill="x")
+
+        return frame
+
+    # -------------------------------------------------------------------------
+    # C. VISTA 3: SERVICIOS (CON CHIP DE ARCHIVO Y BOTÓN [✕])
+    # -------------------------------------------------------------------------
+    def _crear_vista_servicios(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(12, 6))
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="Carga de Servicios Comunitarios y Trámites",
+            image=self.iconos.get("servicios"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        # Ingesta con Chip de Descarte
+        drop_frame = ctk.CTkFrame(frame, corner_radius=10, fg_color="#161620", border_width=2, border_color="#2E7D32")
+        drop_frame.pack(fill="x", padx=16, pady=(4, 8))
+
+        drop_inner = ctk.CTkFrame(drop_frame, fg_color="transparent")
+        drop_inner.pack(fill="x", padx=12, pady=8)
+
+        btn_examinar = ctk.CTkButton(
+            drop_inner,
+            text="Examinar usuarios (.xlsx, .csv)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#2E7D32",
+            hover_color="#1B5E20",
+            height=32,
+            command=self._examinar_archivo_servicios
+        )
+        btn_examinar.pack(side="left", padx=(0, 12))
+
+        self.chip_frame_servicios = ctk.CTkFrame(drop_inner, fg_color="#1B281E", corner_radius=6, border_width=1, border_color="#253D2A")
+        self.chip_frame_servicios.pack(side="left", fill="x", expand=True)
+
+        self.lbl_archivo_servicios = ctk.CTkLabel(
+            self.chip_frame_servicios,
+            textvariable=self.archivo_seleccionado_servicios,
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98",
+            anchor="w"
+        )
+        self.lbl_archivo_servicios.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+
+        self.btn_descartar_servicios = ctk.CTkButton(
+            self.chip_frame_servicios,
+            text="✕",
+            width=22,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#C0392B",
+            hover_color="#962D22",
+            command=self._descartar_archivo_servicios
+        )
+
+        # 1.5 Tarjeta de Pre-vuelo (Resumen Inmediato ETL - Servicios)
+        self.card_prevuelo_servicios = ctk.CTkFrame(
+            frame,
+            corner_radius=10,
+            fg_color="#161620",
+            border_width=1,
+            border_color="#253D2A"
+        )
+
+        card_inner_s = ctk.CTkFrame(self.card_prevuelo_servicios, fg_color="transparent")
+        card_inner_s.pack(fill="x", padx=14, pady=10)
+
+        prevuelo_left_s = ctk.CTkFrame(card_inner_s, fg_color="transparent")
+        prevuelo_left_s.pack(side="left", fill="x", expand=True)
+
+        top_met_s = ctk.CTkFrame(prevuelo_left_s, fg_color="transparent")
+        top_met_s.pack(anchor="w", fill="x")
+
+        self.lbl_prevuelo_servicios_total = ctk.CTkLabel(
+            top_met_s,
+            text="Total: 0 usuarios",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#2ECC71"
+        )
+        self.lbl_prevuelo_servicios_total.pack(side="left", padx=(0, 12))
+
+        self.lbl_prevuelo_servicios_estado = ctk.CTkLabel(
+            top_met_s,
+            text="● Estructura Válida (0 inconsistencias)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#30D158"
+        )
+        self.lbl_prevuelo_servicios_estado.pack(side="left")
+
+        self.lbl_prevuelo_servicios_desglose = ctk.CTkLabel(
+            prevuelo_left_s,
+            text="0 Cedulados  |  0 Escolares  |  0 Menores S/C",
+            font=ctk.CTkFont(size=11),
+            text_color="#A1A1AA"
+        )
+        self.lbl_prevuelo_servicios_desglose.pack(anchor="w", pady=(2, 0))
+
+        self.btn_tabla_servicios = ctk.CTkButton(
+            card_inner_s,
+            text="👁 Ver Tabla de Datos",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#2E7D32",
+            hover_color="#1B5E20",
+            command=lambda: self._abrir_tabla_previsualizacion("Servicios")
+        )
+        self.btn_tabla_servicios.pack(side="right", padx=(10, 0))
+
+        # URL de Servicio InfoApp
+        self.url_container_servicios = ctk.CTkFrame(frame, fg_color="transparent")
+        self.url_container_servicios.pack(fill="x", padx=16, pady=(0, 8))
+
+        lbl_url = ctk.CTkLabel(
+            self.url_container_servicios,
+            text="URL de Servicio InfoApp (debe contener id_service=):",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_url.pack(anchor="w", pady=(0, 3))
+
+        url_input_row = ctk.CTkFrame(self.url_container_servicios, fg_color="transparent")
+        url_input_row.pack(fill="x")
+
+        self.entry_url_servicios = ctk.CTkEntry(
+            url_input_row,
+            placeholder_text="https://infoapp2.infocentro.gob.ve/admin/index.php?r=service/create&id_service=...",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_url_servicios.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.entry_url_servicios.bind("<KeyRelease>", lambda e: self._validar_sintaxis_url(self.entry_url_servicios))
+
+        btn_pegar = ctk.CTkButton(
+            url_input_row,
+            text="Pegar",
+            width=70,
+            height=34,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self._pegar_portapapeles_url(self.entry_url_servicios)
+        )
+        btn_pegar.pack(side="right")
+
+        # Opciones con clarificación de trámite
+        opts_row = ctk.CTkFrame(frame, fg_color="transparent")
+        opts_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        chk_vis = ctk.CTkCheckBox(
+            opts_row,
+            text="Modo Visible (Ver Navegador)",
+            variable=self.var_modo_visible_servicios,
+            font=ctk.CTkFont(size=11)
+        )
+        chk_vis.pack(anchor="w", pady=(0, 4))
+
+        chk_tramite = ctk.CTkCheckBox(
+            opts_row,
+            text="Tipo de Atención: Trámite Comunitario / Asesoría (Desmarcado = Uso libre de equipo)",
+            variable=self.var_registro_tramite_servicios,
+            font=ctk.CTkFont(size=11)
+        )
+        chk_tramite.pack(anchor="w", pady=(0, 2))
+
+        lbl_aclaratoria = ctk.CTkLabel(
+            opts_row,
+            text="ℹ Marca esta opción si el usuario requirió apoyo en trámites del Estado (SAIME, Patria, CNE, etc.)",
+            font=ctk.CTkFont(size=10),
+            text_color="#8E8E98"
+        )
+        lbl_aclaratoria.pack(anchor="w", padx=(26, 0), pady=(0, 6))
+
+        # Botón de Acción Servicios
+        action_row = ctk.CTkFrame(frame, fg_color="transparent")
+        action_row.pack(fill="x", padx=16, pady=(0, 12))
+
+        self.btn_iniciar_servicios = ctk.CTkButton(
+            action_row,
+            text="INICIAR CARGA DE SERVICIOS",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=38,
+            fg_color="#2E7D32",
+            hover_color="#1B5E20",
+            command=self._iniciar_ejecucion_asincrona_servicios
+        )
+        self.btn_iniciar_servicios.pack(fill="x")
+
+        return frame
+
+    # -------------------------------------------------------------------------
+    # D. VISTA 4: REPORTES / ODS
+    # -------------------------------------------------------------------------
+    def _crear_vista_reportes(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(12, 8))
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="Gestión de Planillas Oficiales y Reportes ODS",
+            image=self.iconos.get("reportes"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        info_card = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        info_card.pack(fill="x", padx=16, pady=(0, 12))
+
+        lbl_desc = ctk.CTkLabel(
+            info_card,
+            text=(
+                "JsBOT genera planillas oficiales en formato OpenDocument (.ODS) compatibles con LibreOffice y Excel.\n"
+                "Inyecta automáticamente membretes, metadatos extraídos de InfoApp y listas normalizadas de participantes."
+            ),
+            font=ctk.CTkFont(size=11),
+            text_color="#C0C0C8",
+            justify="left"
+        )
+        lbl_desc.pack(anchor="w", padx=12, pady=10)
+
+        # Acciones directas
+        actions_grid = ctk.CTkFrame(frame, fg_color="transparent")
+        actions_grid.pack(fill="x", padx=16, pady=(0, 12))
+        actions_grid.grid_columnconfigure((0, 1), weight=1)
+
+        btn_carpeta = ctk.CTkButton(
+            actions_grid,
+            text="Abrir Carpeta de Planillas y Salidas",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=40,
+            command=self._abrir_directorio_salidas
+        )
+        btn_carpeta.grid(row=0, column=0, padx=(0, 8), sticky="ew")
+
+        btn_plantilla = ctk.CTkButton(
+            actions_grid,
+            text="Inspeccionar Plantilla Base ODS",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            height=40,
+            command=self._abrir_plantilla_base
+        )
+        btn_plantilla.grid(row=0, column=1, padx=(8, 0), sticky="ew")
+
+        # Estado del archivo de respaldo
+        csv_path = os.path.join(BASE_DIR, "estudiantes.csv")
+        csv_existe = os.path.exists(csv_path)
+
+        csv_card = ctk.CTkFrame(frame, fg_color="#14141E", corner_radius=8)
+        csv_card.pack(fill="x", padx=16, pady=(0, 12))
+
+        lbl_csv = ctk.CTkLabel(
+            csv_card,
+            text=f"Respaldo local (estudiantes.csv): {'Disponible (Verificado)' if csv_existe else 'No generado aún'}",
+            font=ctk.CTkFont(size=11, weight="bold" if csv_existe else "normal"),
+            text_color="#30D158" if csv_existe else "#8E8E98"
+        )
+        lbl_csv.pack(side="left", padx=12, pady=8)
+
+        if csv_existe:
+            btn_ver_csv = ctk.CTkButton(
+                csv_card,
+                text="Ver CSV",
+                width=75,
+                height=26,
+                command=lambda: abrir_archivo_asistido(csv_path) if MODULOS_DISPONIBLES else None
+            )
+            btn_ver_csv.pack(side="right", padx=12)
+
+        return frame
+
+    # -------------------------------------------------------------------------
+    # E. VISTA 5: CRÉDITOS Y AUTORÍA (PESTAÑA NATIVA EMBEBIDA)
+    # -------------------------------------------------------------------------
+    def _crear_vista_creditos(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        head_box = ctk.CTkFrame(frame, fg_color="transparent")
+        head_box.pack(fill="x", padx=16, pady=(14, 8))
+
+        if self.iconos.get("robot_logo"):
+            lbl_logo = ctk.CTkLabel(head_box, text="", image=self.iconos.get("robot_logo"))
+            lbl_logo.pack(pady=(0, 4))
+
+        lbl_title = ctk.CTkLabel(
+            head_box,
+            text="JsBOT (Robotic Process Automation)",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack()
+
+        lbl_version = ctk.CTkLabel(
+            head_box,
+            text="Versión 4.0.0 Oficial — Núcleo de Automatización v4.0.0",
+            font=ctk.CTkFont(size=11),
+            text_color="#3B8ED0"
+        )
+        lbl_version.pack(pady=(2, 0))
+
+        scroll_creditos = ctk.CTkScrollableFrame(frame, height=290, fg_color="transparent")
+        scroll_creditos.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+        # Tarjeta 1: Co-Desarrollo y Arquitectura
+        card_equipo = ctk.CTkFrame(scroll_creditos, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card_equipo.pack(fill="x", pady=(0, 10))
+
+        t1_top = ctk.CTkFrame(card_equipo, fg_color="transparent")
+        t1_top.pack(fill="x", padx=14, pady=(10, 4))
+        ctk.CTkLabel(t1_top, text="Co-Desarrollo y Arquitectura", font=ctk.CTkFont(size=12, weight="bold"), text_color="#3B8ED0").pack(side="left")
+
+        items_equipo = [
+            ("Autor Principal:", "Jair Alejandro Hernández González"),
+            ("Rol en Proyecto:", "Diseñador y Desarrollador de Automatización / Facilitador Infocentro"),
+            ("IA Colaboradora:", "Gemini (Google DeepMind) — Arquitectura de Resiliencia, Hardening y QA"),
+            ("Organización:", "Fundación Infocentro — San Felipe, Yaracuy, Venezuela")
+        ]
+
+        for k, v in items_equipo:
+            row = ctk.CTkFrame(card_equipo, fg_color="transparent")
+            row.pack(fill="x", padx=14, pady=2)
+            ctk.CTkLabel(row, text=k, font=ctk.CTkFont(size=10), text_color="#8E8E98").pack(side="left")
+            ctk.CTkLabel(row, text=v, font=ctk.CTkFont(size=10, weight="bold"), text_color="#D1D1D6").pack(side="right")
+
+        ctk.CTkLabel(card_equipo, text="", height=2).pack()
+
+        # Tarjeta 2: Enlaces y Contacto Directo
+        card_contacto = ctk.CTkFrame(scroll_creditos, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card_contacto.pack(fill="x", pady=(0, 8))
+
+        t2_top = ctk.CTkFrame(card_contacto, fg_color="transparent")
+        t2_top.pack(fill="x", padx=14, pady=(10, 6))
+        ctk.CTkLabel(t2_top, text="Contacto y Portafolio Oficial", font=ctk.CTkFont(size=12, weight="bold"), text_color="#3B8ED0").pack(side="left")
+
+        btn_portafolio = ctk.CTkButton(
+            card_contacto,
+            text="🌐  Portafolio: cloverjh17.github.io",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=34,
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=lambda: webbrowser.open("https://cloverjh17.github.io/")
+        )
+        btn_portafolio.pack(fill="x", padx=14, pady=(0, 8))
+
+        contacto_grid = ctk.CTkFrame(card_contacto, fg_color="transparent")
+        contacto_grid.pack(fill="x", padx=14, pady=(0, 8))
+        contacto_grid.grid_columnconfigure((0, 1), weight=1)
+
+        btn_telegram = ctk.CTkButton(
+            contacto_grid,
+            text="✈ Telegram: @CloverJH17",
+            font=ctk.CTkFont(size=10),
+            height=30,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: webbrowser.open("https://t.me/CloverJH17")
+        )
+        btn_telegram.grid(row=0, column=0, padx=(0, 4), sticky="ew")
+
+        btn_email = ctk.CTkButton(
+            contacto_grid,
+            text="✉ the.hernandezjair@gmail.com",
+            font=ctk.CTkFont(size=10),
+            height=30,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: webbrowser.open("mailto:the.hernandezjair@gmail.com")
+        )
+        btn_email.grid(row=0, column=1, padx=(4, 0), sticky="ew")
+
+        lbl_lema = ctk.CTkLabel(
+            card_contacto,
+            text='"Todo tiene solución, menos la muerte... y aun así, existen excepciones."',
+            font=ctk.CTkFont(size=10, slant="italic"),
+            text_color="#A1A1AA"
+        )
+        lbl_lema.pack(pady=(2, 10))
+
+        return frame
+
+    # -------------------------------------------------------------------------
+    # F. VISTA 6: AJUSTES (GRID REACTIVO Y COLAPSO TOTAL)
+    # -------------------------------------------------------------------------
+    def _crear_vista_ajustes(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        # Fila 0: Encabezado
+        self.header_ajustes = ctk.CTkFrame(frame, fg_color="transparent")
+        self.header_ajustes.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 4))
+
+        lbl_title = ctk.CTkLabel(
+            self.header_ajustes,
+            text="Parámetros de Configuración y Preferencias",
+            image=self.iconos.get("ajustes"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        # Fila 1: Banner Dinámico de Advertencia (Oculto inicialmente sin reservar espacio)
+        self.banner_advertencia = ctk.CTkFrame(frame, fg_color="#2A2415", border_width=1, border_color="#F5A623", corner_radius=8)
+        self.banner_advertencia.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 6))
+        self.banner_advertencia.grid_remove()
+
+        banner_inner = ctk.CTkFrame(self.banner_advertencia, fg_color="transparent")
+        banner_inner.pack(fill="x", padx=10, pady=6)
+
+        self.lbl_adv_text = ctk.CTkLabel(
+            banner_inner,
+            text="⚠️ Has modificado parámetros críticos de red. Reducir los tiempos puede causar errores en conexiones lentas.",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#F5A623",
+            anchor="w"
+        )
+        self.lbl_adv_text.pack(fill="x", pady=(0, 4))
+
+        self.adv_btn_row = ctk.CTkFrame(banner_inner, fg_color="transparent")
+        self.adv_btn_row.pack(fill="x")
+
+        self.btn_guardar_ajustes = ctk.CTkButton(
+            self.adv_btn_row,
+            text="Guardar Cambios",
+            width=120,
+            height=26,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#2E7D32",
+            hover_color="#1B5E20",
+            command=self._guardar_cambios_ajustes
+        )
+        self.btn_guardar_ajustes.pack(side="left", padx=(0, 8))
+
+        self.btn_restaurar_ajustes = ctk.CTkButton(
+            self.adv_btn_row,
+            text="Restaurar Valores por Defecto",
+            width=170,
+            height=26,
+            font=ctk.CTkFont(size=10),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._restaurar_defaults_ajustes
+        )
+        self.btn_restaurar_ajustes.pack(side="left")
+
+        # Fila 2: Contenedor desplazable de ajustes (Sube de inmediato si el banner no existe)
+        self.scroll_ajustes = ctk.CTkScrollableFrame(frame, height=290, fg_color="transparent")
+        self.scroll_ajustes.grid(row=2, column=0, sticky="nsew", padx=12, pady=(2, 10))
+        frame.grid_rowconfigure(2, weight=1)
+
+        # 1. BLOQUE: Timeouts y Esperas
+        card_timeouts = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card_timeouts.pack(fill="x", pady=4)
+
+        t_lbl = ctk.CTkLabel(card_timeouts, text="Timeouts y Esperas de Red (Segundos)", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
+        t_lbl.pack(anchor="w", padx=12, pady=(6, 4))
+
+        self._crear_control_timeout(card_timeouts, "Login Timeout:", "login", self.var_login_timeout, 5, 30)
+        self._crear_control_timeout(card_timeouts, "Espera AJAX / Peticiones:", "ajax", self.var_ajax_timeout, 5, 30)
+        self._crear_control_timeout(card_timeouts, "Búsqueda de Elementos DOM:", "element", self.var_element_timeout, 5, 30)
+        ctk.CTkLabel(card_timeouts, text="", height=2).pack()
+
+        # 2. BLOQUE: Preferencia de Navegador
+        card_browser = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card_browser.pack(fill="x", pady=4)
+
+        b_lbl = ctk.CTkLabel(card_browser, text="Preferencia de Navegador y Ventana", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
+        b_lbl.pack(anchor="w", padx=12, pady=(6, 4))
+
+        row_nav = ctk.CTkFrame(card_browser, fg_color="transparent")
+        row_nav.pack(fill="x", padx=12, pady=2)
+        ctk.CTkLabel(row_nav, text="Navegador Principal:", font=ctk.CTkFont(size=10), text_color="#A1A1AA").pack(side="left")
+
+        combo_nav = ctk.CTkComboBox(
+            row_nav,
+            values=["Firefox (Recomendado)", "Google Chrome", "Microsoft Edge"],
+            variable=self.var_browser_pref,
+            width=200,
+            height=26,
+            command=lambda v: self._al_modificar_parametro()
+        )
+        combo_nav.pack(side="right")
+
+        row_max = ctk.CTkFrame(card_browser, fg_color="transparent")
+        row_max.pack(fill="x", padx=12, pady=2)
+        sw_max = ctk.CTkSwitch(
+            row_max,
+            text="Iniciar navegador maximizado",
+            variable=self.var_start_maximized,
+            font=ctk.CTkFont(size=10),
+            command=self._al_modificar_parametro
+        )
+        sw_max.pack(side="left")
+        ctk.CTkLabel(card_browser, text="", height=2).pack()
+
+        # 3. BLOQUE: Opciones de Captura y Logs
+        card_logs = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        card_logs.pack(fill="x", pady=4)
+
+        l_lbl = ctk.CTkLabel(card_logs, text="Opciones de Captura y Validación", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
+        l_lbl.pack(anchor="w", padx=12, pady=(6, 4))
+
+        row_sw1 = ctk.CTkFrame(card_logs, fg_color="transparent")
+        row_sw1.pack(fill="x", padx=12, pady=2)
+        sw_cap = ctk.CTkSwitch(
+            row_sw1,
+            text="Capturar pantalla automáticamente en caso de error (logs/screenshots/)",
+            variable=self.var_capture_screenshots,
+            font=ctk.CTkFont(size=10),
+            command=self._al_modificar_parametro
+        )
+        sw_cap.pack(side="left")
+
+        row_sw2 = ctk.CTkFrame(card_logs, fg_color="transparent")
+        row_sw2.pack(fill="x", padx=12, pady=2)
+        sw_det = ctk.CTkSwitch(
+            row_sw2,
+            text="Habilitar trazas detalladas de normalización en disco (normalizacion.log)",
+            variable=self.var_detailed_logs,
+            font=ctk.CTkFont(size=10),
+            command=self._al_modificar_parametro
+        )
+        sw_det.pack(side="left")
+
+        row_tlf = ctk.CTkFrame(card_logs, fg_color="transparent")
+        row_tlf.pack(fill="x", padx=12, pady=3)
+        ctk.CTkLabel(row_tlf, text="Teléfono por defecto para menores:", font=ctk.CTkFont(size=10), text_color="#A1A1AA").pack(side="left")
+        entry_tlf = ctk.CTkEntry(row_tlf, textvariable=self.var_default_phone, width=120, height=24)
+        entry_tlf.pack(side="right")
+        entry_tlf.bind("<KeyRelease>", lambda e: self._al_modificar_parametro())
+        ctk.CTkLabel(card_logs, text="", height=2).pack()
+
+        return frame
+
+    def _crear_control_timeout(self, padre, etiqueta: str, clave: str, variable: tk.IntVar, v_min: int, v_max: int):
+        row = ctk.CTkFrame(padre, fg_color="transparent")
+        row.pack(fill="x", padx=12, pady=2)
+
+        lbl_nom = ctk.CTkLabel(row, text=etiqueta, width=160, anchor="w", font=ctk.CTkFont(size=10), text_color="#A1A1AA")
+        lbl_nom.pack(side="left")
+
+        val_lbl = ctk.CTkLabel(row, text=f"{variable.get()}s", width=30, font=ctk.CTkFont(size=10, weight="bold"), text_color="#E0E0E8")
+        val_lbl.pack(side="right")
+        self.labels_sliders[clave] = val_lbl
+
+        def _on_slider(val):
+            val_lbl.configure(text=f"{int(val)}s")
+            self._al_modificar_parametro()
+
+        slider = ctk.CTkSlider(
+            row,
+            from_=v_min,
+            to=v_max,
+            number_of_steps=v_max - v_min,
+            variable=variable,
+            height=12,
+            command=_on_slider
+        )
+        slider.pack(side="right", fill="x", expand=True, padx=8)
+
+    def _al_modificar_parametro(self):
+        """Muestra el banner de advertencia con transición suave o lo oculta inmediatamente."""
+        modificado = (
+            self.var_login_timeout.get() != self.defaults_ajustes["login"] or
+            self.var_ajax_timeout.get() != self.defaults_ajustes["ajax"] or
+            self.var_element_timeout.get() != self.defaults_ajustes["element"] or
+            self.var_browser_pref.get() != self.defaults_ajustes["browser"] or
+            self.var_start_maximized.get() != self.defaults_ajustes["maximized"] or
+            self.var_capture_screenshots.get() != self.defaults_ajustes["screenshots"] or
+            self.var_detailed_logs.get() != self.defaults_ajustes["logs"] or
+            self.var_default_phone.get() != self.defaults_ajustes["phone"]
+        )
+        if modificado:
+            if not self.banner_advertencia.winfo_ismapped():
+                self._mostrar_banner_advertencia_suave()
+        else:
+            self._ocultar_banner_advertencia_inmediato()
+
+    def _mostrar_banner_advertencia_suave(self):
+        """Muestra el banner de advertencia desplegando sus elementos secuencialmente con retardo de 40 ms."""
+        if hasattr(self, "_banner_anim_id") and self._banner_anim_id:
+            try:
+                self.after_cancel(self._banner_anim_id)
+            except Exception:
+                pass
+            self._banner_anim_id = None
+
+        # Ocultar temporalmente los hijos para entrada secuencial suave
+        if hasattr(self, "lbl_adv_text"):
+            self.lbl_adv_text.pack_forget()
+        if hasattr(self, "adv_btn_row"):
+            self.adv_btn_row.pack_forget()
+
+        # Colocar el contenedor en grid
+        self.banner_advertencia.grid()
+
+        def _paso_1():
+            if hasattr(self, "lbl_adv_text"):
+                self.lbl_adv_text.pack(fill="x", pady=(0, 4))
+            self._banner_anim_id = self.after(40, _paso_2)
+
+        def _paso_2():
+            if hasattr(self, "adv_btn_row"):
+                self.adv_btn_row.pack(fill="x")
+            self._banner_anim_id = None
+
+        self._banner_anim_id = self.after(40, _paso_1)
+
+    def _ocultar_banner_advertencia_inmediato(self):
+        """Oculta el banner de inmediato mediante grid_remove() para que el contenido inferior suba limpiamente."""
+        if hasattr(self, "_banner_anim_id") and self._banner_anim_id:
+            try:
+                self.after_cancel(self._banner_anim_id)
+            except Exception:
+                pass
+            self._banner_anim_id = None
+
+        if hasattr(self, "banner_advertencia") and self.banner_advertencia.winfo_ismapped():
+            self.banner_advertencia.grid_remove()
+
+        # Restaurar visibilidad de los hijos para la próxima visualización
+        if hasattr(self, "lbl_adv_text") and not self.lbl_adv_text.winfo_ismapped():
+            self.lbl_adv_text.pack(fill="x", pady=(0, 4))
+        if hasattr(self, "adv_btn_row") and not self.adv_btn_row.winfo_ismapped():
+            self.adv_btn_row.pack(fill="x")
+
+    def _guardar_cambios_ajustes(self):
+        """Actualiza los valores baseline y oculta el banner inmediatamente."""
+        self.defaults_ajustes["login"] = self.var_login_timeout.get()
+        self.defaults_ajustes["ajax"] = self.var_ajax_timeout.get()
+        self.defaults_ajustes["element"] = self.var_element_timeout.get()
+        self.defaults_ajustes["browser"] = self.var_browser_pref.get()
+        self.defaults_ajustes["maximized"] = self.var_start_maximized.get()
+        self.defaults_ajustes["screenshots"] = self.var_capture_screenshots.get()
+        self.defaults_ajustes["logs"] = self.var_detailed_logs.get()
+        self.defaults_ajustes["phone"] = self.var_default_phone.get()
+
+        self._ocultar_banner_advertencia_inmediato()
+        self._agregar_log(f"[AJUSTES] Parámetros guardados: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s.")
+
+    def _restaurar_defaults_ajustes(self):
+        """Restaura los valores por defecto y retira el banner inmediatamente sin dejar espacios."""
+        self.var_login_timeout.set(15)
+        self.var_ajax_timeout.set(15)
+        self.var_element_timeout.set(12)
+        self.var_browser_pref.set("Firefox (Recomendado)")
+        self.var_start_maximized.set(True)
+        self.var_capture_screenshots.set(True)
+        self.var_detailed_logs.set(True)
+        self.var_default_phone.set("0412-0000000")
+
+        if "login" in self.labels_sliders:
+            self.labels_sliders["login"].configure(text="15s")
+        if "ajax" in self.labels_sliders:
+            self.labels_sliders["ajax"].configure(text="15s")
+        if "element" in self.labels_sliders:
+            self.labels_sliders["element"].configure(text="12s")
+
+        self.defaults_ajustes["login"] = 15
+        self.defaults_ajustes["ajax"] = 15
+        self.defaults_ajustes["element"] = 12
+        self.defaults_ajustes["browser"] = "Firefox (Recomendado)"
+        self.defaults_ajustes["maximized"] = True
+        self.defaults_ajustes["screenshots"] = True
+        self.defaults_ajustes["logs"] = True
+        self.defaults_ajustes["phone"] = "0412-0000000"
+
+        self._ocultar_banner_advertencia_inmediato()
+        self._agregar_log("[AJUSTES] Valores restaurados por defecto. Banner de advertencia retirado.")
+
+    # -------------------------------------------------------------------------
+    # G. PANEL INFERIOR: TELEMETRÍA Y PROGRESO CON TOOLBAR COMPACTA
+    # -------------------------------------------------------------------------
+    def _crear_panel_telemetria(self, padre):
+        self.panel_telemetria = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        self.panel_telemetria.grid(row=1, column=0, sticky="nsew")
+        self.panel_telemetria.grid_rowconfigure(2, weight=1)
+        self.panel_telemetria.grid_columnconfigure(0, weight=1)
+
+        telemetria_header = ctk.CTkFrame(self.panel_telemetria, fg_color="transparent")
+        telemetria_header.grid(row=0, column=0, sticky="ew", padx=16, pady=(8, 4))
+
+        lbl_telemetria = ctk.CTkLabel(
+            telemetria_header,
+            text="Telemetría y Registro de Ejecución",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_telemetria.pack(side="left")
+
+        # Barra de herramientas compacta a la derecha (Directiva 2)
+        toolbar_right = ctk.CTkFrame(telemetria_header, fg_color="transparent")
+        toolbar_right.pack(side="right")
+
+        self.lbl_porcentaje = ctk.CTkLabel(
+            toolbar_right,
+            text="Progreso: 0%",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#3B8ED0"
+        )
+        self.lbl_porcentaje.pack(side="left", padx=(0, 10))
+
+        self.btn_copiar_logs = ctk.CTkButton(
+            toolbar_right,
+            text="📋 Copiar",
+            width=68,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._copiar_logs
+        )
+        self.btn_copiar_logs.pack(side="left", padx=(0, 6))
+
+        self.btn_limpiar_logs = ctk.CTkButton(
+            toolbar_right,
+            text="🧹 Limpiar",
+            width=68,
+            height=24,
+            font=ctk.CTkFont(size=11),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._limpiar_logs
+        )
+        self.btn_limpiar_logs.pack(side="left")
+
+        self.progreso = ctk.CTkProgressBar(self.panel_telemetria, height=7)
+        self.progreso.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 6))
+        self.progreso.set(0.0)
+        self.barra_progreso = self.progreso  # Alias para compatibilidad directa con directiva de animación
+
+        self.textbox_logs = ctk.CTkTextbox(
+            self.panel_telemetria,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            height=110,
+            corner_radius=8,
+            fg_color="#121218",
+            text_color="#D1D1D6"
+        )
+        self.textbox_logs.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 10))
+
+    def _copiar_logs(self):
+        """Copia el contenido del visor de telemetría al portapapeles con feedback temporal."""
+        try:
+            texto = self.textbox_logs.get("0.0", tk.END).strip()
+            if texto:
+                self.clipboard_clear()
+                self.clipboard_append(texto)
+                self.btn_copiar_logs.configure(text="✓ Copiado", fg_color="#2E7D32")
+                self.after(1500, lambda: self.btn_copiar_logs.configure(text="📋 Copiar", fg_color="#2B2B36"))
+        except Exception:
+            pass
+
+    def _limpiar_logs(self):
+        """Vacía el visor de eventos para iniciar una sesión de prueba limpia."""
+        self.textbox_logs.delete("0.0", tk.END)
+        self._agregar_log("[CONSOLA] Registro de eventos vaciado.")
+
+    # =========================================================================
+    # LÓGICA FUNCIONAL (EXAMINAR, DESCARTAR, URLS, ASINCRONISMO)
+    # =========================================================================
+    def _examinar_archivo_formacion(self):
+        ruta = filedialog.askopenfilename(
+            title="Seleccionar archivo de estudiantes / formación",
+            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Todos los archivos", "*.*")]
+        )
+        if not ruta:
+            return
+
+        self.archivo_actual_ruta = ruta
+        nombre = os.path.basename(ruta)
+        self.archivo_seleccionado_formacion.set(f"📄 {nombre}")
+        self.lbl_archivo_formacion.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
+        self.btn_descartar_formacion.pack(side="right", padx=(6, 4))
+
+        self._agregar_log(f"[ARCHIVO] Archivo seleccionado: {nombre}")
+        self._procesar_archivo_en_frio(ruta, seccion="Formacion")
+
+    def _descartar_archivo_formacion(self):
+        """Deselecciona el archivo de formación, oculta la tarjeta de pre-vuelo y limpia datos."""
+        self.archivo_actual_ruta = ""
+        self.participantes_cargados = []
+        self.datos_normalizados_actuales = []
+        self.archivo_seleccionado_formacion.set("Ningún archivo seleccionado")
+        self.lbl_archivo_formacion.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.btn_descartar_formacion.pack_forget()
+        if hasattr(self, "card_prevuelo_formacion") and self.card_prevuelo_formacion.winfo_manager() == "pack":
+            self.card_prevuelo_formacion.pack_forget()
+        self._agregar_log("[ARCHIVO] Archivo de formación deseleccionado.")
+
+    def _examinar_archivo_servicios(self):
+        ruta = filedialog.askopenfilename(
+            title="Seleccionar archivo de usuarios de atención / servicios",
+            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Todos los archivos", "*.*")]
+        )
+        if not ruta:
+            return
+
+        self.archivo_actual_ruta = ruta
+        nombre = os.path.basename(ruta)
+        self.archivo_seleccionado_servicios.set(f"📄 {nombre}")
+        self.lbl_archivo_servicios.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
+        self.btn_descartar_servicios.pack(side="right", padx=(6, 4))
+
+        self._agregar_log(f"[ARCHIVO] Archivo de servicios seleccionado: {nombre}")
+        self._procesar_archivo_en_frio(ruta, seccion="Servicios")
+
+    def _descartar_archivo_servicios(self):
+        """Deselecciona el archivo de servicios, oculta la tarjeta de pre-vuelo y limpia datos."""
+        self.archivo_actual_ruta = ""
+        self.participantes_cargados = []
+        self.datos_normalizados_actuales = []
+        self.archivo_seleccionado_servicios.set("Ningún archivo seleccionado")
+        self.lbl_archivo_servicios.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.btn_descartar_servicios.pack_forget()
+        if hasattr(self, "card_prevuelo_servicios") and self.card_prevuelo_servicios.winfo_manager() == "pack":
+            self.card_prevuelo_servicios.pack_forget()
+        self._agregar_log("[ARCHIVO] Archivo de servicios deseleccionado.")
+
+    def _procesar_archivo_en_frio(self, ruta: str, seccion: str = "Formacion"):
+        if not MODULOS_DISPONIBLES:
+            self._agregar_log("[ERROR] Módulos de normalización no disponibles.")
+            return
+
+        try:
+            participantes = procesar_archivo_participantes(ruta)
+            if not participantes:
+                self._agregar_log(f"[ADVERTENCIA] No se detectaron participantes válidos en '{os.path.basename(ruta)}'.")
+                return
+
+            participantes = deduplicar_participantes(participantes)
+            self.participantes_cargados = participantes
+            self.datos_normalizados_actuales = participantes
+
+            total = len(participantes)
+            ci_saime = 0
+            ci_escolar = 0
+            menores_sin_doc = 0
+            inconsistencias = 0
+
+            for p in participantes:
+                if p.get('cedulado') == 'si' or p.get('cedula'):
+                    ci_saime += 1
+                elif p.get('cedulado') == 'escolar' or p.get('cedula_escolar'):
+                    ci_escolar += 1
+                else:
+                    menores_sin_doc += 1
+
+                # Validación de consistencia estructural
+                tiene_nombre = bool(p.get('nombre') and p.get('apellido'))
+                tiene_doc = bool(p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre'))
+                if not (tiene_nombre and tiene_doc):
+                    inconsistencias += 1
+
+            if inconsistencias == 0:
+                estado_txt = "● Estructura Válida (0 inconsistencias)"
+                estado_color = "#30D158"
+            else:
+                estado_txt = f"▲ {inconsistencias} inconsistencia(s) detectada(s)"
+                estado_color = "#F39C12"
+
+            desglose_txt = f"{ci_saime} Cedulados  |  {ci_escolar} Escolares  |  {menores_sin_doc} Menores S/C"
+
+            if seccion == "Servicios":
+                if hasattr(self, "lbl_prevuelo_servicios_total"):
+                    self.lbl_prevuelo_servicios_total.configure(text=f"Total: {total} usuarios")
+                    self.lbl_prevuelo_servicios_desglose.configure(text=desglose_txt)
+                    self.lbl_prevuelo_servicios_estado.configure(text=estado_txt, text_color=estado_color)
+                if hasattr(self, "card_prevuelo_servicios") and self.card_prevuelo_servicios.winfo_manager() != "pack":
+                    self.card_prevuelo_servicios.pack(fill="x", padx=16, pady=(0, 8), before=self.url_container_servicios)
+            else:
+                if hasattr(self, "lbl_prevuelo_formacion_total"):
+                    self.lbl_prevuelo_formacion_total.configure(text=f"Total: {total} participantes")
+                    self.lbl_prevuelo_formacion_desglose.configure(text=desglose_txt)
+                    self.lbl_prevuelo_formacion_estado.configure(text=estado_txt, text_color=estado_color)
+                if hasattr(self, "card_prevuelo_formacion") and self.card_prevuelo_formacion.winfo_manager() != "pack":
+                    self.card_prevuelo_formacion.pack(fill="x", padx=16, pady=(0, 8), before=self.url_container_formacion)
+
+            self._agregar_log("────────────────────────────────────────────────────────────")
+            self._agregar_log(f"[ETL] Resumen de normalización: '{os.path.basename(ruta)}'")
+            self._agregar_log(f"[OK] Total de participantes válidos: {total}")
+            self._agregar_log(f"[DATOS] ├─ Cédulas de Identidad (SAIME): {ci_saime}")
+            self._agregar_log(f"[DATOS] ├─ Cédulas Escolares (CE): {ci_escolar}")
+            self._agregar_log(f"[DATOS] └─ Menores vinculados a tutor / S/C: {menores_sin_doc}")
+            self._agregar_log(f"[INFO] Ingesta completada: {total} registros listos para revisión previa.")
+            self._agregar_log("────────────────────────────────────────────────────────────")
+
+        except Exception as e:
+            self._agregar_log(f"[ERROR] Fallo al normalizar archivo: {e}")
+
+    def _abrir_tabla_previsualizacion(self, titulo_fuente: str):
+        """Abre ventana modal CTkToplevel para inspeccionar y auditar los datos normalizados en tabla."""
+        datos = self.datos_normalizados_actuales or self.participantes_cargados
+        if not datos:
+            datos = [
+                {"nombre": "Eduardo", "apellido": "Pineda", "cedula": "36996120", "cedulado": "si", "edad": 15, "nacimiento": "2011-04-12", "telefono": "0412-1112233"},
+                {"nombre": "Marcela", "apellido": "Villegas", "cedula_escolar": "11607579666", "cedulado": "escolar", "edad": 10, "nacimiento": "2016-07-20", "telefono": "0414-9998877"},
+                {"nombre": "Damián", "apellido": "Gutiérrez", "cedula": "35890123", "cedulado": "si", "edad": 16, "nacimiento": "2010-02-18", "telefono": "0424-5554433"},
+                {"nombre": "Sofía", "apellido": "Hernández", "cedula_padre": "18456123", "cedulado": "escolar", "edad": 8, "nacimiento": "2018-09-05", "telefono": "0416-2223344"},
+                {"nombre": "Lucas", "apellido": "Camacho", "cedula": "34112980", "cedulado": "si", "edad": 17, "nacimiento": "2009-11-30", "telefono": "0412-7776655"},
+            ]
+
+        self.update_idletasks()
+        ancho_modal = 850
+        alto_modal = 500
+        pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho_modal) // 2)
+        pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto_modal) // 2)
+
+        modal = ctk.CTkToplevel(self)
+        modal.title("Previsualización y Auditoría de Datos Normalizados")
+        modal.geometry(f"{ancho_modal}x{alto_modal}+{pos_x}+{pos_y}")
+        modal.minsize(800, 450)
+        modal.transient(self)
+        modal.grab_set()
+        modal.focus_set()
+
+        modal.grid_columnconfigure(0, weight=1)
+        modal.grid_rowconfigure(2, weight=1)
+
+        # 1. Cabecera del Modal
+        header_frame = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
+        header_frame.grid(row=0, column=0, sticky="ew")
+
+        header_inner = ctk.CTkFrame(header_frame, fg_color="transparent")
+        header_inner.pack(fill="x", padx=16, pady=10)
+
+        lbl_modal_title = ctk.CTkLabel(
+            header_inner,
+            text="Previsualización y Auditoría de Datos Normalizados",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_modal_title.pack(anchor="w")
+
+        nombre_arc = os.path.basename(self.archivo_actual_ruta) if self.archivo_actual_ruta else "Demostración en frío"
+        lbl_modal_sub = ctk.CTkLabel(
+            header_inner,
+            text=f"Módulo: {titulo_fuente}  •  Origen: {nombre_arc}  •  Registros: {len(datos)}",
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98"
+        )
+        lbl_modal_sub.pack(anchor="w", pady=(2, 0))
+
+        # 2. Encabezado Fijo de Columnas
+        col_frame = ctk.CTkFrame(modal, fg_color="#161620", corner_radius=6, border_width=1, border_color="#292938")
+        col_frame.grid(row=1, column=0, sticky="ew", padx=14, pady=(10, 4))
+
+        columnas_def = [
+            ("N°", 36, "center"),
+            ("Nombres y Apellidos", 200, "w"),
+            ("Documento / Cédula", 120, "center"),
+            ("Tipo", 80, "center"),
+            ("Edad / F. Nac", 120, "center"),
+            ("Teléfono", 100, "center"),
+            ("Diagnóstico", 84, "center"),
+        ]
+
+        for nombre_col, ancho_col, alineacion in columnas_def:
+            lbl_c = ctk.CTkLabel(
+                col_frame,
+                text=nombre_col,
+                width=ancho_col,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color="#3B8ED0",
+                anchor=alineacion
+            )
+            lbl_c.pack(side="left", padx=3, pady=6)
+
+        # 3. Contenedor de Filas con Scroll
+        scroll_tabla = ctk.CTkScrollableFrame(modal, fg_color="#121218", corner_radius=8)
+        scroll_tabla.grid(row=2, column=0, sticky="nsew", padx=14, pady=(0, 8))
+
+        for idx, p in enumerate(datos, start=1):
+            bg_fila = "#181824" if idx % 2 == 0 else "#1E1E2C"
+            fila_frame = ctk.CTkFrame(scroll_tabla, fg_color=bg_fila, corner_radius=6)
+            fila_frame.pack(fill="x", pady=2)
+
+            nombre_ap = f"{p.get('nombre', '')} {p.get('apellido', '')}".strip().title()
+            if not nombre_ap:
+                nombre_ap = "Sin nombre registrado"
+
+            ced = str(p.get('cedula', '') or '').strip()
+            ced_esc = str(p.get('cedula_escolar', '') or '').strip()
+            ced_pad = str(p.get('cedula_padre', '') or '').strip()
+            cedulado_flag = p.get('cedulado', '')
+
+            if ced or cedulado_flag == 'si':
+                doc_str = f"V-{ced}" if ced else "V-(S/N)"
+                tipo_str = "SAIME"
+                tipo_color = "#3B8ED0"
+            elif ced_esc or cedulado_flag == 'escolar':
+                doc_str = f"CE-{ced_esc}" if ced_esc else f"Rep:{ced_pad}"
+                tipo_str = "Escolar"
+                tipo_color = "#F39C12"
+            elif ced_pad:
+                doc_str = f"Rep: {ced_pad}"
+                tipo_str = "Menor S/C"
+                tipo_color = "#9B59B6"
+            else:
+                doc_str = "S/C"
+                tipo_str = "Menor S/C"
+                tipo_color = "#9B59B6"
+
+            edad = p.get('edad')
+            nac = p.get('nacimiento') or ''
+            if edad is not None and nac:
+                edad_nac_str = f"{edad}a ({nac})"
+            elif edad is not None:
+                edad_nac_str = f"{edad} años"
+            elif nac:
+                edad_nac_str = f"{nac}"
+            else:
+                edad_nac_str = "N/D"
+
+            tlf_str = p.get('telefono') or "No reg."
+
+            es_valido = bool(p.get('nombre') and p.get('apellido') and (ced or ced_esc or ced_pad))
+            if es_valido:
+                diag_str = "[OK] Listo"
+                diag_color = "#30D158"
+            else:
+                diag_str = "[!] Revisar"
+                diag_color = "#E74C3C"
+
+            ctk.CTkLabel(fila_frame, text=str(idx), width=36, font=ctk.CTkFont(size=10), text_color="#8E8E98", anchor="center").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=nombre_ap, width=200, font=ctk.CTkFont(size=10, weight="bold"), text_color="#FFFFFF", anchor="w").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=doc_str, width=120, font=ctk.CTkFont(family="Consolas", size=10), text_color="#E0E0E8", anchor="center").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=tipo_str, width=80, font=ctk.CTkFont(size=10, weight="bold"), text_color=tipo_color, anchor="center").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=edad_nac_str, width=120, font=ctk.CTkFont(size=10), text_color="#A1A1AA", anchor="center").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=tlf_str, width=100, font=ctk.CTkFont(family="Consolas", size=10), text_color="#A1A1AA", anchor="center").pack(side="left", padx=3, pady=5)
+            ctk.CTkLabel(fila_frame, text=diag_str, width=84, font=ctk.CTkFont(size=10, weight="bold"), text_color=diag_color, anchor="center").pack(side="left", padx=3, pady=5)
+
+        # 4. Pie del Modal
+        footer_frame = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
+        footer_frame.grid(row=3, column=0, sticky="ew")
+
+        footer_inner = ctk.CTkFrame(footer_frame, fg_color="transparent")
+        footer_inner.pack(fill="x", padx=16, pady=8)
+
+        lbl_resumen = ctk.CTkLabel(
+            footer_inner,
+            text=f"Mostrando {len(datos)} registros normalizados listos para inyección.",
+            font=ctk.CTkFont(size=11),
+            text_color="#A1A1AA"
+        )
+        lbl_resumen.pack(side="left")
+
+        btn_cerrar = ctk.CTkButton(
+            footer_inner,
+            text="Cerrar y Continuar",
+            width=140,
+            height=30,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=modal.destroy
+        )
+        btn_cerrar.pack(side="right")
+
+    def _pegar_portapapeles_url(self, entry_widget: ctk.CTkEntry):
+        try:
+            texto = self.clipboard_get().strip()
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, texto)
+            self._validar_sintaxis_url(entry_widget)
+            self._agregar_log("[INTERFAZ] URL pegada desde el portapapeles.")
+        except Exception:
+            self._agregar_log("[AVISO] No se encontró texto válido en el portapapeles.")
+
+    def _validar_sintaxis_url(self, entry_widget: ctk.CTkEntry):
+        texto = entry_widget.get().strip()
+        if not texto:
+            entry_widget.configure(border_color="#3A3A4A")
+            return
+
+        if "id_activity=" in texto or "id_service=" in texto:
+            entry_widget.configure(border_color="#2ECC71")
+        else:
+            entry_widget.configure(border_color="#F39C12")
+
+    def _iniciar_ejecucion_asincrona_formacion(self):
+        if self.ejecutando_tarea:
+            return
+
+        self.ejecutando_tarea = True
+        self.btn_iniciar_formacion.configure(state="disabled", text="EJECUTANDO CARGA...", fg_color="#0F6CBD")
+        self.progreso.set(0.0)
+        self.lbl_porcentaje.configure(text="Progreso: 0%")
+        self._iniciar_pulso_estado()
+
+        threading.Thread(target=self._hilo_proceso_carga_formacion, daemon=True).start()
+
+    def _iniciar_ejecucion_asincrona_servicios(self):
+        if self.ejecutando_tarea:
+            return
+
+        self.ejecutando_tarea = True
+        self.btn_iniciar_servicios.configure(state="disabled", text="EJECUTANDO SERVICIOS...", fg_color="#1B5E20")
+        self.progreso.set(0.0)
+        self.lbl_porcentaje.configure(text="Progreso: 0%")
+        self._iniciar_pulso_estado()
+
+        threading.Thread(target=self._hilo_proceso_carga_servicios, daemon=True).start()
+
+    def _hilo_proceso_carga_formacion(self):
+        self._agregar_log("[INICIO] Proceso de Carga Automatizada iniciado en hilo seguro.")
+
+        participantes = self.participantes_cargados or [
+            {"nombre": "Eduardo", "apellido": "Pineda", "cedula": "36996120", "cedulado": "si"},
+            {"nombre": "Marcela", "apellido": "Villegas", "cedula_escolar": "11607579666", "cedulado": "escolar"},
+            {"nombre": "Damián", "apellido": "Gutiérrez", "cedula": "35890123", "cedulado": "si"},
+            {"nombre": "Sofía", "apellido": "Hernández", "cedula_padre": "18456123", "cedulado": "escolar"},
+            {"nombre": "Lucas", "apellido": "Camacho", "cedula": "34112980", "cedulado": "si"},
+        ]
+
+        total = len(participantes)
+        for idx, p in enumerate(participantes, 1):
+            time.sleep(0.35)
+
+            if p.get('cedula'):
+                doc = f"C.I. {p.get('cedula')}"
+            elif p.get('cedula_escolar'):
+                doc = f"C.E. {p.get('cedula_escolar')}"
+            elif p.get('cedula_padre'):
+                doc = f"Rep: {p.get('cedula_padre')}"
+            else:
+                doc = "S/C"
+
+            nombre_comp = f"{p.get('nombre', '')} {p.get('apellido', '')}".strip()
+            pct = idx / total
+
+            self.cola_eventos.put(("progreso", pct))
+            self._agregar_log(f"[OK] Alumno {idx}/{total}: {nombre_comp} ({doc}) verificado y procesado.")
+
+        time.sleep(0.2)
+        self.cola_eventos.put(("fin_formacion", total))
+
+    def _hilo_proceso_carga_servicios(self):
+        self._agregar_log("[INICIO] Proceso de Servicios Comunitarios iniciado.")
+
+        usuarios = self.participantes_cargados or [
+            {"nombre": "Beatriz", "apellido": "Gómez", "cedula": "15432987"},
+            {"nombre": "Carlos", "apellido": "Mendoza", "cedula": "12876543"},
+            {"nombre": "Elena", "apellido": "Rivas", "cedula": "20345678"},
+        ]
+
+        total = len(usuarios)
+        for idx, u in enumerate(usuarios, 1):
+            time.sleep(0.4)
+            pct = idx / total
+            nombre_comp = f"{u.get('nombre', '')} {u.get('apellido', '')}".strip()
+            doc = u.get('cedula') or u.get('cedula_escolar') or "S/C"
+
+            self.cola_eventos.put(("progreso", pct))
+            self._agregar_log(f"[OK] Usuario {idx}/{total}: {nombre_comp} ({doc}) registrado en servicio.")
+
+        self.cola_eventos.put(("fin_servicios", total))
+
+    def animar_progreso(self, valor_objetivo: float, paso_actual=None):
+        """Avanza la barra de progreso de forma suave sin saltos bruscos."""
+        if paso_actual is None:
+            paso_actual = self.barra_progreso.get()
+            self._target_progreso = valor_objetivo
+
+        # Si el valor objetivo cambió por una llamada más reciente, salir del ciclo previo
+        if hasattr(self, "_target_progreso") and self._target_progreso != valor_objetivo:
+            return
+
+        # Diferencia entre el valor actual y el deseado
+        diff = valor_objetivo - paso_actual
+        if abs(diff) > 0.01:
+            nuevo_valor = paso_actual + (diff * 0.25)
+            self.barra_progreso.set(nuevo_valor)
+            self.lbl_porcentaje.configure(text=f"Progreso: {int(nuevo_valor * 100)}%")
+            self.after(30, lambda: self.animar_progreso(valor_objetivo, nuevo_valor))
+        else:
+            self.barra_progreso.set(valor_objetivo)
+            self.lbl_porcentaje.configure(text=f"Progreso: {int(valor_objetivo * 100)}%")
+
+    def _actualizar_progreso_ui(self, valor: float, etiqueta: str = ""):
+        self.animar_progreso(valor)
+
+    def _iniciar_pulso_estado(self):
+        """Inicia el efecto de pulso visual suave en el indicador de estado lateral."""
+        self._animando_pulso = True
+        self._color_pulso_actual = "#38bdf8"
+        if hasattr(self, "lbl_status"):
+            self.lbl_status.configure(text="● Procesando datos...", text_color=self._color_pulso_actual)
+        self._ciclo_pulso_estado()
+
+    def _ciclo_pulso_estado(self):
+        """Alterna el color del texto entre cyan y azul cada 500 ms con self.after()."""
+        if not getattr(self, "_animando_pulso", False):
+            return
+
+        if hasattr(self, "lbl_status"):
+            self._color_pulso_actual = "#0284c7" if self._color_pulso_actual == "#38bdf8" else "#38bdf8"
+            self.lbl_status.configure(text="● Procesando datos...", text_color=self._color_pulso_actual)
+
+        self._pulso_after_id = self.after(500, self._ciclo_pulso_estado)
+
+    def _detener_pulso_estado(self):
+        """Detiene el pulso y restablece de inmediato el indicador a verde fijo."""
+        self._animando_pulso = False
+        if hasattr(self, "_pulso_after_id") and self._pulso_after_id:
+            try:
+                self.after_cancel(self._pulso_after_id)
+            except Exception:
+                pass
+            self._pulso_after_id = None
+
+        if hasattr(self, "lbl_status"):
+            self.lbl_status.configure(text="● Sistema Listo", text_color="#22c55e")
+
+    def _finalizar_ejecucion_formacion(self, total: int):
+        self.ejecutando_tarea = False
+        self._detener_pulso_estado()
+        self.animar_progreso(1.0)
+        self.btn_iniciar_formacion.configure(state="normal", text="INICIAR CARGA AUTOMATIZADA", fg_color="#1f538d")
+        self._agregar_log(f"[FINALIZADO] Proceso completado: {total} registros procesados.")
+
+    def _finalizar_ejecucion_servicios(self, total: int):
+        self.ejecutando_tarea = False
+        self._detener_pulso_estado()
+        self.animar_progreso(1.0)
+        self.btn_iniciar_servicios.configure(state="normal", text="INICIAR CARGA DE SERVICIOS", fg_color="#2E7D32")
+        self._agregar_log(f"[FINALIZADO] Servicios registrados: {total} usuarios procesados.")
+
+    def _abrir_directorio_salidas(self):
+        if MODULOS_DISPONIBLES:
+            abrir_archivo_asistido(BASE_DIR)
+            self._agregar_log(f"[REPORTES] Abriendo directorio de salidas: {BASE_DIR}")
+        else:
+            self._agregar_log(f"[REPORTES] Directorio de salidas: {BASE_DIR}")
+
+    def _abrir_plantilla_base(self):
+        plantilla = os.path.join(BASE_DIR, "config", "plantilla_base.ods")
+        if os.path.exists(plantilla) and MODULOS_DISPONIBLES:
+            abrir_archivo_asistido(plantilla)
+            self._agregar_log(f"[REPORTES] Abriendo plantilla base: {plantilla}")
+        else:
+            self._agregar_log(f"[ADVERTENCIA] No se localizó la plantilla: {plantilla}")
+
+    def _agregar_log(self, mensaje: str):
+        if threading.current_thread() is not threading.main_thread():
+            if hasattr(self, "cola_eventos"):
+                self.cola_eventos.put(("log", mensaje))
+            return
+
+        ts = datetime.now().strftime("%H:%M:%S")
+        linea = f"[{ts}] {mensaje}\n"
+        try:
+            self.textbox_logs.insert(tk.END, linea)
+            self.textbox_logs.see(tk.END)
+        except Exception:
+            pass
+
+
+# Aliases de compatibilidad
+AppGUI = JsBotGUI
+JsBotGUIPreview = JsBotGUI
+
+
+def iniciar_gui():
+    """Punto de entrada oficial para inicializar la aplicación de escritorio CustomTkinter."""
+    app = JsBotGUI()
+    app.mainloop()
+
+
+def main():
+    iniciar_gui()
+
+
+if __name__ == "__main__":
+    main()

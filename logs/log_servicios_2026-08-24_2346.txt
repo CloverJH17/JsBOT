@@ -1,0 +1,24 @@
+================================================================================
+REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v3.1.0
+Fecha Inicio : 2026-08-24 23:46:12
+Servicio     : Actividades de educación o aprendizaje
+Fecha Reg.   : 2026-08-24
+Operador     : jairhernandez
+================================================================================
+
+[23:46:43] [FALLIDO ] Doc:                    | Adrismar Milagros Bracovite Pereira | Usuario no existe en InfoApp (requiere registro previo de perfil)
+[23:47:00] [FALLIDO ] Doc:                    | Adrismar Milagros Bracovite Pereira | Usuario no existe en InfoApp (requiere registro previo de perfil)
+[23:57:01] [CRITICO ] Doc: CE:12621302079     | Adrismar Milagros Bracovite Pereira | name 're' is not defined
+[23:57:02] [CRITICO ] Doc: CE:11819454212     | Faiza Jabra                      | name 're' is not defined
+[23:57:03] [CRITICO ] Doc: CE:11911275624     | Arantza Sofia Peraza Martinez    | name 're' is not defined
+[23:57:04] [CRITICO ] Doc: CE:11816482158     | Isabella Lucia Rivero Vargas     | name 're' is not defined
+[23:57:05] [CRITICO ] Doc: CE:12322306118     | Isabella Valentina Rebgalado Materan | name 're' is not defined
+[23:57:06] [CRITICO ] Doc: 37128898           | Alessa Antonella Sequera Camacho | name 're' is not defined
+[23:57:07] [CRITICO ] Doc: CE:11920176024     | Luna Mercedes Villavicencio Muñoz | name 're' is not defined
+[23:57:08] [CRITICO ] Doc: CE:11916823939     | Camila Valentina Olivares Muñoz  | name 're' is not defined
+[23:57:09] [CRITICO ] Doc: CE:11719345932     | Hilary Andreina Camacho Ruiz     | name 're' is not defined
+[23:57:10] [CRITICO ] Doc: CE:11718759782     | Leonardo Jose Sosa Muñoz         | name 're' is not defined
+[23:57:11] [CRITICO ] Doc: CE:12115389941     | Fabian Gael Cardera Herrera      | name 're' is not defined
+[23:57:12] [CRITICO ] Doc: CE:12028207394     | Mathias Emanuel Isea Herrera     | name 're' is not defined
+[23:57:12] [CRITICO ] Doc: CE:12230348681     | Sammyr Josue Riera Tarazona      | name 're' is not defined
+[23:57:13] [CRITICO ] Doc: CE:1192742923      | Adrian Jose Herrera Rivas        | name 're' is not defined

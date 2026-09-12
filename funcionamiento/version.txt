@@ -1,0 +1,266 @@
+================================================================================
+          HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
+================================================================================
+Fecha Última   : 11 de septiembre de 2026
+Autor Principal: Jair Alejandro Hernández González
+Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.0.0] — 11 de Septiembre de 2026 (Lanzamiento Mayor: Interfaz Gráfica Nativa & Arquitectura Bimodal)
+--------------------------------------------------------------------------------
+• LANZAMIENTO MAYOR: INTERFAZ GRÁFICA DE USUARIO (GUI) NATIVA:
+  - Nueva interfaz de escritorio moderna construida sobre CustomTkinter en modo oscuro (Dark-Blue).
+  - Componente modular 'modulos/interfaz_grafica.py' con navegación por pestañas (Formación, Servicios, Reportes, Diagnóstico, Ajustes, Créditos).
+  - Iconografía minimalista en 'config/assets/iconos/' con carga dinámica multiplataforma.
+  - Diseño ergonómico adaptado a pantallas estándar de 1366x768 px y superiores en Windows y Canaima GNU/Linux.
+• PATRÓN FEATURE TOGGLE BIMODAL:
+  - Soporte coexistente de GUI por defecto y CLI tradicional de consola interactiva (Rich + InquirerPy).
+  - Flags de línea de comandos: --gui / -g para entorno gráfico, --cli / -c / --consola / --terminal para modo consola.
+  - Configuración declarativa en 'config/settings.json' ('app.interfaz_predeterminada').
+  - Mecanismo de Fallback Automático: En ausencia de servidor gráfico (ej. entornos headless o Linux sin X11/Wayland), conmuta limpiamente a modo consola sin interrumpir la operación.
+• TARJETA DE PRE-VUELO Y VISUALIZADOR TABULAR:
+  - Resumen instantáneo de métricas de normalización (Cedulados, Escolares, Menores S/C).
+  - Visor modal 'CTkToplevel' de datos normalizados con tabla interactiva tipo spreadsheet y coloreado por tipo de participante.
+• TELEMETRÍA Y CONTROL EN TIEMPO REAL:
+  - Terminal de registro integrada con autoscroll inteligente, barra de progreso con microanimación no bloqueante e indicador dinámico de porcentaje y velocidad.
+  - Botón de copiado al portapapeles y limpiador de telemetría.
+  - Desacoplamiento threading-safe: Ejecución de automatización web en hilo demonio de segundo plano comunicado por colas thread-safe (queue.Queue).
+• ENTRADA PRINCIPAL CONSOLIDADA:
+  - Creación del punto de entrada raíz 'main.py' y actualización de lanzadores 'windows.bat' y 'linux.sh' con propagación de parámetros.
+
+--------------------------------------------------------------------------------
+[v3.6.1] — 10 de Septiembre de 2026 (Corrección Visual: Renderizado ANSI y Unicode)
+--------------------------------------------------------------------------------
+• CORRECCIÓN VISUAL Y TERMINAL VIRTUAL (WINDOWS):
+  - Inicialización nativa de la API Windows vía ctypes (SetConsoleMode con ENABLE_VIRTUAL_TERMINAL_PROCESSING) para erradicar secuencias crudas ANSI (ej. ←[36m).
+  - Configuración directa de Console(force_terminal=True) en Rich.
+• COMPATIBILIDAD CP850 / RASTER FONTS:
+  - Sustitución de caracteres Unicode vulnerables (✔, ✖) por marcadores retrocompatibles de alto contraste: [OK], [X], [!].
+• RENDERIZADO NATIVO CON RICH TABLE & PANEL:
+  - Estructuración de los elementos del checklist dentro de una Table sin bordes incrustada en Panel, con alineación estricta y subtítulo dinámico de estado general.
+
+--------------------------------------------------------------------------------
+[v3.6.0] — 10 de Septiembre de 2026 (Compatibilidad Canaima/Linux & Diagnóstico Pre-vuelo)
+--------------------------------------------------------------------------------
+• COMPATIBILIDAD NATIVA CANAIMA GNU/LINUX & WINDOWS:
+  - Creación de lanzadores duales: 'windows.bat' y 'linux.sh'.
+  - Abstracción de ejecución documental mediante 'xdg-open' para entornos XFCE/Mate/GNOME.
+  - Opciones de aislamiento en Chromium (--no-sandbox, --disable-dev-shm-usage) para Debian/Canaima.
+• VERIFICADOR DE INTEGRIDAD DE ENTORNO (PRE-VUELO):
+  - Nuevo módulo 'modulos/verificador_entorno.py' con checklist visual estilo videojuego en Rich.
+  - Sincronización y actualización automática desatendida de dependencias PyPI con pantalla de carga.
+  - Auditoría de binarios de navegadores y existencia física de 'plantilla_base.ods'.
+• RESILIENCIA HITL SIN SUITE OFIMÁTICA:
+  - Detección de ausencia de Excel/LibreOffice con fallback asistido por ruta absoluta en consola.
+
+--------------------------------------------------------------------------------
+[v3.5.2] - 25 de Agosto de 2026 (Configuración Operativa Centralizada)
+--------------------------------------------------------------------------------
+• NUEVO MÓDULO modulos/config_manager.py:
+  - Puerta única de entrada a config/settings.json con fusión profunda sobre defaults internos idénticos al comportamiento histórico: si el archivo falta o está corrupto, el bot arranca igual.
+  - Helpers: cargar_settings(), obtener_timeout(), obtener_url_login(), obtener_browser_cfg(), telefono_por_defecto() y captura_screenshots_activada().
+• SETTINGS.JSON AHORA ES OPERATIVO (antes solo se leía ajax_wait_seconds):
+  - urls.base_login consume la URL del login en realizar_login() (antes hardcodeada).
+  - timeouts.login_wait_seconds y timeouts.element_wait_seconds gobiernan todos los WebDriverWait de login, registro de alumnos, perfiles nuevos y servicios (antes fijos en 15/12/10).
+  - browser.priority define la cascada real Firefox→Chrome→Edge mediante fábricas registradas (FABRICAS_NAVEGADOR); nombres desconocidos se saltan sin fallar.
+  - browser.start_maximized controla la maximización de ventana por navegador.
+  - validation.capture_screenshots_on_error permite desactivar las evidencias PNG ante incidencias.
+  - validation.default_phone centraliza el teléfono neutral usado por el ETL (normalizador_datos).
+• LIMPIEZA DE settings.json:
+  - Eliminadas claves decorativas que ningún módulo leía: paths.*, timeouts.page_load_seconds/post_submit_retries/step_delay_seconds, validation.phone_regex/cedula_escolar_min_age, browser.headless/disable_gpu.
+• IMPORT json ELIMINADO de automatizador_web.py (quedó huérfano tras migrar la lectura a config_manager).
+• NUEVOS TESTS tests/test_config_manager.py (16):
+  - Carga con archivo válido/inexistente/corrupto/no-dict, fusión profunda, helpers, normalización de prioridades, cascada respetando priority con fábricas simuladas, y flag de capturas encendido/apagado.
+  - Suite completa: 220 tests OK.
+
+--------------------------------------------------------------------------------
+[v3.5.1] - 25 de Agosto de 2026 (Refactor de Calidad, Constantes Únicas y Sincronización de Versiones)
+--------------------------------------------------------------------------------
+• UNIFICACIÓN DE CONSTANTES (FUENTE ÚNICA DE VERDAD):
+  - PALABRAS_INVALIDAS_NOMBRE: Se eliminó la definición muerta duplicada y ahora es la única lista de filtrado de filas basura, consumida por es_nombre_valido() y el bloque ETL (se suprimió el filtro inline redundante en procesar_archivo_participantes).
+  - CABECERAS_IGNORADAS: Lista de columnas de autoridades elevada a constante de módulo.
+  - PREFIJOS_VALIDOS_TLF: Los prefijos telefónicos ya no están hardcodeados en 3 sitios; se derivan PREFIJOS_SIN_CERO y PREFIJOS_MOVILES_SIN_CERO usados por limpiar_telefono(), detectar_cabeceras() y la detección de teléfonos en campo cédula.
+• DEDUPLICACIÓN UNIFICADA:
+  - Nueva función generar_clave_dedup(): Formación y Servicios ahora comparten exactamente la misma lógica de clave de deduplicado (antes divergían: CI→CE→REP vs CE→REP→CI), preservando gemelos por primer nombre.
+• LIMPIEZA DE CÓDIGO MUERTO:
+  - Eliminados imports sin uso: urllib.parse (gestor_sesion), TimeoutException (automatizador_web), Text de rich (interfaz_usuario) y guardar_config_servicios (orquestador).
+  - Eliminada variable muerta 'hoy' en procesar_archivo_texto.
+• INTERFAZ Y ESTILO:
+  - prompt_tipo_servicio(): añadido qmark="" conforme a REGLAS_IA.md (mostraba '?' por defecto).
+  - Banner corregido y alineado (texto de 87 → 89 chars para cuadrar con los bordes) tanto en Python como en run.bat.
+  - Monkeypatch de builtins.input en tests ahora restaura el original (sin contaminación entre tests).
+• SINCRONIZACIÓN DE VERSIONES:
+  - Homologado v3.5.1 en cabeceras de los 6 módulos, requirements.txt, config/settings.json, run.bat, banner UI y REGLAS_IA.md (antes coexistían v3.0.0/v3.1.0/v3.1.5/v3.5).
+• NUEVOS TESTS DE REGRESIÓN:
+  - tests/test_refactor_calidad.py (16 tests): constantes unificadas, derivación de prefijos, clave de dedup compartida, alineación del banner y qmark. Suite completa: 204 tests OK.
+
+--------------------------------------------------------------------------------
+[v3.5.0] - 25 de Agosto de 2026 (Automatización Integral de Servicios y Menores de Edad)
+--------------------------------------------------------------------------------
+• MOTOR DE SERVICIOS Y MENORES:
+  - Inclusión total de menores en Servicios: Soporte completo para participantes con Cédula Escolar y representados sin C.I. directa.
+  - Registro dinámico en 'userform_new': Los menores se registran con 'No/Menor de edad', DNI de representante ('parent_dni'), número de hijo ('child_number') y correo institucional generado automáticamente.
+  - Búsqueda unívoca en Servicios: Localización de menores mediante 'parent_ref' ({padre}1) con 'user_has_document = No', evitando cualquier ambigüedad o selección errónea del representante.
+  - Verificación robusta en DOM: El validador post-carga de Servicios ahora comprueba ID numérico de InfoApp, Nombre/Apellido del participante y Cédula, resolviendo falsas alertas por la etiqueta 'No cedulado'.
+  - Aislamiento de edad en ETL: Detección inteligente de columnas de edad estudiantil (ej. '6.Edad') previniendo falsos positivos con edades de representantes.
+  - Consola y Logs: Visualización exacta del identificador ('CE:{cedula_escolar}') en tarjetas de ejecución y reportes de auditoría.
+  
+--------------------------------------------------------------------------------
+[v3.4.0] - 24 de Agosto de 2026 (Inteligencia Dinámica en Servicios)
+--------------------------------------------------------------------------------
+• MOTOR DE SERVICIOS:
+  - Unificación del pipeline ETL: La carga de servicios ahora consume el mismo diccionario heurístico puro del menú de planillas, preservando la Cédula Escolar Universal intacta.
+  - Implementación de pre-visualización de tabla de participantes en la Opción 2 antes de iniciar la carga.
+  - Creación dinámica de perfiles: El bot ahora calcula matemáticamente la edad de los menores y asigna el "Nivel académico" exacto requerido por InfoApp (Educación preescolar, primaria, 1er o 2do ciclo).
+  - Asignación inteligente de estatus laboral según mayoría de edad.
+  
+--------------------------------------------------------------------------------
+[v3.3.0] - 24 de Agosto de 2026 (Cédula Escolar Universal, HITL y Optimización Web)
+--------------------------------------------------------------------------------
+• NORMALIZADOR Y EXTRACCIÓN DE DATOS:
+  - Implementación de Cédula Escolar automática para menores sin CI propia.
+  - Detección inteligente de CI de representante erróneamente insertada en campos de niños.
+  - Saneamiento automático de fechas futuras e identificadores truncados generados por Excel.
+• ETL HEURÍSTICO - HUMAN-IN-THE-LOOP (HITL) Y ANTI-PATRONES:
+  - Bucle de rescate interactivo: Apertura nativa en Excel de archivos irreconocibles y pausa del bot para corrección humana.
+  - Lista de exclusión estricta: Ignora columnas de autoridades (responsables, profesores, facilitadores).
+  - Aislamiento de teléfonos: Incorporación de filtros 'local' y 'habitacion' para forzar la recolección de números celulares.
+• AUTOMATIZADOR WEB (SELENIUM):
+  - Solución a falso positivo de caducidad de sesión: Se evita que el bot entre en bucles de re-autenticación al aterrizar en el Dashboard (index.php).
+  - Eliminación del retraso de 5-15 segundos al iniciar la carga de servicios.
+• INTERFAZ DE USUARIO (UI) Y GOBERNANZA:
+  - Normalización gráfica de InquirerPy (eliminación del doble signo '??') en todo el ecosistema.
+  - Sincronización estética del banner inicial en el archivo 'run.bat' con el diseño en Python.
+  - Creación del manifiesto maestro 'REGLAS_IA.md' para establecer directrices de agentes de desarrollo.
+
+--------------------------------------------------------------------------------
+[v3.1.0] — 24 de Agosto de 2026 (Consolidación Modular y Blindaje de Producción)
+--------------------------------------------------------------------------------
+• FUSIÓN Y CONSOLIDACIÓN MODULAR:
+  - Unificación completa del subsistema de Servicios al Usuario dentro de modulos/.
+  - Eliminación de la carpeta servicios/ y centralización de config_servicios.json en config/.
+  - Menú maestro con selectores directos para Formación y Servicios con escape seguro ('0' / 'cancelar').
+• SOPORTE UNIVERSAL DE FORMATOS & ETL AVANZADO:
+  - Ingestión directa de archivos de texto plano (.txt), listas de cédulas puras y hojas (.xlsx, .ods, .csv).
+  - Preservación de prefijo de nacionalidad extranjera (E-) en documentos y cédulas escolares.
+  - Parser robusto de fechas en español ('15 de marzo de 2014', timestamps SQL y seriales de Excel).
+  - Data sniffing con escaneo de hasta 15 filas para tolerar membretes institucionales complejos.
+• BLINDAJE DE PRODUCCIÓN Y RESILIENCIA:
+  - Checkpoints atómicos con fsync y reemplazo de archivo temporal (.tmp) ante apagones.
+  - Deduplicación con clave compuesta por nombre para preservar hermanos gemelos.
+  - Detección y re-autenticación automática ante expiración de sesión PHP de InfoApp.
+  - Timeout dinámico de AJAX configurable desde settings.json.
+  - Manejo interactivo de PermissionError ante archivos abiertos en Excel/Calc.
+  - Generador ODS dinámico con detección de pie de firmas y control de celdas repetidas.
+
+--------------------------------------------------------------------------------
+[v3.0.0] — 23 de Agosto de 2026 (Reestructuración de Arquitectura & Bucle Rápido)
+--------------------------------------------------------------------------------
+• REESTRUCTURACIÓN DE DIRECTORIOS Y SIMPLIFICACIÓN:
+  - Eliminación de carpetas redundantes (data/ y artifacts/).
+  - Centralización de configuraciones y plantilla base en config/ (config/plantilla_base.ods).
+  - Centralización de auditorías y evidencias en logs/ (logs/screenshots/ y logs/Auditoria_*.xlsx).
+  - Respaldo único de procesamiento guardado directamente en la raíz (estudiantes.csv).
+• VERIFICACIÓN ESTRICTA EN TABLA Y CERO FALSOS POSITIVOS:
+  - Recarga de actividad y escaneo obligatorio en el DOM de la tabla HTML de InfoApp tras cada carga.
+  - Saneamiento de cédula escolar vacía ("") para evitar el error 'No aplica' en el servidor.
+  - Parada e interacción ante incidencias reales con captura de pantalla automática.
+• INTERFAZ DE CONSOLA REFRESCADA (RICH UI):
+  - Refresco dinámico del panel de progreso en la parte superior sin acumulación de bloques hacia abajo.
+  - Formateo inteligente de nombres en Title Case respetando partículas en minúsculas.
+  - Normalización de números telefónicos nacionales (0412, 0414, 0416, 0424, 0426).
+  - Deduplicación interactiva pre-carga mediante terminal con InquirerPy.
+• PROTOCOLO AGÉNTICO FAST-LOOP:
+  - Gobernanza mediante AGENTS.md para ingeniería iterativa de ciclo rápido.
+
+--------------------------------------------------------------------------------
+[v2.6.0] — 23 de Agosto de 2026 (Cédula Escolar MPPE & Parche Asíncrono)
+--------------------------------------------------------------------------------
+• CLASIFICACIÓN TRIPARTITA DE DOCUMENTOS (MPPE / INFOAPP):
+  - Implementación de la fórmula algorítmica de Cédula Escolar:
+    (1 + Últimos 2 dígitos Año Nacimiento + CI Representante a 8 dígitos).
+  - Clasificación en 3 estados: [A] SAIME (Si), [B] Cédula Escolar (>= 10 años sin CI),
+    [C] Menor no escolarizado (< 10 años con CI de tutor).
+• ADAPTACIÓN DINÁMICA DEL FORMULARIO WEB:
+  - Conmutación del selector superior entre 'document_id', 'cedula_escolar' y 'parent_ref'.
+  - Inyección de parche JS/AJAX en evento submit para forzar el envío de 'cedula_escolar' y 'age'.
+• SELLO CRIPTOGRÁFICO DE AUTORÍA:
+  - Inserción de Watermark digital en Base64 dentro del núcleo del sistema (verificar_firma_autor).
+
+--------------------------------------------------------------------------------
+[v2.5.0] — 21 de Agosto de 2026 (Inyección Segura HTML5 & Validación Estricta)
+--------------------------------------------------------------------------------
+• INYECCIÓN JS DE FECHAS ISO:
+  - Despacho de eventos nativos 'input' y 'change' para resolver el fallo de Chrome (20/12/0115).
+• VALIDACIÓN PRE-SUBMIT Y POST-SUBMIT:
+  - Detección de selectores ':invalid' antes de presionar el botón de agregar.
+  - Escaneo en vivo contra la tabla de la actividad para eliminar confirmaciones falsas.
+• TELÉFONOS EN FORMATO NACIONAL:
+  - Normalización forzada a 11 dígitos con guion intermedio (04XX-XXXXXXX).
+
+--------------------------------------------------------------------------------
+[v2.4.0] — 20 de Agosto de 2026 (Resiliencia de Spinner & Cédulas en Cero)
+--------------------------------------------------------------------------------
+• NEUTRALIZACIÓN DE OVERLAYS ASÍNCRONOS:
+  - Creación de esperar_desbloqueo_ajax() para esperar y remover la capa '#cover-spin'.
+• SANEAMIENTO DE VALORES NULOS EN IDENTIFICACIÓN:
+  - Tratamiento de cadenas '000', '0' o '0.0' asignándolas automáticamente al tutor.
+• PRIORIDAD EN CASCADA DE NAVEGADORES:
+  - Reordenamiento del pool de drivers: 1. Chrome -> 2. Firefox -> 3. Edge.
+• VERIFICACIÓN DE LOGIN:
+  - Detección de fallos en autenticación y solicitud interactiva de nuevas credenciales.
+
+--------------------------------------------------------------------------------
+[v2.3.0] — 20 de Agosto de 2026 (Resurrección en Caliente & Auditoría Cruzada)
+--------------------------------------------------------------------------------
+• CHECKPOINTS EN VIVO ANTE APAGONES:
+  - Serialización continua de estado en 'session_state.json' (URL, log activo e índice actual).
+• AUTO-RESURRECCIÓN DE SESIÓN:
+  - Manejo de WebDriverException para reabrir navegador y reautenticar sin perder la posición.
+• AUDITORÍA HISTÓRICA CONTRA LOGS PREVIOS:
+  - Búsqueda en O(N) para detectar y omitir participantes ya cargados en la actividad.
+
+--------------------------------------------------------------------------------
+[v2.2.0] — 19 de Agosto de 2026 (Generación Nativa ODS & Limpieza de Consola)
+--------------------------------------------------------------------------------
+• INYECCIÓN DIRECTA XML EN OPENDOCUMENT (.ODS):
+  - Descompresión y mutación en 'content.xml' manteniendo logotipos y membretes oficiales.
+• EDICIÓN INTERACTIVA DE FICHA FORMATIVA:
+  - Subrutina en consola para modificar Facilitador, Cédula, Módulo, Contenido y Horarios.
+• MEMORIA PEDAGÓGICA PERSISTENTE:
+  - Almacenamiento desacoplado en 'Planillas/datos_actividad.json'.
+• REFRESO DE TERMINAL:
+  - Incorporación de limpieza de pantalla ('cls' / 'clear') entre fases operativas.
+
+--------------------------------------------------------------------------------
+[v2.1.0] — 18 de Agosto de 2026 (ETL Heurístico & Rescate de Seriales)
+--------------------------------------------------------------------------------
+• DATA SNIFFING DE COLUMNAS GENÉRICAS:
+  - Identificación de números telefónicos por muestreo de contenido en columnas tipo 'Columna3'.
+• RESCATE DE FECHAS SERIALES EXCEL:
+  - Algoritmo de conversión para enteros de época base (ej. 42595 -> 2016-08-13).
+• JERARQUÍA DE NOMBRES Y APELLIDOS:
+  - Anulación de reglas combinadas al detectar nombres y apellidos en columnas separadas.
+• COMPUERTAS DE RESCATE ASISTIDAS:
+  - Menús para resolver huérfanos de documento, cálculo de fechas por edad y asignación de sexo.
+• RESPALDO PREVENTIVO EN DISCO:
+  - Generación de 'estudiantes.csv' antes de establecer conexión web.
+
+--------------------------------------------------------------------------------
+[v2.0.0] — 17 de Agosto de 2026 (Consolidación Modular y Control de Logs)
+--------------------------------------------------------------------------------
+• ARQUITECTURA MODULAR BASE:
+  - Separación del sistema en main.py, normalizador.py, selenium_bot.py y config_manager.py.
+• CONTROL DE ESTADOS MEDIANTE LOGS DINÁMICOS:
+  - Nomenclatura transaccional: [EN_PROCESO], [COMPLETADO] e [INCOMPLETO].
+• LECTURA MULTIFORMATO:
+  - Compatibilidad de ingesta para .xlsx, .xls, .ods y .csv con bloqueo de .pdf.
+• TRIPLE FALLBACK DRIVER:
+  - Primera integración de arranque en cascada para navegadores web.
+
+--------------------------------------------------------------------------------
+[v1.0.0] — 15 de Agosto de 2026 (Prototipo Inicial)
+--------------------------------------------------------------------------------
+• PROTOTIPO FUNCIONAL:
+  - Automatización lineal básica con Selenium y mapeo simple de hojas de cálculo.
+================================================================================
