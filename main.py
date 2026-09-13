@@ -1,10 +1,10 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-PUNTO DE ENTRADA MAESTRO — JsBOT v4.0.0
+PUNTO DE ENTRADA MAESTRO — JsBOT v4.1.0
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — Versión 4.0.0
+Sistema   : JsBOT (Robotic Process Automation) — Versión 4.1.0
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================

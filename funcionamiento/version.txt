@@ -1,9 +1,33 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 11 de septiembre de 2026
+Fecha Última   : 12 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.1.0] — 12 de Septiembre de 2026 (Gestión de Credenciales, ONLYOFFICE & PyPI Fast)
+--------------------------------------------------------------------------------
+• PANEL DEDICADO DE CREDENCIALES (SIDEBAR GUI):
+  - Incorporación de vista "Credenciales" directamente en la barra lateral.
+  - Persistencia reactiva bidireccional en 'config/config.ini' ([LOGIN]).
+  - Toggle de visualización protegida de contraseña y telemetría de confirmación.
+• DESPLIEGUE RÁPIDO PYPI & RESOLUCIÓN CANAIMA (PEP 668):
+  - Optimización de 'linux.sh': aseguramiento selectivo de binarios del sistema
+    (python3-tk, python3-pip) e instalación ultrarrápida vía wheels precompilados.
+  - Bypass controlado de PEP 668 con '--break-system-packages'.
+• INTEGRACIÓN NATIVA CON ONLYOFFICE DESKTOP EDITORS:
+  - Inclusión de binarios 'desktopeditors' y 'onlyoffice-desktopeditors' en
+    'modulos/verificador_entorno.py' pasando de [AVISO] a [OK] en Canaima/Debian.
+• DESACOPLAMIENTO DEFINITIVO CLI <-> GUI:
+  - Supresión de llamadas interactivas (InquirerPy / input) al procesar archivos en CustomTkinter.
+  - Depuración automática silenciosa de duplicados con reporte detallado en telemetría.
+• CABLEADO TOTAL GUI CON MOTOR WEB SELENIUM:
+  - Enlace reactivo del botón de ejecución en Formación con el driver web en hilo seguro.
+  - Generación de reportes de auditoría Excel y planillas oficiales .ODS.
+• ASSETS Y RECURSOS EN REPOSITORIO:
+  - Consolidación de iconografía oficial en 'config/assets/iconos/'.
+
 
 --------------------------------------------------------------------------------
 [v4.0.0] — 11 de Septiembre de 2026 (Lanzamiento Mayor: Interfaz Gráfica Nativa & Arquitectura Bimodal)

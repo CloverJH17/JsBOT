@@ -1,7 +1,7 @@
 {
     "app": {
         "name": "JsBOT (Robotic Process Automation)",
-        "version": "4.0.0",
+        "version": "4.1.0",
         "interfaz_predeterminada": "gui",
         "author": "Jair Alejandro Hernández González",
         "location": "San Felipe, Yaracuy, Venezuela",

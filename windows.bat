@@ -1,8 +1,12 @@
-﻿@echo off
+@echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul
-title JsBOT — Verificador de Entorno
+title JsBOT v4.1.0 — Verificador de Entorno
 cd /d "%~dp0"
+
+echo ========================================================
+echo   JsBOT v4.1.0 — Entorno Microsoft Windows
+echo ========================================================
 
 echo [INFO] Verificando interprete de Python...
 

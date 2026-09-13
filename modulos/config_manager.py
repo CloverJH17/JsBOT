@@ -66,6 +66,32 @@ def cargar_settings(ruta: str = None) -> dict:
     return _fusionar(DEFAULTS, datos)
 
 
+def guardar_settings(nuevos_settings: dict, ruta: str = None) -> bool:
+    """
+    Persiste la configuración en config/settings.json fusionando los nuevos valores.
+    Preserva las secciones no modificadas y asegura escritura atómica y limpia.
+    """
+    ruta = ruta or SETTINGS_PATH
+    try:
+        actuales = {}
+        if os.path.exists(ruta):
+            with open(ruta, "r", encoding="utf-8") as f:
+                leido = json.load(f)
+                if isinstance(leido, dict):
+                    actuales = leido
+        if not actuales:
+            actuales = dict(DEFAULTS)
+
+        fusionado = _fusionar(actuales, nuevos_settings)
+        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
+        with open(ruta, "w", encoding="utf-8") as f:
+            json.dump(fusionado, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"⚠️ Error al guardar settings en {ruta}: {e}")
+        return False
+
+
 def obtener_timeout(campo: str, default: int = None) -> int:
     """Obtiene un timeout de la sección timeouts (en segundos)."""
     try:

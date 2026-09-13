@@ -115,38 +115,45 @@ def parsear_metadatos_url(url: str) -> dict:
     return datos
 
 def seleccionar_ubicacion_guardado(id_actividad: str = "") -> str:
-    """Solicita la ruta de guardado para la planilla ODS."""
+    """Solicita la ruta de guardado para la planilla ODS asegurando la carpeta Planillas/."""
+    planillas_dir = os.path.join(BASE_DIR, "Planillas")
+    os.makedirs(planillas_dir, exist_ok=True)
+
     ts = datetime.now().strftime("%Y%m%d_%H%M")
     id_s = f"_{id_actividad}" if id_actividad and id_actividad != "general" else ""
     nombre_sugerido = f"Planilla_Participantes_Actividad{id_s}_{ts}.ods"
 
     if TK_AVAILABLE:
         try:
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes('-topmost', True)
+            tiene_root = bool(getattr(tk, '_default_root', None))
+            root = None if tiene_root else tk.Tk()
+            if root:
+                root.withdraw()
+                root.attributes('-topmost', True)
             ruta = filedialog.asksaveasfilename(
                 title="Guardar Planilla Oficial de Participantes",
+                initialdir=planillas_dir,
                 initialfile=nombre_sugerido,
                 defaultextension=".ods",
                 filetypes=[("OpenDocument Spreadsheet", "*.ods")]
             )
-            root.destroy()
+            if root:
+                root.destroy()
             if ruta:
                 return ruta
         except Exception:
             pass
 
-    return os.path.join(BASE_DIR, nombre_sugerido)
+    return os.path.join(planillas_dir, nombre_sugerido)
 
-def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_actividad: str = ""):
+def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_actividad: str = "", ruta_salida: str = "") -> str:
     """
     Genera la planilla oficial ODS inyectando los participantes en la plantilla base.
     Preserva los logos, membretes, metadatos, bordes de celda y pie de firmas de la plantilla oficial.
     """
     if not participantes:
         print("\n⚠️ No hay participantes registrados para generar la planilla.")
-        return
+        return ""
 
     # 1. Extraer metadatos de cabecera
     datos_act = parsear_metadatos_url(url_actividad)
@@ -154,7 +161,10 @@ def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_ac
         datos_act['id_actividad'] = id_actividad
 
     # 2. Seleccionar ubicación de guardado
-    ruta_salida = seleccionar_ubicacion_guardado(id_actividad)
+    if not ruta_salida:
+        ruta_salida = seleccionar_ubicacion_guardado(id_actividad)
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
 
     # 3. Inyección en plantilla base oficial ODS (XML Nativo)
     if os.path.exists(TEMPLATE_PATH):
@@ -356,7 +366,7 @@ def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_ac
                             zout.writestr(item, buffer)
 
                 print(f"\n📊 Planilla oficial ODS guardada con éxito en:\n   {ruta_salida}")
-                return
+                return ruta_salida
             except PermissionError:
                 print(f"\n⚠️ El archivo '{os.path.basename(ruta_salida)}' está abierto en Excel o LibreOffice.")
                 input("Por favor ciérralo y presiona Enter para reintentar el guardado...")
@@ -383,7 +393,7 @@ def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_ac
             df_out = pd.DataFrame(registros_salida)
             df_out.to_excel(ruta_salida, index=False, engine='odf')
             print(f"\n📊 Planilla oficial ODS guardada con éxito en:\n   {ruta_salida}")
-            break
+            return ruta_salida
         except PermissionError:
             print(f"\n⚠️ El archivo '{os.path.basename(ruta_salida)}' está abierto en Excel o LibreOffice.")
             input("Por favor ciérralo y presiona Enter para reintentar el guardado...")

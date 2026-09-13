@@ -49,22 +49,45 @@ def extraer_id_actividad(url: str) -> str:
         return match_gen.group(1)
     return "general"
 
+def extraer_id_servicio(url: str) -> str:
+    """Extrae el ID del servicio desde los parámetros de la URL de InfoApp."""
+    match = re.search(r'id_service=(\d+)', url, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    match_gen = re.search(r'/(\d+)(?:/|$|\?)', url)
+    if match_gen:
+        return match_gen.group(1)
+    return "general"
+
 def obtener_credenciales() -> tuple:
-    """Lee las credenciales guardadas en config.ini."""
+    """Lee las credenciales guardadas en config.ini (prioriza [LOGIN], fallback [CREDENCIALES])."""
     config = configparser.ConfigParser()
     if os.path.exists(CONFIG_FILE):
-        config.read(CONFIG_FILE, encoding='utf-8')
-        if 'CREDENCIALES' in config:
-            u = config['CREDENCIALES'].get('usuario', '')
-            c = config['CREDENCIALES'].get('clave', '')
-            if u and c:
-                return u, c
+        try:
+            config.read(CONFIG_FILE, encoding='utf-8')
+            seccion = 'LOGIN' if 'LOGIN' in config else ('CREDENCIALES' if 'CREDENCIALES' in config else None)
+            if seccion:
+                u = config[seccion].get('usuario', '')
+                c = config[seccion].get('clave', '')
+                if u and c:
+                    return u, c
+        except Exception:
+            pass
     return "", ""
 
 def guardar_credenciales(usuario: str, clave: str):
-    """Guarda las credenciales en config.ini."""
+    """Guarda las credenciales en config.ini en [LOGIN] y [CREDENCIALES]."""
     os.makedirs(CONFIG_DIR, exist_ok=True)
     config = configparser.ConfigParser()
+    if os.path.exists(CONFIG_FILE):
+        try:
+            config.read(CONFIG_FILE, encoding='utf-8')
+        except Exception:
+            pass
+    config['LOGIN'] = {
+        'usuario': usuario,
+        'clave': clave
+    }
     config['CREDENCIALES'] = {
         'usuario': usuario,
         'clave': clave

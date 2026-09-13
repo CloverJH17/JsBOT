@@ -1,5 +1,5 @@
 ===============================================================================
-                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.0.0
+                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.1.0
 ===============================================================================
 
 1. normalizador_datos.py (Motor ETL y Clasificación Tripartita de Documentos):
@@ -70,27 +70,31 @@
 - Detección precisa de plataforma (Windows vs Canaima GNU/Linux, Debian y derivadas).
 - Chequeo de versión mínima de Python (>= 3.10) y auditoría de navegadores (Firefox, Chrome/Chromium, Edge).
 - Auto-sincronización desatendida de dependencias desde requirements.txt con animación Rich.
-- Chequeo de suite ofimática instalada y validación física de archivos esenciales (config/settings.json y config/plantilla_base.ods).
+- Detección de suite ofimática instalada: reconocimiento y firma de binarios para ONLYOFFICE Desktop Editors ('desktopeditors', 'onlyoffice-desktopeditors') junto a LibreOffice ('libreoffice', 'soffice') y Microsoft Excel ('excel.exe'), pasando de [AVISO] a [OK] en Canaima/Debian.
+- Validación física de archivos esenciales (config/settings.json, config/config.ini y config/plantilla_base.ods).
 - Renderizado de panel de control estilo videojuego con esquinas redondeadas en Rich.
 
 8. Entrada Principal y Lanzadores Multiplataforma (main.py, windows.bat y linux.sh):
 -------------------------------------------------------------------------------
 - main.py: Punto de entrada raíz bimodal con soporte para flags --gui y --cli.
 - windows.bat: Lanzador oficial optimizado para Microsoft Windows con propagación de parámetros (%*).
-- linux.sh: Script de arranque nativo Bash para Canaima GNU/Linux, Debian y derivados con propagación ("$@").
+- linux.sh: Script de arranque nativo Bash para Canaima GNU/Linux, Debian y derivados con propagación ("$@"). Implementa estrategia híbrida optimizada: aseguramiento mínimo de binarios del kernel/X11 vía apt ('python3-tk', 'python3-pip') e instalación ultrarrápida de dependencias PyPI vía wheels precompilados con la bandera de excepción de sistema '--break-system-packages' (bypaseando restricciones de PEP 668 y evitando cuellos de botella por compilación o paquetes pesados de apt). Forzado de renderizado X11 por software ('LIBGL_ALWAYS_SOFTWARE=1') y fallback automático a CLI en caso de fallo gráfico.
 - run.bat: Lanzador histórico conservado con elevación de privilegios para compatibilidad regresiva.
 
 9. interfaz_grafica.py (Interfaz Gráfica Nativa de Escritorio — CustomTkinter):
 -------------------------------------------------------------------------------
 - Aplicación de escritorio moderna basada en CustomTkinter con tema oscuro (Dark-Blue).
-- Navegación desacoplada por pestañas laterales:
-  * Formación: Carga de participantes para actividades de formación presencial/virtual.
+- Navegación desacoplada por pestañas en el sidebar lateral:
+  * Formación: Carga masiva de participantes para actividades de formación presencial/virtual, con cableado reactivo de hilo secundario (worker thread) hacia el motor web Selenium, telemetría en vivo, inyección DOM real y generación automática de planillas formativas ODS.
   * Servicios: Carga de beneficiarios y usuarios atendidos en servicios institucionales.
+  * Credenciales: Panel dedicado directamente en la barra lateral con persistencia reactiva bidireccional en 'config/config.ini' ([LOGIN]), toggle de visibilidad para contraseña protegida y telemetría de confirmación en tiempo real.
   * Reportes: Generación directa de planillas formativas oficiales (.ods) y acceso rápido a logs.
   * Diagnóstico: Cuadrícula de tarjetas visuales de estado del sistema (Python, SO, librerías, conectividad, navegadores, resolución).
-  * Ajustes: Calibración interactiva de timeouts (Login, AJAX, DOM) y gestión de credenciales con banner de advertencia reactivo.
+  * Ajustes: Calibración interactiva de timeouts (Login, AJAX, DOM) y parámetros del sistema.
   * Créditos: Reconocimiento institucional, autoría, soporte comunitario y licencias.
 - Tarjeta de pre-vuelo reactiva con métricas automáticas al seleccionar hojas de cálculo (.xlsx, .xls, .ods, .csv).
-- Visor modal 'CTkToplevel' con tabla de datos estructurada por participantes y resaltado por categorías.
+- Visor modal 'CTkToplevel' de datos de pre-vuelo con tabla interactiva tipo spreadsheet, coloreado distintivo por categoría (Cedulados, Escolares, Menores S/C) y detalles completos de la nómina.
+- Desacoplamiento definitivo CLI <-> GUI: Supresión total de peticiones o prompts interactivos de consola (InquirerPy / input()) durante la ingesta de archivos desde la interfaz gráfica; resolución automática y deduplicación silenciosa con reporte directo a la telemetría interna de la ventana.
 - Telemetría en tiempo real: Redirección thread-safe mediante cola de eventos ('queue.Queue') para sincronizar logs, progreso interpolado y estados del motor Selenium sin congelar la UI.
 - Arquitectura bimodal: Coexistencia con la consola CLI histórica, gobernada por Feature Flag ('settings.json' o flags de línea de comandos).
+- Consolidación de iconografía oficial en 'config/assets/iconos/': soporte de carga dinámica multiplataforma para diagnóstico, credenciales, formación, servicios, reportes, ajustes e info.

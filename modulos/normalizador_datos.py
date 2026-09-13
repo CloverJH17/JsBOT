@@ -450,27 +450,72 @@ def generar_clave_dedup(p: dict) -> str:
         return f"REP:{p.get('cedula_padre', '')}_{nom_key}"
     return f"NOM:{normalizar_col_nombre(p.get('nombre',''))}_{normalizar_col_nombre(p.get('apellido',''))}_{p.get('nacimiento','')}"
 
-def deduplicar_participantes(participantes: list) -> list:
+def deduplicar_participantes(
+    participantes: list,
+    modo_interactivo: bool = True,
+    retornar_reporte: bool = None
+) -> list | tuple[list, dict]:
     """
     Identifica y filtra participantes duplicados en la lista de entrada.
     Usa clave compuesta por nombre para gemelos con idéntica cédula escolar / representante.
+
+    Parámetros:
+        participantes: Lista de diccionarios de participantes normalizados.
+        modo_interactivo: Si es True (CLI), consulta por terminal ante duplicados.
+                          Si es False (GUI), descarta duplicados automáticamente sin usar InquirerPy ni input().
+        retornar_reporte: Si es True, retorna tupla (unicos, reporte). Si es None, retorna tupla
+                          cuando modo_interactivo es False y lista cuando modo_interactivo es True.
     """
+    debe_retornar_reporte = retornar_reporte if retornar_reporte is not None else (not modo_interactivo)
+
     if not participantes:
-        return []
-    
+        reporte_vacio = {
+            "duplicados_omitidos": 0,
+            "nombres": [],
+            "detalles": [],
+            "total_original": 0,
+            "total_unicos": 0
+        }
+        return ([], reporte_vacio) if debe_retornar_reporte else []
+
     vistos = {}
     duplicados = []
     unicos = []
-    
+
     for p in participantes:
         clave = generar_clave_dedup(p)
-            
+
         if clave in vistos:
             duplicados.append(p)
         else:
             vistos[clave] = p
             unicos.append(p)
-            
+
+    reporte = {
+        "duplicados_omitidos": len(duplicados),
+        "nombres": [
+            f"{d.get('nombre', '')} {d.get('apellido', '')}".strip()
+            for d in duplicados
+        ],
+        "detalles": [
+            {
+                "nombre": f"{d.get('nombre', '')} {d.get('apellido', '')}".strip(),
+                "documento": d.get('cedula') or d.get('cedula_escolar') or d.get('cedula_padre') or 'S/D',
+                "registro": d
+            }
+            for d in duplicados
+        ],
+        "total_original": len(participantes),
+        "total_unicos": len(unicos)
+    }
+
+    if not modo_interactivo:
+        # Modo no interactivo (GUI / background): no invocar terminal ni InquirerPy.
+        # Descartar duplicados por defecto y conservar los registros únicos.
+        if debe_retornar_reporte:
+            return unicos, reporte
+        return unicos
+
     if duplicados:
         print(f"\n⚠️  [ATENCIÓN] Se detectaron {len(duplicados)} registro(s) duplicado(s) en la lista:")
         for d in duplicados[:5]:
@@ -479,8 +524,10 @@ def deduplicar_participantes(participantes: list) -> list:
             print(f"   • {nom} (Doc: {doc})")
         if len(duplicados) > 5:
             print(f"   ... y {len(duplicados) - 5} más.")
-            
+
         try:
+            if not sys.stdin.isatty():
+                raise RuntimeError("Non-interactive stdin")
             from InquirerPy import inquirer
             from InquirerPy.base.control import Choice
             opc = inquirer.select(
@@ -495,11 +542,15 @@ def deduplicar_participantes(participantes: list) -> list:
         except Exception:
             resp = input(f"¿Deseas eliminar los duplicados y dejar solo {len(unicos)} registros únicos? [S/N] (Enter = Sí): ").strip().lower()
             opc = "KEEP" if resp == 'n' else "DEDUP"
-            
+
         if opc == "DEDUP":
             print(f"✅ Lista deduplicada: {len(unicos)} participantes únicos listos para carga.")
+            if debe_retornar_reporte:
+                return unicos, reporte
             return unicos
-            
+
+    if debe_retornar_reporte:
+        return participantes, reporte
     return participantes
 
 def seleccionar_archivo_interactivo(titulo: str = "Participantes / Estudiantes") -> str:

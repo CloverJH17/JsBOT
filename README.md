@@ -1,4 +1,4 @@
-# 🤖 JsBOT — Sistema RPA y Normalización ETL de Participantes (v4.0.0)
+# 🤖 JsBOT — Sistema RPA y Normalización ETL de Participantes (v4.1.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
@@ -36,10 +36,11 @@
 
 | Sección | Función Operativa |
 | :--- | :--- |
+| **Diagnóstico** | Matriz de tarjetas en tiempo real (Python, SO, librerías, conectividad y navegador). |
+| **Credenciales** | Administración segura de usuario y contraseña para la plataforma InfoApp. |
 | **Formación** | Carga masiva de participantes en actividades y cursos formativos. |
 | **Servicios** | Carga automatizada de beneficiarios y registros de atención comunitaria. |
 | **Reportes** | Generación de planillas oficiales `.ods` y apertura de trazas de ejecución. |
-| **Diagnóstico** | Matriz de tarjetas en tiempo real (Python, SO, librerías, conectividad y navegador). |
 | **Ajustes** | Calibración de timeouts de red (Login, AJAX, DOM) y conmutador visual de navegador. |
 | **Créditos** | Ficha técnica, licencias y autoría del proyecto. |
 

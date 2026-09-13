@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: ORQUESTADOR MAESTRO CONSOLIDADO (orquestador.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.0.0
+Sistema   : JsBOT (Robotic Process Automation) — v4.1.0
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
@@ -357,7 +357,7 @@ def flujo_servicios(estado_previo: dict = None):
         time.sleep(2)
 
 def flujo_consola():
-    """Bucle maestro del agente RPA JsBOT v4.0.0 en modo consola interactiva."""
+    """Bucle maestro del agente RPA JsBOT v4.1.0 en modo consola interactiva."""
     # PASO 0: Diagnóstico de Integridad y Requisitos de Entorno (Pre-vuelo)
     if not ejecutar_checklist_sistema():
         sys.exit(1)
@@ -403,7 +403,7 @@ def flujo_consola():
             break
 
 def iniciar_sistema(args: list = None):
-    """Punto de entrada bimodal para JsBOT v4.0.0.
+    """Punto de entrada bimodal para JsBOT v4.1.0.
 
     Soporta los flags de línea de comandos:
       --gui, -g: Fuerza el lanzamiento de la interfaz gráfica nativa (CustomTkinter).

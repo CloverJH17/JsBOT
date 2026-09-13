@@ -176,8 +176,11 @@ def detectar_navegadores() -> str:
 
 
 def detectar_suite_ofimatica() -> tuple:
-    """Verifica si existe LibreOffice, OpenOffice o Excel para asistencia HITL."""
-    comandos_suite = ["libreoffice", "soffice", "localc", "excel"]
+    """Verifica si existe LibreOffice, OpenOffice, Excel u OnlyOffice para asistencia HITL."""
+    comandos_suite = [
+        "libreoffice", "soffice", "localc", "excel",
+        "desktopeditors", "onlyoffice-desktopeditors", "onlyoffice"
+    ]
     for cmd in comandos_suite:
         ruta = shutil.which(cmd)
         if ruta:

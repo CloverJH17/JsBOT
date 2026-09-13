@@ -567,8 +567,33 @@ def registrar_alumno_en_web(driver, alumno: dict, config: dict) -> tuple:
         detalle_err = resp_servidor if resp_servidor else "El participante no aparece en la tabla de InfoApp (no se guardó)"
         return False, detalle_err
 
-def ejecutar_carga_infoapp(participantes: list, config: dict, indice_inicio: int = 0) -> tuple:
+def ejecutar_carga_infoapp(
+    participantes: list,
+    config: dict,
+    indice_inicio: int = 0,
+    log_callback = None,
+    progreso_callback = None
+) -> tuple:
     """Orquesta la inyección masiva de participantes en actividades formativas."""
+    if log_callback is None:
+        log_callback = config.get('log_callback')
+    if progreso_callback is None:
+        progreso_callback = config.get('progreso_callback')
+
+    def _emitir_log(mensaje: str):
+        if log_callback:
+            try:
+                log_callback(mensaje)
+            except Exception:
+                pass
+
+    def _emitir_progreso(actual: int, total_p: int, desc: str = ""):
+        if progreso_callback:
+            try:
+                progreso_callback(actual, total_p, desc)
+            except Exception:
+                pass
+
     driver_contenedor = {'driver': None}
     cargados_exitosos = []
     fallidos = []
@@ -578,9 +603,13 @@ def ejecutar_carga_infoapp(participantes: list, config: dict, indice_inicio: int
     print("\n" + "=" * 80)
     print(f"   [+] INICIANDO CARGA RPA: {total - indice_inicio} PARTICIPANTES")
     print("================================================================================")
+    _emitir_log(f"[INFO] Iniciando automatización web Selenium ({total - indice_inicio} participantes)...")
+    _emitir_progreso(indice_inicio, total, "Iniciando navegador...")
 
     try:
         asegurar_navegador_activo(driver_contenedor, config)
+        _emitir_log(f"[OK] Sesión autenticada en InfoApp con usuario '{config.get('usuario', '')}'.")
+        _emitir_log(f"[WEB] Actividad en proceso: ID {config.get('id_actividad', '')}")
 
         for i in range(indice_inicio, total):
             alumno = participantes[i]
@@ -591,6 +620,8 @@ def ejecutar_carga_infoapp(participantes: list, config: dict, indice_inicio: int
             renderizar_panel_carga(
                 i + 1, total, alumno, len(cargados_exitosos), len(fallidos), t_inicio, "Procesando en InfoApp...", id_actividad=id_act
             )
+            _emitir_progreso(i + 1, total, f"Procesando: {nom_comp}")
+            _emitir_log(f"[PROCESANDO] Alumno {i + 1}/{total}: {nom_comp} ({doc_str})...")
 
             cargado = False
             reintentos = 0
@@ -609,6 +640,8 @@ def ejecutar_carga_infoapp(participantes: list, config: dict, indice_inicio: int
                         registrar_evento_log(config['archivo_log'], doc_str, nom_comp, "EXITOSO", detalle)
                         cargados_exitosos.append(alumno)
                         guardar_estado_sesion(config, participantes, i + 1)
+                        _emitir_log(f"[OK] Alumno {i + 1}/{total}: {nom_comp} verificado en InfoApp.")
+                        _emitir_progreso(i + 1, total, f"[OK] {nom_comp}")
                         cargado = True
                     else:
                         renderizar_panel_carga(
@@ -617,14 +650,21 @@ def ejecutar_carga_infoapp(participantes: list, config: dict, indice_inicio: int
                         print(f"\n[-] INCIDENCIA con '{nom_comp}': {detalle}")
                         registrar_evento_log(config['archivo_log'], doc_str, nom_comp, "FALLIDO", detalle)
                         capturar_pantalla_error(driver, doc_str)
+                        _emitir_log(f"[ERROR] Incidencia con '{nom_comp}': {detalle}")
 
-                        accion = prompt_reintentar_alumno(nom_comp, detalle)
+                        if config.get('modo_gui'):
+                            accion = config.get('accion_defecto_incidencia', 'SKIP')
+                            _emitir_log(f"[AVISO] Modo GUI: Omitiendo participante '{nom_comp}' tras registrar evidencia.")
+                        else:
+                            accion = prompt_reintentar_alumno(nom_comp, detalle)
+
                         if accion == "SKIP":
                             fallidos.append({'participante': alumno, 'estado': 'OMITIDO', 'detalle': detalle})
                             guardar_estado_sesion(config, participantes, i + 1)
                             cargado = True
                         elif accion == "PAUSE":
                             print("💾 Sesión pausada y guardada en disco.")
+                            _emitir_log("[PAUSA] Sesión pausada por el usuario.")
                             return cargados_exitosos, fallidos, time.time() - t_inicio
 
                 except (NoSuchWindowException, WebDriverException) as we:
@@ -956,9 +996,30 @@ def ejecutar_carga_servicios_infoapp(
     config: dict,
     config_servicio: dict,
     indice_inicio: int = 0,
-    fn_guardar_checkpoint = None
+    fn_guardar_checkpoint = None,
+    log_callback = None,
+    progreso_callback = None
 ) -> tuple:
     """Orquesta la inyección masiva de servicios al usuario en InfoApp."""
+    if log_callback is None:
+        log_callback = config.get('log_callback')
+    if progreso_callback is None:
+        progreso_callback = config.get('progreso_callback')
+
+    def _emitir_log(mensaje: str):
+        if log_callback:
+            try:
+                log_callback(mensaje)
+            except Exception:
+                pass
+
+    def _emitir_progreso(actual: int, total_p: int, desc: str = ""):
+        if progreso_callback:
+            try:
+                progreso_callback(actual, total_p, desc)
+            except Exception:
+                pass
+
     driver_contenedor = {'driver': None}
     cargados_exitosos = []
     fallidos = []
@@ -968,11 +1029,16 @@ def ejecutar_carga_servicios_infoapp(
     tipo_srv = config_servicio.get('tipo_servicio', 'Gestión en el Sistema de Protección Social Patria')
     fecha_srv = config_servicio.get('fecha_servicio', datetime.now().strftime("%Y-%m-%d"))
 
+    _emitir_log(f"[INFO] Iniciando automatización de servicios comunitarios ({total - indice_inicio} usuarios)...")
+    _emitir_log(f"[INFO] Servicio: {tipo_srv} | Fecha: {fecha_srv}")
+    _emitir_progreso(indice_inicio, total, "Iniciando navegador...")
+
     try:
         renderizar_panel_servicios(
             indice_inicio + 1, total, personas[indice_inicio], len(cargados_exitosos), len(fallidos), t_inicio, tipo_srv, fecha_srv, "Iniciando navegador y sesión..."
         )
         asegurar_navegador_activo(driver_contenedor, config)
+        _emitir_log(f"[OK] Sesión autenticada en InfoApp con usuario '{config.get('usuario', '')}'.")
 
         for i in range(indice_inicio, total):
             persona = personas[i]
@@ -982,6 +1048,8 @@ def ejecutar_carga_servicios_infoapp(
             renderizar_panel_servicios(
                 i + 1, total, persona, len(cargados_exitosos), len(fallidos), t_inicio, tipo_srv, fecha_srv, "Procesando en InfoApp..."
             )
+            _emitir_progreso(i + 1, total, f"Procesando: {nom_comp}")
+            _emitir_log(f"[PROCESANDO] Servicio {i + 1}/{total}: {nom_comp} ({doc_str})...")
 
             cargado = False
             reintentos = 0
@@ -1003,6 +1071,8 @@ def ejecutar_carga_servicios_infoapp(
                         if fn_guardar_checkpoint:
                             fn_guardar_checkpoint(config, config_servicio, personas, i + 1)
                             
+                        _emitir_log(f"[OK] Servicio {i + 1}/{total}: {nom_comp} registrado exitosamente.")
+                        _emitir_progreso(i + 1, total, f"[OK] {nom_comp}")
                         cargado = True
                     else:
                         renderizar_panel_servicios(
@@ -1010,8 +1080,14 @@ def ejecutar_carga_servicios_infoapp(
                         )
                         registrar_evento_log(config['archivo_log'], doc_str, nom_comp, "FALLIDO", detalle)
                         capturar_pantalla_error(driver, doc_str)
+                        _emitir_log(f"[ERROR] Incidencia con servicio de '{nom_comp}': {detalle}")
 
-                        accion = prompt_reintentar_alumno(nom_comp, detalle)
+                        if config.get('modo_gui'):
+                            accion = config.get('accion_defecto_incidencia', 'SKIP')
+                            _emitir_log(f"[AVISO] Modo GUI: Omitiendo usuario '{nom_comp}' tras registrar evidencia.")
+                        else:
+                            accion = prompt_reintentar_alumno(nom_comp, detalle)
+
                         if accion == "SKIP":
                             fallidos.append({'participante': persona, 'estado': 'OMITIDO', 'detalle': detalle})
                             if fn_guardar_checkpoint:
@@ -1019,6 +1095,7 @@ def ejecutar_carga_servicios_infoapp(
                             cargado = True
                         elif accion == "PAUSE":
                             print("\n[PAUSA] Sesión pausada por el usuario.")
+                            _emitir_log("[PAUSA] Sesión de servicios pausada por el usuario.")
                             return cargados_exitosos, fallidos, time.time() - t_inicio
 
                 except (NoSuchWindowException, WebDriverException) as we:

@@ -1,34 +1,67 @@
+===============================================================================
+           ÁRBOL DE COMPONENTES Y MATRIZ DEL SISTEMA — JsBOT v4.1.0
+===============================================================================
+Sistema   : JsBOT (Robotic Process Automation)
+Versión   : 4.1.0 (Gestión de Credenciales, ONLYOFFICE & PyPI Fast)
+Autor     : Jair Alejandro Hernández González
+Ubicación : San Felipe, Yaracuy, Venezuela
+===============================================================================
+
 JsBOT/
-├── run.bat                      # Acceso directo para el facilitador (permisos + dependencias)
-├── estudiantes.csv              # Respaldo temporal de la última normalización de datos
-├── requirements.txt             # Dependencias técnicas optimizadas
-├── AGENTS.md                    # Protocolo de ingeniería iterativa de ciclo rápido
+├── main.py                         # Punto de entrada maestro bimodal (GUI CustomTkinter / CLI Rich)
+├── linux.sh                        # Lanzador nativo Canaima/Debian GNU/Linux (PyPI Fast, PEP 668 bypass)
+├── windows.bat                     # Lanzador nativo Microsoft Windows con verificación de entorno
+├── instalar.sh                     # Script de clonación/actualización automatizada desde Git
+├── requirements.txt                # Dependencias técnicas optimizadas (v4.1.0)
+├── estudiantes.csv                 # Respaldo temporal de la última normalización de datos
+├── README.md                       # Documentación general y guía rápida del sistema
+├── REGLAS_IA.md                    # Lineamientos de ingeniería y arquitectura del proyecto
 │
-├── config/                      # 📂 CONFIGURACIONES Y PLANTILLA BASE
-│   ├── config.ini               # Credenciales de acceso a InfoApp
-│   ├── datos_actividad.json     # Metadatos del facilitador e Infocentro
-│   ├── settings.json            # Configuración general y timeouts
-│   └── plantilla_base.ods       # Plantilla oficial en blanco con logos y estilos
+├── config/                         # 📂 CONFIGURACIONES, ASSETS Y PLANTILLA BASE
+│   ├── config.ini                  # Credenciales de acceso a InfoApp ([LOGIN]) persistencia reactiva
+│   ├── settings.json               # Configuración global v4.1.0 (interfaz, timeouts, URLs, navegador)
+│   ├── config_servicios.json       # Parámetros y tipologías para carga masiva de Servicios
+│   ├── datos_actividad.json        # Metadatos institucionales persistentes (facilitador, infocentro)
+│   ├── plantilla_base.ods          # Plantilla oficial en blanco con membretes y estilos ODS
+│   └── assets/                     # Recursos visuales del sistema
+│       └── iconos/                 # Iconografía PNG/SVG multiplataforma para CustomTkinter
 │
-├── logs/                        # 📂 AUDITORÍA, CHECKPOINTS Y EVIDENCIAS
-│   ├── [COMPLETADO]_Actividad_...log
-│   ├── [INCOMPLETO]_Actividad_...log
-│   ├── session_state.json       # Punto de control ante cortes eléctricos
-│   ├── normalizacion.log        # Registro técnico del motor ETL
-│   ├── Auditoria_Carga_*.xlsx   # Reportes de auditoría en Excel
-│   └── screenshots/             # 📸 Capturas de pantalla automáticas de incidencias
+├── modulos/                        # 📂 MOTOR TÉCNICO MODULAR (Arquitectura Limpia)
+│   ├── __init__.py                 # Metadatos del paquete v4.1.0
+│   ├── interfaz_grafica.py         # GUI nativa CustomTkinter (Formación, Servicios, Credenciales, Reportes, Diagnóstico, Ajustes, Créditos)
+│   ├── interfaz_usuario.py         # Interfaz CLI interactiva para terminal (Rich + InquirerPy)
+│   ├── orquestador.py              # Orquestador bimodal maestro, control de estados y métricas
+│   ├── normalizador_datos.py       # Motor ETL universal, clasificación tripartita, Title Case y deduplicación
+│   ├── automatizador_web.py        # Automatización web Selenium multi-navegador con verificación DOM en vivo
+│   ├── gestor_sesion.py            # Persistencia de sesiones, checkpoints y generación de reportes Excel
+│   ├── generador_planilla.py       # Inyector XML para modificación nativa de planillas oficiales ODS
+│   ├── verificador_entorno.py      # Diagnóstico pre-vuelo (Python, navegadores, ONLYOFFICE/LibreOffice/Excel)
+│   └── config_manager.py           # Gestor centralizado de lectura/escritura y fusiones de settings.json
 │
-├── modulos/                     # 📂 MOTOR TÉCNICO MODULAR (Arquitectura Limpia)
-│   ├── __init__.py              # Metadatos del paquete v3.0.0
-│   ├── orquestador.py           # Orquestador del flujo, control de estados y métricas
-│   ├── normalizador_datos.py    # Motor ETL universal, data sniffing y conversión serial
-│   ├── automatizador_web.py     # Automatizador web multi-navegador con verificación en tabla
-│   ├── gestor_sesion.py         # Gestor de credenciales, checkpoints y reportes Excel
-│   ├── generador_planilla.py    # Inyector XML para generación nativa de planillas ODS
-│   └── interfaz_usuario.py      # Interfaz de consola agéntica (Rich + InquirerPy)
+├── logs/                           # 📂 AUDITORÍA, CHECKPOINTS Y EVIDENCIAS
+│   ├── session_state.json          # Punto de control ante interrupciones en Formación
+│   ├── session_state_servicios.json# Punto de control ante interrupciones en Servicios
+│   ├── log_actividad_*.txt         # Registros de auditoría en texto plano con marca temporal
+│   ├── Auditoria_Carga_*.xlsx      # Reportes de auditoría en Excel (Exitosos e Incidencias)
+│   └── screenshots/                # 📸 Capturas de pantalla automáticas de incidencias web DOM
 │
-└── funcionamiento/              # 📂 MANUALES Y DOCUMENTACIÓN TÉCNICA
-    ├── version.txt              # Historial de versiones y registro de cambios
-    ├── funcionamiento.txt       # Manual de funcionamiento técnico
-    ├── diagrama de flujo.txt    # Diagrama de flujo integral del sistema
-    └── matriz.txt               # Árbol y matriz de componentes
+├── tests/                          # 📂 SUITE DE PRUEBAS AUTOMATIZADAS Y RESILIENCIA
+│   ├── test_automatizador_web.py   # Pruebas del motor Selenium y manipulación DOM
+│   ├── test_caos_apagon.py         # Simulación de cortes eléctricos y recuperación de checkpoints
+│   ├── test_casos_extremos.py      # Pruebas de estrés y casos extremos en normalización ETL
+│   ├── test_concurrencia.py        # Pruebas de concurrencia y no-bloqueo
+│   ├── test_config_manager.py      # Validación del gestor de configuración y tolerancia a fallos
+│   ├── test_generador_planilla.py  # Verificación de integridad XML y ensamblado de ODS
+│   ├── test_gestor_sesion.py       # Pruebas de persistencia de credenciales y auditoría
+│   ├── test_normalizador.py        # Pruebas del clasificador tripartito de cédulas
+│   ├── test_refactor_calidad.py    # Auditoría de calidad de código y adherencia de estilo
+│   ├── test_validacion_ods.py      # Validación de esquema y datos de salida en hojas ODS
+│   └── test_verificador_entorno.py # Pruebas del diagnóstico pre-vuelo de suites ofimáticas
+│
+├── Planillas/                      # 📂 ALMACENAMIENTO DE PLANILLAS FORMATIVAS GENERADAS (.ods)
+│
+└── funcionamiento/                 # 📂 MANUALES Y DOCUMENTACIÓN TÉCNICA OPERATIVA
+    ├── version.txt                 # Historial consolidado de versiones y registro de cambios
+    ├── funcionamiento.txt          # Manual de funcionamiento técnico operativo v4.1.0
+    ├── diagrama de flujo.txt       # Diagrama de flujo integral del sistema bimodal
+    └── matriz.txt                  # Árbol y matriz de componentes del sistema v4.1.0

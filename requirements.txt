@@ -1,5 +1,5 @@
 # ===============================================================================
-# DEPENDENCIAS DEL SISTEMA - JsBOT (Robotic Process Automation) — v4.0.0
+# DEPENDENCIAS DEL SISTEMA - JsBOT (Robotic Process Automation) — v4.1.0
 # ===============================================================================
 selenium>=4.20.0
 pandas>=2.0.0

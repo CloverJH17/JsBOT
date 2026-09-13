@@ -106,6 +106,18 @@ class TestCredenciales(_Aislado):
             resultado = ("", "")
         self.assertIsInstance(resultado, tuple)
 
+    def test_seccion_login_prioritaria(self):
+        with open(self._ruta("config.ini"), "w", encoding="utf-8") as f:
+            f.write("[LOGIN]\nusuario = login_user\nclave = login_pass\n[CREDENCIALES]\nusuario = old_user\nclave = old_pass\n")
+        u, c = gs.obtener_credenciales()
+        self.assertEqual((u, c), ("login_user", "login_pass"))
+
+    def test_seccion_credenicales_fallback(self):
+        with open(self._ruta("config.ini"), "w", encoding="utf-8") as f:
+            f.write("[CREDENCIALES]\nusuario = old_user\nclave = old_pass\n")
+        u, c = gs.obtener_credenciales()
+        self.assertEqual((u, c), ("old_user", "old_pass"))
+
 
 # =============================================================================
 # CHECKPOINTS DE FORMACIÓN (resiliencia ante apagones)

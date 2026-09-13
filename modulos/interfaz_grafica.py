@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: INTERFAZ GRÁFICA NATIVA (interfaz_grafica.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.0.0
+Sistema   : JsBOT (Robotic Process Automation) — v4.1.0
 Tecnología: Python + CustomTkinter (Dark Mode con acentos #3B8ED0 y #22c55e)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
@@ -16,9 +16,11 @@ import sys
 import json
 import time
 import shutil
+import subprocess
 import threading
 import queue
 import webbrowser
+import configparser
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -31,10 +33,31 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+CONFIG_DIR = os.path.join(BASE_DIR, "config")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.ini")
+
+# Despachador nativo multiplataforma (Canaima / Linux / Windows)
+def abrir_archivo_o_directorio_sistema(ruta: str) -> bool:
+    """Abre un archivo o directorio con la aplicación nativa del sistema operativo."""
+    if not ruta or not os.path.exists(ruta):
+        return False
+    try:
+        if sys.platform.startswith('win'):
+            os.startfile(ruta)
+        elif sys.platform.startswith('darwin'):
+            subprocess.Popen(['open', ruta])
+        else:
+            # Canaima GNU/Linux, Debian, Ubuntu
+            subprocess.Popen(['xdg-open', ruta], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except Exception:
+        return False
+
 # Importaciones de los módulos funcionales
 try:
     from modulos.normalizador_datos import (
         procesar_archivo_participantes,
+        procesar_archivo_texto,
         deduplicar_participantes,
         abrir_archivo_asistido
     )
@@ -43,6 +66,26 @@ try:
         detectar_navegadores,
         detectar_suite_ofimatica,
         verificar_integridad_archivos
+    )
+    from modulos.automatizador_web import (
+        ejecutar_carga_infoapp,
+        ejecutar_carga_servicios_infoapp
+    )
+    from modulos.generador_planilla import generar_planilla_oficial
+    from modulos.gestor_sesion import (
+        obtener_credenciales,
+        guardar_credenciales,
+        extraer_id_actividad,
+        extraer_id_servicio,
+        guardar_estado_sesion,
+        guardar_estado_sesion_servicios,
+        limpiar_estado_sesion,
+        limpiar_estado_sesion_servicios,
+        finalizar_log_exito,
+        finalizar_log_incompleto,
+        generar_reporte_auditoria_excel,
+        generar_reporte_auditoria_servicios,
+        cargar_config_servicios
     )
     from modulos import config_manager as cm
     MODULOS_DISPONIBLES = True
@@ -65,7 +108,7 @@ class JsBotGUI(ctk.CTk):
         super().__init__()
 
         # 1. Configuración de Ventana Principal (Calibrada para 1366x768)
-        self.title("JsBOT (RPA) — Versión 4.0.0")
+        self.title("JsBOT (RPA) — Versión 4.1.0")
         self.geometry("1020x670")
         self.minsize(980, 620)
 
@@ -81,6 +124,7 @@ class JsBotGUI(ctk.CTk):
         self.seccion_actual = "Diagnostico"
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
+        self.reporte_deduplicacion_actual = None
         self.archivo_actual_ruta = ""
         self.ejecutando_tarea = False
 
@@ -99,6 +143,13 @@ class JsBotGUI(ctk.CTk):
         self.archivo_seleccionado_servicios = tk.StringVar(value="Ningún archivo seleccionado")
         self.var_modo_visible_servicios = tk.BooleanVar(value=True)
         self.var_registro_tramite_servicios = tk.BooleanVar(value=True)
+
+        # Variables de Credenciales InfoApp (Persistidas en config/config.ini)
+        u_init, c_init = obtener_credenciales() if MODULOS_DISPONIBLES else ("", "")
+        self.usuario_activo = u_init
+        self.clave_activa = c_init
+        self.var_cred_usuario = tk.StringVar(value=u_init)
+        self.var_cred_clave = tk.StringVar(value=c_init)
 
         # Variables para Ajustes Interactivos con valores base
         self.defaults_ajustes = {
@@ -139,7 +190,7 @@ class JsBotGUI(ctk.CTk):
         self._iniciar_escucha_cola()
 
         # Log inicial de bienvenida
-        self._agregar_log("[OK] Entorno gráfico JsBOT v4.0 inicializado (Resolución 1020x670).")
+        self._agregar_log("[OK] Entorno gráfico JsBOT v4.1 inicializado (Resolución 1020x670).")
         if MODULOS_DISPONIBLES:
             self._agregar_log("[OK] Módulos de verificación y normalización vinculados en modo lectura.")
         else:
@@ -176,11 +227,15 @@ class JsBotGUI(ctk.CTk):
         self.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
 
     def _cargar_iconos(self):
-        """Carga los iconos PNG desde pruebas/assets/iconos/ usando CTkImage."""
+        """Carga los iconos PNG desde config/assets/iconos/ usando CTkImage."""
         self.iconos = {}
-        nombres = ["diagnostico", "formacion", "servicios", "reportes", "ajustes", "info", "robot_logo"]
+        nombres = ["diagnostico", "cuenta", "credenciales", "formacion", "servicios", "reportes", "ajustes", "info", "robot_logo"]
         for n in nombres:
             ruta = os.path.join(RUTA_ICONOS, f"{n}.png")
+            if not os.path.exists(ruta):
+                alt_ruta = os.path.join(BASE_DIR, "assets", "iconos", f"{n}.png")
+                if os.path.exists(alt_ruta):
+                    ruta = alt_ruta
             if os.path.exists(ruta):
                 try:
                     img = Image.open(ruta)
@@ -203,9 +258,20 @@ class JsBotGUI(ctk.CTk):
                 self.defaults_ajustes["screenshots"] = cfg.get("validation", {}).get("capture_screenshots_on_error", True)
                 self.defaults_ajustes["maximized"] = cfg.get("browser", {}).get("start_maximized", True)
 
+                prio = cfg.get("browser", {}).get("priority", ["firefox"])
+                if prio and isinstance(prio, list):
+                    prim = str(prio[0]).lower()
+                    if "chrome" in prim:
+                        self.defaults_ajustes["browser"] = "Google Chrome"
+                    elif "edge" in prim:
+                        self.defaults_ajustes["browser"] = "Microsoft Edge"
+                    else:
+                        self.defaults_ajustes["browser"] = "Firefox (Recomendado)"
+
                 self.var_login_timeout.set(self.defaults_ajustes["login"])
                 self.var_ajax_timeout.set(self.defaults_ajustes["ajax"])
                 self.var_element_timeout.set(self.defaults_ajustes["element"])
+                self.var_browser_pref.set(self.defaults_ajustes["browser"])
                 self.var_default_phone.set(self.defaults_ajustes["phone"])
                 self.var_capture_screenshots.set(self.defaults_ajustes["screenshots"])
                 self.var_start_maximized.set(self.defaults_ajustes["maximized"])
@@ -239,7 +305,7 @@ class JsBotGUI(ctk.CTk):
 
         self.sub_label = ctk.CTkLabel(
             self.sidebar_frame,
-            text="Versión 4.0.0",
+            text="Versión 4.1.0",
             font=ctk.CTkFont(size=11),
             text_color="#8E8E93"
         )
@@ -254,6 +320,7 @@ class JsBotGUI(ctk.CTk):
 
         secciones_superiores = [
             ("Diagnostico", "Diagnóstico", "diagnostico"),
+            ("Credenciales", "Credenciales", "cuenta"),
             ("Formacion", "Formación", "formacion"),
             ("Servicios", "Servicios", "servicios"),
             ("Reportes", "Reportes / ODS", "reportes"),
@@ -264,7 +331,7 @@ class JsBotGUI(ctk.CTk):
             btn = ctk.CTkButton(
                 self.sidebar_frame,
                 text=f"  {texto}",
-                image=self.iconos.get(icono_k),
+                image=self.iconos.get(icono_k) or self.iconos.get("credenciales") or self.iconos.get("cuenta"),
                 compound="left",
                 anchor="w",
                 height=38,
@@ -272,7 +339,7 @@ class JsBotGUI(ctk.CTk):
                 font=ctk.CTkFont(size=12, weight="bold" if es_activo else "normal"),
                 fg_color="#1f538d" if es_activo else "transparent",
                 hover_color="#14375e" if es_activo else "#2B2B36",
-                command=lambda c=clave: self._cambiar_seccion(c)
+                command=lambda c=clave: self._mostrar_seccion(c)
             )
             btn.grid(row=idx, column=0, padx=12, pady=2, sticky="ew")
             self.nav_buttons[clave] = btn
@@ -289,7 +356,7 @@ class JsBotGUI(ctk.CTk):
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
             hover_color="#2B2B36",
-            command=lambda: self._cambiar_seccion("Creditos")
+            command=lambda: self._mostrar_seccion("Creditos")
         )
         btn_creditos.grid(row=9, column=0, padx=12, pady=(0, 2), sticky="ew")
         self.nav_buttons["Creditos"] = btn_creditos
@@ -306,7 +373,7 @@ class JsBotGUI(ctk.CTk):
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
             hover_color="#2B2B36",
-            command=lambda: self._cambiar_seccion("Ajustes")
+            command=lambda: self._mostrar_seccion("Ajustes")
         )
         btn_ajustes.grid(row=10, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.nav_buttons["Ajustes"] = btn_ajustes
@@ -339,26 +406,42 @@ class JsBotGUI(ctk.CTk):
         )
         lbl_instance.pack(anchor="w", padx=10, pady=(1, 8))
 
+    def _mostrar_seccion(self, seccion: str):
+        """Conmuta a la sección indicada en el panel central."""
+        self._cambiar_seccion(seccion)
+
     def _cambiar_seccion(self, seccion: str):
         """Intercambia vistas en el panel central y actualiza el botón activo del sidebar."""
-        if self.seccion_actual == seccion:
+        mapping = {
+            "diagnostico": "Diagnostico",
+            "credenciales": "Credenciales",
+            "cuenta": "Credenciales",
+            "formacion": "Formacion",
+            "servicios": "Servicios",
+            "reportes": "Reportes",
+            "creditos": "Creditos",
+            "ajustes": "Ajustes"
+        }
+        seccion_clave = mapping.get(str(seccion).lower(), seccion)
+
+        if self.seccion_actual == seccion_clave:
             return
 
-        self.seccion_actual = seccion
+        self.seccion_actual = seccion_clave
 
         for clave, btn in self.nav_buttons.items():
-            if clave == seccion:
+            if clave == seccion_clave:
                 btn.configure(fg_color="#1f538d", hover_color="#14375e", font=ctk.CTkFont(size=12, weight="bold"))
             else:
                 btn.configure(fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=12, weight="normal"))
 
         for nombre, vista in self.vistas.items():
-            if nombre == seccion:
+            if nombre == seccion_clave:
                 vista.grid(row=0, column=0, sticky="nsew")
             else:
                 vista.grid_forget()
 
-        self._agregar_log(f"[NAVEGACIÓN] Sección activa: {seccion}")
+        self._agregar_log(f"[NAVEGACIÓN] Sección activa: {seccion_clave}")
 
     # =========================================================================
     # 2. CONTENEDOR PRINCIPAL Y VISTAS
@@ -378,6 +461,8 @@ class JsBotGUI(ctk.CTk):
         # Diccionario de vistas
         self.vistas = {}
         self.vistas["Diagnostico"] = self._crear_vista_diagnostico(self.vistas_container)
+        self.frame_credenciales = self._crear_vista_credenciales(self.vistas_container)
+        self.vistas["Credenciales"] = self.frame_credenciales
         self.vistas["Formacion"] = self._crear_vista_formacion(self.vistas_container)
         self.vistas["Servicios"] = self._crear_vista_servicios(self.vistas_container)
         self.vistas["Reportes"] = self._crear_vista_reportes(self.vistas_container)
@@ -491,11 +576,22 @@ class JsBotGUI(ctk.CTk):
         )
 
         # Tarjeta 4: Navegadores Web
-        nav_ok = "detectado" in nav_desc.lower()
+        nav_ok = "detectado" in nav_desc.lower() and "no detectado" not in nav_desc.lower()
+        if "firefox" in nav_desc.lower() and "chrome" in nav_desc.lower():
+            val_nav = "Firefox / Chrome"
+        elif "firefox" in nav_desc.lower():
+            val_nav = "Mozilla Firefox"
+        elif "chrome" in nav_desc.lower():
+            val_nav = "Google Chrome"
+        elif "edge" in nav_desc.lower():
+            val_nav = "Microsoft Edge"
+        else:
+            val_nav = "Detectado" if nav_ok else "No detectado"
+
         self._crear_tarjeta_grid(
             self.diag_grid, row=1, col=0,
             titulo="Navegadores Web",
-            valor_destacado="Chrome / Edge" if "chrome" in nav_desc.lower() or "edge" in nav_desc.lower() else "Detectado",
+            valor_destacado=val_nav,
             tag_texto="[OK]" if nav_ok else "[AVISO]",
             tag_color="#30D158" if nav_ok else "#F5A623",
             linea_1="Control: Selenium WebDriver",
@@ -503,10 +599,23 @@ class JsBotGUI(ctk.CTk):
         )
 
         # Tarjeta 5: Suite Ofimática
+        if suite_ok and suite_ruta:
+            base_s = os.path.basename(suite_ruta).lower()
+            if "desktopeditors" in base_s or "onlyoffice" in base_s:
+                valor_suite = "ONLYOFFICE"
+            elif "soffice" in base_s or "libreoffice" in base_s or "localc" in base_s:
+                valor_suite = "LibreOffice"
+            elif "excel" in base_s:
+                valor_suite = "Microsoft Excel"
+            else:
+                valor_suite = os.path.basename(suite_ruta)
+        else:
+            valor_suite = "Modo Asistido"
+
         self._crear_tarjeta_grid(
             self.diag_grid, row=1, col=1,
             titulo="Suite Ofimática",
-            valor_destacado=os.path.basename(suite_ruta) if suite_ruta else "Modo Asistido",
+            valor_destacado=valor_suite,
             tag_texto="[OK]" if suite_ok else "[AVISO]",
             tag_color="#30D158" if suite_ok else "#F5A623",
             linea_1="Soporte: Formatos .ODS y .XLSX",
@@ -567,7 +676,243 @@ class JsBotGUI(ctk.CTk):
         self._agregar_log("[OK] Diagnóstico actualizado: 6/6 módulos verificados.")
 
     # -------------------------------------------------------------------------
-    # B. VISTA 2: FORMACIÓN (CON CHIP DE ARCHIVO Y BOTÓN [✕])
+    # B. VISTA DEDICADA: GESTIÓN DE CUENTA Y CREDENCIALES INFOAPP
+    # -------------------------------------------------------------------------
+    def _crear_vista_credenciales(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        # Encabezado
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(12, 6))
+
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="🔐 Gestión de Cuenta y Credenciales InfoApp",
+            image=self.iconos.get("cuenta"),
+            compound="left",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(anchor="w")
+
+        lbl_sub = ctk.CTkLabel(
+            header,
+            text="Configura tus datos de acceso institucional para la automatización web sin exponer claves en código.",
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98"
+        )
+        lbl_sub.pack(anchor="w", pady=(2, 0))
+
+        # Tarjeta Central de Formulario
+        card_form = ctk.CTkFrame(
+            frame,
+            corner_radius=10,
+            fg_color="#161620",
+            border_width=1,
+            border_color="#292938"
+        )
+        card_form.pack(fill="x", padx=16, pady=(8, 12))
+
+        card_inner = ctk.CTkFrame(card_form, fg_color="transparent")
+        card_inner.pack(fill="x", padx=16, pady=16)
+
+        # Indicador de Estado Superior
+        u_actual = self.usuario_activo or ""
+        estado_texto = f"● Estado: Cuenta guardada ({u_actual})" if u_actual else "● Estado: Sin credenciales configuradas"
+        estado_color = "#22c55e" if u_actual else "#F5A623"
+
+        row_estado = ctk.CTkFrame(card_inner, fg_color="transparent")
+        row_estado.pack(fill="x", pady=(0, 12))
+
+        self.lbl_estado_credenciales = ctk.CTkLabel(
+            row_estado,
+            text=estado_texto,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=estado_color
+        )
+        self.lbl_estado_credenciales.pack(side="left")
+
+        # 1. Campo Usuario / Correo
+        lbl_usuario = ctk.CTkLabel(
+            card_inner,
+            text="Usuario / Correo Institucional:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_usuario.pack(anchor="w", pady=(0, 4))
+
+        self.entry_cred_usuario = ctk.CTkEntry(
+            card_inner,
+            placeholder_text="correo@infocentro.gob.ve",
+            textvariable=self.var_cred_usuario,
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_cred_usuario.pack(fill="x", pady=(0, 12))
+
+        # 2. Campo Contraseña
+        lbl_clave = ctk.CTkLabel(
+            card_inner,
+            text="Contraseña de Acceso:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_clave.pack(anchor="w", pady=(0, 4))
+
+        row_clave = ctk.CTkFrame(card_inner, fg_color="transparent")
+        row_clave.pack(fill="x", pady=(0, 16))
+
+        self.entry_cred_clave = ctk.CTkEntry(
+            row_clave,
+            show="*",
+            placeholder_text="Ingresa tu contraseña de InfoApp",
+            textvariable=self.var_cred_clave,
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_cred_clave.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        # Botón compacto para alternar visibilidad
+        self.btn_toggle_ver_clave = ctk.CTkButton(
+            row_clave,
+            text="👁 Mostrar",
+            width=90,
+            height=34,
+            font=ctk.CTkFont(size=11),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._alternar_ver_clave
+        )
+        self.btn_toggle_ver_clave.pack(side="right")
+
+        # Fila de Acciones y Notificación Visual
+        row_acciones = ctk.CTkFrame(card_inner, fg_color="transparent")
+        row_acciones.pack(fill="x", pady=(4, 2))
+
+        self.btn_guardar_credenciales = ctk.CTkButton(
+            row_acciones,
+            text="Guardar Credenciales",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=36,
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=self._guardar_credenciales_gui
+        )
+        self.btn_guardar_credenciales.pack(side="left", padx=(0, 14))
+
+        self.lbl_feedback_credenciales = ctk.CTkLabel(
+            row_acciones,
+            text="",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#22c55e"
+        )
+        self.lbl_feedback_credenciales.pack(side="left")
+
+        # Tarjeta informativa de seguridad en el pie
+        card_info = ctk.CTkFrame(
+            frame,
+            corner_radius=8,
+            fg_color="#14141E",
+            border_width=1,
+            border_color="#252535"
+        )
+        card_info.pack(fill="x", padx=16, pady=(0, 16))
+
+        lbl_info_seguridad = ctk.CTkLabel(
+            card_info,
+            text="🛡️ Seguridad y Privacidad: Tus credenciales se almacenan localmente en 'config/config.ini' y se utilizan\núnicamente durante el proceso automatizado con Selenium hacia los servidores oficiales de InfoApp.",
+            font=ctk.CTkFont(size=10),
+            text_color="#8E8E98",
+            justify="left"
+        )
+        lbl_info_seguridad.pack(anchor="w", padx=14, pady=10)
+
+        return frame
+
+    def _alternar_ver_clave(self):
+        """Alterna la visibilidad del campo contraseña entre texto plano y asteriscos."""
+        if self.entry_cred_clave.cget("show") == "*":
+            self.entry_cred_clave.configure(show="")
+            self.btn_toggle_ver_clave.configure(text="🔒 Ocultar")
+        else:
+            self.entry_cred_clave.configure(show="*")
+            self.btn_toggle_ver_clave.configure(text="👁 Mostrar")
+
+    def _guardar_credenciales_gui(self):
+        """Persiste las credenciales en config/config.ini y actualiza la memoria activa."""
+        usuario = self.entry_cred_usuario.get().strip()
+        clave = self.entry_cred_clave.get().strip()
+
+        if not usuario or not clave:
+            self.lbl_feedback_credenciales.configure(
+                text="⚠️ Usuario y contraseña no pueden estar vacíos",
+                text_color="#F5A623"
+            )
+            self._agregar_log("[ERROR] Intento de guardar credenciales vacías en InfoApp.")
+            return
+
+        try:
+            # 1. Escribir directamente en [LOGIN] de config/config.ini mediante configparser
+            config_path = CONFIG_FILE if 'CONFIG_FILE' in globals() else os.path.join(BASE_DIR, "config", "config.ini")
+            os.makedirs(os.path.dirname(config_path), exist_ok=True)
+            cfg = configparser.ConfigParser()
+            if os.path.exists(config_path):
+                try:
+                    cfg.read(config_path, encoding='utf-8')
+                except Exception:
+                    pass
+
+            if "LOGIN" not in cfg:
+                cfg["LOGIN"] = {}
+            cfg["LOGIN"]["usuario"] = usuario
+            cfg["LOGIN"]["clave"] = clave
+
+            # Mantener retrocompatibilidad con [CREDENCIALES]
+            if "CREDENCIALES" not in cfg:
+                cfg["CREDENCIALES"] = {}
+            cfg["CREDENCIALES"]["usuario"] = usuario
+            cfg["CREDENCIALES"]["clave"] = clave
+
+            with open(config_path, "w", encoding="utf-8") as f:
+                cfg.write(f)
+
+            # 2. Actualizar variables de sesión activas en memoria para que Selenium las consuma de inmediato sin reiniciar
+            self.usuario_activo = usuario
+            self.clave_activa = clave
+
+            if MODULOS_DISPONIBLES:
+                try:
+                    guardar_credenciales(usuario, clave)
+                except Exception:
+                    pass
+
+            # 3. Emitir mensaje a la consola de telemetría
+            self._agregar_log("[OK] Credenciales de InfoApp actualizadas y persistidas en config/config.ini.")
+
+            # 4. Notificar visualmente en la tarjeta
+            self.lbl_feedback_credenciales.configure(
+                text="✓ Credenciales guardadas exitosamente",
+                text_color="#22c55e"
+            )
+            self.lbl_estado_credenciales.configure(
+                text=f"● Estado: Cuenta guardada ({usuario})",
+                text_color="#22c55e"
+            )
+
+        except Exception as ex:
+            self._agregar_log(f"[ERROR] No se pudieron guardar las credenciales: {ex}")
+            self.lbl_feedback_credenciales.configure(
+                text=f"✕ Error al guardar: {ex}",
+                text_color="#EF4444"
+            )
+
+    # -------------------------------------------------------------------------
+    # C. VISTA 3: FORMACIÓN (CON CHIP DE ARCHIVO Y BOTÓN [✕])
     # -------------------------------------------------------------------------
     def _crear_vista_formacion(self, padre) -> ctk.CTkFrame:
         frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
@@ -1028,7 +1373,7 @@ class JsBotGUI(ctk.CTk):
                 text="Ver CSV",
                 width=75,
                 height=26,
-                command=lambda: abrir_archivo_asistido(csv_path) if MODULOS_DISPONIBLES else None
+                command=lambda: abrir_archivo_o_directorio_sistema(csv_path)
             )
             btn_ver_csv.pack(side="right", padx=12)
 
@@ -1058,7 +1403,7 @@ class JsBotGUI(ctk.CTk):
 
         lbl_version = ctk.CTkLabel(
             head_box,
-            text="Versión 4.0.0 Oficial — Núcleo de Automatización v4.0.0",
+            text="Versión 4.1.0 Oficial — Núcleo de Automatización v4.1.0",
             font=ctk.CTkFont(size=11),
             text_color="#3B8ED0"
         )
@@ -1392,7 +1737,7 @@ class JsBotGUI(ctk.CTk):
             self.adv_btn_row.pack(fill="x")
 
     def _guardar_cambios_ajustes(self):
-        """Actualiza los valores baseline y oculta el banner inmediatamente."""
+        """Actualiza los valores baseline, los persiste en config/settings.json y oculta el banner inmediatamente."""
         self.defaults_ajustes["login"] = self.var_login_timeout.get()
         self.defaults_ajustes["ajax"] = self.var_ajax_timeout.get()
         self.defaults_ajustes["element"] = self.var_element_timeout.get()
@@ -1402,11 +1747,38 @@ class JsBotGUI(ctk.CTk):
         self.defaults_ajustes["logs"] = self.var_detailed_logs.get()
         self.defaults_ajustes["phone"] = self.var_default_phone.get()
 
+        pref = self.var_browser_pref.get()
+        if "chrome" in pref.lower():
+            prioridad = ["chrome", "firefox", "edge"]
+        elif "edge" in pref.lower():
+            prioridad = ["edge", "chrome", "firefox"]
+        else:
+            prioridad = ["firefox", "chrome", "edge"]
+
+        nuevos_settings = {
+            "timeouts": {
+                "login_wait_seconds": int(self.var_login_timeout.get()),
+                "ajax_wait_seconds": int(self.var_ajax_timeout.get()),
+                "element_wait_seconds": int(self.var_element_timeout.get())
+            },
+            "browser": {
+                "priority": prioridad,
+                "start_maximized": bool(self.var_start_maximized.get())
+            },
+            "validation": {
+                "default_phone": str(self.var_default_phone.get()).strip() or "0412-0000000",
+                "capture_screenshots_on_error": bool(self.var_capture_screenshots.get())
+            }
+        }
+
+        if MODULOS_DISPONIBLES:
+            cm.guardar_settings(nuevos_settings)
+
         self._ocultar_banner_advertencia_inmediato()
-        self._agregar_log(f"[AJUSTES] Parámetros guardados: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s.")
+        self._agregar_log(f"[AJUSTES] Parámetros guardados y persistidos en config/settings.json: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s, Navegador={self.defaults_ajustes['browser']}.")
 
     def _restaurar_defaults_ajustes(self):
-        """Restaura los valores por defecto y retira el banner inmediatamente sin dejar espacios."""
+        """Restaura los valores por defecto, los persiste en disco y retira el banner inmediatamente sin dejar espacios."""
         self.var_login_timeout.set(15)
         self.var_ajax_timeout.set(15)
         self.var_element_timeout.set(12)
@@ -1432,8 +1804,11 @@ class JsBotGUI(ctk.CTk):
         self.defaults_ajustes["logs"] = True
         self.defaults_ajustes["phone"] = "0412-0000000"
 
+        if MODULOS_DISPONIBLES:
+            cm.guardar_settings(cm.DEFAULTS)
+
         self._ocultar_banner_advertencia_inmediato()
-        self._agregar_log("[AJUSTES] Valores restaurados por defecto. Banner de advertencia retirado.")
+        self._agregar_log("[AJUSTES] Valores restaurados por defecto y persistidos en config/settings.json.")
 
     # -------------------------------------------------------------------------
     # G. PANEL INFERIOR: TELEMETRÍA Y PROGRESO CON TOOLBAR COMPACTA
@@ -1523,15 +1898,100 @@ class JsBotGUI(ctk.CTk):
         self.textbox_logs.delete("0.0", tk.END)
         self._agregar_log("[CONSOLA] Registro de eventos vaciado.")
 
+    def _mostrar_modal_mensaje(self, titulo: str, mensaje: str, tipo: str = "aviso"):
+        """
+        Muestra un diálogo modal visual mediante CTkMessagebox si está disponible,
+        o mediante una ventana secundaria CTkToplevel vinculada a la ventana principal.
+        Evita volcar excepciones o advertencias en sys.stdout.
+        """
+        try:
+            from CTkMessagebox import CTkMessagebox
+            icon_map = {"error": "cancel", "aviso": "warning", "info": "info", "ok": "check"}
+            CTkMessagebox(master=self, title=titulo, message=mensaje, icon=icon_map.get(tipo, "info"))
+            return
+        except ImportError:
+            pass
+
+        try:
+            self.update_idletasks()
+            ancho = 500
+            alto = 230
+            pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho) // 2)
+            pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto) // 2)
+
+            modal = ctk.CTkToplevel(self)
+            modal.title(titulo)
+            modal.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
+            modal.resizable(False, False)
+            modal.transient(self)
+            modal.grab_set()
+            modal.focus_set()
+
+            colores = {
+                "error": ("#E74C3C", "❌ Error"),
+                "aviso": ("#F39C12", "⚠️ Advertencia"),
+                "info": ("#3B8ED0", "ℹ️ Información"),
+                "ok": ("#30D158", "✅ Éxito")
+            }
+            color_tema, prefijo = colores.get(tipo, ("#3B8ED0", "ℹ️ Información"))
+
+            f_top = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
+            f_top.pack(fill="x")
+
+            lbl_t = ctk.CTkLabel(
+                f_top,
+                text=f"{prefijo}: {titulo}",
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color=color_tema
+            )
+            lbl_t.pack(anchor="w", padx=16, pady=10)
+
+            f_body = ctk.CTkFrame(modal, fg_color="transparent")
+            f_body.pack(fill="both", expand=True, padx=20, pady=12)
+
+            lbl_msg = ctk.CTkLabel(
+                f_body,
+                text=mensaje,
+                font=ctk.CTkFont(size=11),
+                text_color="#E0E0E8",
+                justify="left",
+                wraplength=450
+            )
+            lbl_msg.pack(anchor="w", pady=(4, 8))
+
+            btn_ok = ctk.CTkButton(
+                modal,
+                text="Aceptar",
+                width=110,
+                height=32,
+                font=ctk.CTkFont(size=11, weight="bold"),
+                fg_color="#1f538d",
+                hover_color="#14375e",
+                command=modal.destroy
+            )
+            btn_ok.pack(side="bottom", pady=(0, 14))
+        except Exception:
+            pass
+
     # =========================================================================
     # LÓGICA FUNCIONAL (EXAMINAR, DESCARTAR, URLS, ASINCRONISMO)
     # =========================================================================
     def _examinar_archivo_formacion(self):
         ruta = filedialog.askopenfilename(
             title="Seleccionar archivo de estudiantes / formación",
-            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Todos los archivos", "*.*")]
+            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
         )
         if not ruta:
+            return
+
+        ext = os.path.splitext(ruta)[1].lower()
+        if ext not in ('.xlsx', '.xls', '.ods', '.csv', '.txt'):
+            self._agregar_log(f"[ERROR] Formato de archivo no soportado: '{os.path.basename(ruta)}'")
+            self._mostrar_modal_mensaje(
+                titulo="Formato no compatible",
+                mensaje=f"El archivo '{os.path.basename(ruta)}' tiene un formato no compatible ({ext}).\n\nFormatos soportados: Excel (.xlsx, .xls), OpenDocument (.ods), CSV (.csv) y Texto (.txt).",
+                tipo="error"
+            )
             return
 
         self.archivo_actual_ruta = ruta
@@ -1548,6 +2008,7 @@ class JsBotGUI(ctk.CTk):
         self.archivo_actual_ruta = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
+        self.reporte_deduplicacion_actual = None
         self.archivo_seleccionado_formacion.set("Ningún archivo seleccionado")
         self.lbl_archivo_formacion.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
         self.btn_descartar_formacion.pack_forget()
@@ -1558,9 +2019,19 @@ class JsBotGUI(ctk.CTk):
     def _examinar_archivo_servicios(self):
         ruta = filedialog.askopenfilename(
             title="Seleccionar archivo de usuarios de atención / servicios",
-            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Todos los archivos", "*.*")]
+            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
         )
         if not ruta:
+            return
+
+        ext = os.path.splitext(ruta)[1].lower()
+        if ext not in ('.xlsx', '.xls', '.ods', '.csv', '.txt'):
+            self._agregar_log(f"[ERROR] Formato de archivo no soportado: '{os.path.basename(ruta)}'")
+            self._mostrar_modal_mensaje(
+                titulo="Formato no compatible",
+                mensaje=f"El archivo '{os.path.basename(ruta)}' tiene un formato no compatible ({ext}).\n\nFormatos soportados: Excel (.xlsx, .xls), OpenDocument (.ods), CSV (.csv) y Texto (.txt).",
+                tipo="error"
+            )
             return
 
         self.archivo_actual_ruta = ruta
@@ -1577,6 +2048,7 @@ class JsBotGUI(ctk.CTk):
         self.archivo_actual_ruta = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
+        self.reporte_deduplicacion_actual = None
         self.archivo_seleccionado_servicios.set("Ningún archivo seleccionado")
         self.lbl_archivo_servicios.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
         self.btn_descartar_servicios.pack_forget()
@@ -1587,17 +2059,45 @@ class JsBotGUI(ctk.CTk):
     def _procesar_archivo_en_frio(self, ruta: str, seccion: str = "Formacion"):
         if not MODULOS_DISPONIBLES:
             self._agregar_log("[ERROR] Módulos de normalización no disponibles.")
+            self._mostrar_modal_mensaje(
+                "Módulos no disponibles",
+                "Los módulos de normalización de datos no están disponibles en este entorno.",
+                tipo="error"
+            )
             return
 
         try:
-            participantes = procesar_archivo_participantes(ruta)
+            ext = os.path.splitext(ruta)[1].lower()
+            if seccion == "Servicios" and ext == '.txt':
+                participantes = procesar_archivo_texto(ruta)
+            else:
+                participantes = procesar_archivo_participantes(ruta)
+
             if not participantes:
                 self._agregar_log(f"[ADVERTENCIA] No se detectaron participantes válidos en '{os.path.basename(ruta)}'.")
+                self._mostrar_modal_mensaje(
+                    titulo="Sin registros válidos",
+                    mensaje=f"No se detectaron registros válidos en '{os.path.basename(ruta)}'.\n\nVerifica que contenga cabeceras claras (Nombres, Apellidos, Cédula) y filas con datos.",
+                    tipo="aviso"
+                )
                 return
 
-            participantes = deduplicar_participantes(participantes)
+            # Invocación con modo_interactivo=False para desacoplar InquirerPy/CLI de la GUI
+            res_dedup = deduplicar_participantes(participantes, modo_interactivo=False)
+            if isinstance(res_dedup, tuple):
+                participantes, reporte_dedup = res_dedup
+            else:
+                participantes = res_dedup
+                reporte_dedup = {"duplicados_omitidos": 0, "nombres": []}
+
             self.participantes_cargados = participantes
             self.datos_normalizados_actuales = participantes
+            self.reporte_deduplicacion_actual = reporte_dedup
+
+            dup_omitidos = reporte_dedup.get("duplicados_omitidos", 0)
+            if dup_omitidos > 0:
+                self._agregar_log(f"[AVISO] Se detectaron {dup_omitidos} registros duplicados en el archivo.")
+                self._agregar_log(f"[OK] Duplicados depurados automáticamente: {len(participantes)} registros únicos listos para procesar.")
 
             total = len(participantes)
             ci_saime = 0
@@ -1620,13 +2120,22 @@ class JsBotGUI(ctk.CTk):
                     inconsistencias += 1
 
             if inconsistencias == 0:
-                estado_txt = "● Estructura Válida (0 inconsistencias)"
+                if dup_omitidos > 0:
+                    estado_txt = f"● Estructura Válida ({dup_omitidos} dup. depurados)"
+                else:
+                    estado_txt = "● Estructura Válida (0 inconsistencias)"
                 estado_color = "#30D158"
             else:
-                estado_txt = f"▲ {inconsistencias} inconsistencia(s) detectada(s)"
+                if dup_omitidos > 0:
+                    estado_txt = f"▲ {inconsistencias} inconsistencia(s) | {dup_omitidos} dup. depurados"
+                else:
+                    estado_txt = f"▲ {inconsistencias} inconsistencia(s) detectada(s)"
                 estado_color = "#F39C12"
 
-            desglose_txt = f"{ci_saime} Cedulados  |  {ci_escolar} Escolares  |  {menores_sin_doc} Menores S/C"
+            if dup_omitidos > 0:
+                desglose_txt = f"{ci_saime} Cedulados  |  {ci_escolar} Escolares  |  {menores_sin_doc} Menores S/C  |  {dup_omitidos} Dup. omitidos"
+            else:
+                desglose_txt = f"{ci_saime} Cedulados  |  {ci_escolar} Escolares  |  {menores_sin_doc} Menores S/C"
 
             if seccion == "Servicios":
                 if hasattr(self, "lbl_prevuelo_servicios_total"):
@@ -1648,12 +2157,21 @@ class JsBotGUI(ctk.CTk):
             self._agregar_log(f"[OK] Total de participantes válidos: {total}")
             self._agregar_log(f"[DATOS] ├─ Cédulas de Identidad (SAIME): {ci_saime}")
             self._agregar_log(f"[DATOS] ├─ Cédulas Escolares (CE): {ci_escolar}")
-            self._agregar_log(f"[DATOS] └─ Menores vinculados a tutor / S/C: {menores_sin_doc}")
+            self._agregar_log(f"[DATOS] ├─ Menores vinculados a tutor / S/C: {menores_sin_doc}")
+            if dup_omitidos > 0:
+                self._agregar_log(f"[DATOS] └─ Duplicados depurados: {dup_omitidos}")
+            else:
+                self._agregar_log(f"[DATOS] └─ Sin duplicados detectados")
             self._agregar_log(f"[INFO] Ingesta completada: {total} registros listos para revisión previa.")
             self._agregar_log("────────────────────────────────────────────────────────────")
 
         except Exception as e:
             self._agregar_log(f"[ERROR] Fallo al normalizar archivo: {e}")
+            self._mostrar_modal_mensaje(
+                titulo="Error de Normalización",
+                mensaje=f"No se pudo procesar el archivo '{os.path.basename(ruta)}':\n\n{e}",
+                tipo="error"
+            )
 
     def _abrir_tabla_previsualizacion(self, titulo_fuente: str):
         """Abre ventana modal CTkToplevel para inspeccionar y auditar los datos normalizados en tabla."""
@@ -1700,9 +2218,13 @@ class JsBotGUI(ctk.CTk):
         lbl_modal_title.pack(anchor="w")
 
         nombre_arc = os.path.basename(self.archivo_actual_ruta) if self.archivo_actual_ruta else "Demostración en frío"
+        dup_om = self.reporte_deduplicacion_actual.get('duplicados_omitidos', 0) if getattr(self, 'reporte_deduplicacion_actual', None) else 0
+        sub_txt = f"Módulo: {titulo_fuente}  •  Origen: {nombre_arc}  •  Registros: {len(datos)}"
+        if dup_om > 0:
+            sub_txt += f"  •  Duplicados depurados: {dup_om}"
         lbl_modal_sub = ctk.CTkLabel(
             header_inner,
-            text=f"Módulo: {titulo_fuente}  •  Origen: {nombre_arc}  •  Registros: {len(datos)}",
+            text=sub_txt,
             font=ctk.CTkFont(size=11),
             text_color="#8E8E98"
         )
@@ -1804,9 +2326,13 @@ class JsBotGUI(ctk.CTk):
         footer_inner = ctk.CTkFrame(footer_frame, fg_color="transparent")
         footer_inner.pack(fill="x", padx=16, pady=8)
 
+        if dup_om > 0:
+            txt_res = f"Mostrando {len(datos)} registros únicos listos para inyección ({dup_om} duplicados omitidos automáticamente)."
+        else:
+            txt_res = f"Mostrando {len(datos)} registros normalizados listos para inyección."
         lbl_resumen = ctk.CTkLabel(
             footer_inner,
-            text=f"Mostrando {len(datos)} registros normalizados listos para inyección.",
+            text=txt_res,
             font=ctk.CTkFont(size=11),
             text_color="#A1A1AA"
         )
@@ -1845,83 +2371,294 @@ class JsBotGUI(ctk.CTk):
         else:
             entry_widget.configure(border_color="#F39C12")
 
+    def agregar_log_telemetria(self, mensaje: str):
+        """Redirige registros de ejecución en vivo hacia la consola visual de telemetría."""
+        self._agregar_log(mensaje)
+
     def _iniciar_ejecucion_asincrona_formacion(self):
         if self.ejecutando_tarea:
             return
 
+        # 1. Validar presencia de archivo cargado
+        if not self.participantes_cargados:
+            self._agregar_log("[ERROR] No se puede iniciar: no hay ningún archivo seleccionado o no contiene participantes válidos.")
+            self._mostrar_modal_mensaje(
+                titulo="Archivo Requerido",
+                mensaje="Debes examinar y cargar un archivo de estudiantes válido (.xlsx, .ods, .csv, .txt) antes de iniciar la carga automatizada.",
+                tipo="error"
+            )
+            return
+
+        # 2. Validar sintaxis y presencia de id_activity en la URL
+        url = self.entry_url_formacion.get().strip()
+        id_actividad = extraer_id_actividad(url) if MODULOS_DISPONIBLES else ""
+        if not url or ("id_activity=" not in url and id_actividad == "general"):
+            self._agregar_log(f"[ERROR] URL de InfoApp no válida: '{url}'")
+            self._mostrar_modal_mensaje(
+                titulo="URL Inválida",
+                mensaje="La URL de InfoApp no es válida. Debe contener el parámetro 'id_activity=' de la actividad destino (ej: https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=526293).",
+                tipo="error"
+            )
+            return
+
+        # 3. Cargar credenciales activas en memoria o desde config.ini
+        usuario = self.usuario_activo or (obtener_credenciales()[0] if MODULOS_DISPONIBLES else "")
+        clave = self.clave_activa or (obtener_credenciales()[1] if MODULOS_DISPONIBLES else "")
+        if not usuario or not clave:
+            self._agregar_log("[ERROR] Credenciales no localizadas en config/config.ini.")
+            self._mostrar_modal_mensaje(
+                titulo="Credenciales Requeridas",
+                mensaje="No se encontraron credenciales en 'config/config.ini'. Por favor configura tu usuario y contraseña de InfoApp.",
+                tipo="error"
+            )
+            return
+
+        # 4. Iniciar ejecución en hilo seguro
         self.ejecutando_tarea = True
         self.btn_iniciar_formacion.configure(state="disabled", text="EJECUTANDO CARGA...", fg_color="#0F6CBD")
         self.progreso.set(0.0)
         self.lbl_porcentaje.configure(text="Progreso: 0%")
         self._iniciar_pulso_estado()
 
-        threading.Thread(target=self._hilo_proceso_carga_formacion, daemon=True).start()
+        ts = datetime.now().strftime("%Y-%m-%d_%H%M")
+        log_dir = os.path.join(BASE_DIR, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        archivo_log = os.path.join(log_dir, f"log_actividad_{id_actividad}_{ts}.txt")
+
+        with open(archivo_log, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA v4.1.0 (GUI)\n")
+            f.write(f"Actividad ID : {id_actividad}\n")
+            f.write(f"URL          : {url}\n")
+            f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Operador     : {usuario}\n")
+            f.write("=" * 80 + "\n\n")
+
+        config = {
+            "usuario": usuario,
+            "clave": clave,
+            "url": url,
+            "id_actividad": id_actividad,
+            "timestamp_str": ts,
+            "archivo_log": archivo_log,
+            "modo_gui": True,
+            "modo_visible": self.var_modo_visible_formacion.get(),
+            "generar_ods": self.var_generar_ods_formacion.get()
+        }
+
+        participantes = list(self.participantes_cargados)
+        threading.Thread(
+            target=self._hilo_proceso_carga_formacion,
+            args=(participantes, config),
+            daemon=True
+        ).start()
 
     def _iniciar_ejecucion_asincrona_servicios(self):
         if self.ejecutando_tarea:
             return
 
+        # 1. Validar presencia de usuarios/participantes
+        if not self.participantes_cargados:
+            self._agregar_log("[ERROR] No se puede iniciar: no hay usuarios cargados para servicios comunitarios.")
+            self._mostrar_modal_mensaje(
+                titulo="Archivo Requerido",
+                mensaje="Debes examinar y cargar un archivo de usuarios válido (.xlsx, .csv, .txt) antes de iniciar la carga de servicios.",
+                tipo="error"
+            )
+            return
+
+        # 2. Validar sintaxis y presencia de id_service en la URL
+        url = self.entry_url_servicios.get().strip()
+        id_servicio = extraer_id_servicio(url) if MODULOS_DISPONIBLES else ""
+        if not url or ("id_service=" not in url and id_servicio == "general"):
+            self._agregar_log(f"[ERROR] URL de Servicio InfoApp no válida: '{url}'")
+            self._mostrar_modal_mensaje(
+                titulo="URL de Servicio Inválida",
+                mensaje="La URL de Servicio no es válida. Debe contener el parámetro 'id_service=' (ej: https://infoapp2.infocentro.gob.ve/admin/index.php?r=service/create&id_service=12345).",
+                tipo="error"
+            )
+            return
+
+        # 3. Cargar credenciales activas en memoria o desde config.ini
+        usuario = self.usuario_activo or (obtener_credenciales()[0] if MODULOS_DISPONIBLES else "")
+        clave = self.clave_activa or (obtener_credenciales()[1] if MODULOS_DISPONIBLES else "")
+        if not usuario or not clave:
+            self._agregar_log("[ERROR] Credenciales no localizadas en config/config.ini.")
+            self._mostrar_modal_mensaje(
+                titulo="Credenciales Requeridas",
+                mensaje="No se encontraron credenciales en 'config/config.ini'. Por favor configura tu usuario y contraseña de InfoApp.",
+                tipo="error"
+            )
+            return
+
+        # 4. Iniciar ejecución en hilo seguro
         self.ejecutando_tarea = True
         self.btn_iniciar_servicios.configure(state="disabled", text="EJECUTANDO SERVICIOS...", fg_color="#1B5E20")
         self.progreso.set(0.0)
         self.lbl_porcentaje.configure(text="Progreso: 0%")
         self._iniciar_pulso_estado()
 
-        threading.Thread(target=self._hilo_proceso_carga_servicios, daemon=True).start()
+        cfg_serv_global = cargar_config_servicios() if MODULOS_DISPONIBLES else {}
+        if self.var_registro_tramite_servicios.get():
+            tipo_srv = cfg_serv_global.get("servicio_por_defecto", "Gestión en el Sistema de Protección Social Patria")
+        else:
+            tipo_srv = "Uso de equipo de computación e internet"
 
-    def _hilo_proceso_carga_formacion(self):
-        self._agregar_log("[INICIO] Proceso de Carga Automatizada iniciado en hilo seguro.")
+        fecha_srv = datetime.now().strftime("%Y-%m-%d")
+        ts = datetime.now().strftime("%Y-%m-%d_%H%M")
+        log_dir = os.path.join(BASE_DIR, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        archivo_log = os.path.join(log_dir, f"log_servicios_{id_servicio}_{ts}.txt")
 
-        participantes = self.participantes_cargados or [
-            {"nombre": "Eduardo", "apellido": "Pineda", "cedula": "36996120", "cedulado": "si"},
-            {"nombre": "Marcela", "apellido": "Villegas", "cedula_escolar": "11607579666", "cedulado": "escolar"},
-            {"nombre": "Damián", "apellido": "Gutiérrez", "cedula": "35890123", "cedulado": "si"},
-            {"nombre": "Sofía", "apellido": "Hernández", "cedula_padre": "18456123", "cedulado": "escolar"},
-            {"nombre": "Lucas", "apellido": "Camacho", "cedula": "34112980", "cedulado": "si"},
-        ]
+        with open(archivo_log, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v4.1.0 (GUI)\n")
+            f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Servicio     : {tipo_srv}\n")
+            f.write(f"Servicio ID  : {id_servicio}\n")
+            f.write(f"Fecha Reg.   : {fecha_srv}\n")
+            f.write(f"Operador     : {usuario}\n")
+            f.write("=" * 80 + "\n\n")
 
+        config_bot = {
+            "usuario": usuario,
+            "clave": clave,
+            "url": url,
+            "id_servicio": id_servicio,
+            "timestamp_str": ts,
+            "archivo_log": archivo_log,
+            "modo_gui": True,
+            "modo_visible": self.var_modo_visible_servicios.get()
+        }
+
+        config_servicio = {
+            "tipo_servicio": tipo_srv,
+            "fecha_servicio": fecha_srv,
+            "id_servicio": id_servicio,
+            "infocentro": cfg_serv_global.get("infocentro", {})
+        }
+
+        usuarios = list(self.participantes_cargados)
+        threading.Thread(
+            target=self._hilo_proceso_carga_servicios,
+            args=(usuarios, config_bot, config_servicio),
+            daemon=True
+        ).start()
+
+    def _hilo_proceso_carga_formacion(self, participantes: list, config: dict):
         total = len(participantes)
-        for idx, p in enumerate(participantes, 1):
-            time.sleep(0.35)
+        id_act = config.get("id_actividad", "")
+        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Carga Automatizada real iniciado para {total} participantes.")
+        self.after(0, self.agregar_log_telemetria, f"[ACTIVIDAD] ID Actividad: {id_act} | URL: {config.get('url')}")
 
-            if p.get('cedula'):
-                doc = f"C.I. {p.get('cedula')}"
-            elif p.get('cedula_escolar'):
-                doc = f"C.E. {p.get('cedula_escolar')}"
-            elif p.get('cedula_padre'):
-                doc = f"Rep: {p.get('cedula_padre')}"
+        if MODULOS_DISPONIBLES:
+            guardar_estado_sesion(config, participantes, 0)
+
+        def cb_log(msg):
+            self.after(0, self.agregar_log_telemetria, msg)
+
+        def cb_progreso(actual, total_p, desc=""):
+            pct = actual / total_p if total_p > 0 else 0.0
+            self.cola_eventos.put(("progreso", pct))
+
+        cargados_exitosos = []
+        fallidos = []
+        tiempo_seg = 0.0
+
+        try:
+            cargados_exitosos, fallidos, tiempo_seg = ejecutar_carga_infoapp(
+                participantes,
+                config,
+                indice_inicio=0,
+                log_callback=cb_log,
+                progreso_callback=cb_progreso
+            )
+
+            if len(cargados_exitosos) >= total:
+                finalizar_log_exito(config)
+                self.after(0, self.agregar_log_telemetria, f"[OK] Carga completada exitosamente: {len(cargados_exitosos)}/{total} inyectados en {tiempo_seg:.1f}s.")
             else:
-                doc = "S/C"
+                finalizar_log_incompleto(config, f"Parcial: {len(cargados_exitosos)}/{total} procesados")
+                self.after(0, self.agregar_log_telemetria, f"[AVISO] Carga parcial: {len(cargados_exitosos)}/{total} procesados ({len(fallidos)} incidencias).")
 
-            nombre_comp = f"{p.get('nombre', '')} {p.get('apellido', '')}".strip()
-            pct = idx / total
+            # Reporte Excel de Auditoría
+            try:
+                ruta_excel = generar_reporte_auditoria_excel(config, cargados_exitosos, fallidos)
+                if ruta_excel:
+                    self.after(0, self.agregar_log_telemetria, f"[AUDITORÍA] Reporte Excel generado: logs/{os.path.basename(ruta_excel)}")
+            except Exception as e_excel:
+                self.after(0, self.agregar_log_telemetria, f"[AVISO] Error al generar reporte Excel: {e_excel}")
 
-            self.cola_eventos.put(("progreso", pct))
-            self._agregar_log(f"[OK] Alumno {idx}/{total}: {nombre_comp} ({doc}) verificado y procesado.")
+            # Generar planilla ODS si la opción está activa
+            if config.get("generar_ods", True):
+                self.after(0, self.agregar_log_telemetria, "[PLANILLA] Generando Planilla Oficial .ODS...")
+                planillas_dir = os.path.join(BASE_DIR, "Planillas")
+                os.makedirs(planillas_dir, exist_ok=True)
+                ts = config.get("timestamp_str", datetime.now().strftime("%Y%m%d_%H%M"))
+                ruta_ods = os.path.join(planillas_dir, f"Planilla_Participantes_Actividad_{id_act}_{ts}.ods")
+                lista_ods = cargados_exitosos if cargados_exitosos else participantes
+                try:
+                    res_ods = generar_planilla_oficial(lista_ods, id_act, config.get("url", ""), ruta_salida=ruta_ods)
+                    self.after(0, self.agregar_log_telemetria, f"[OK] Planilla oficial .ODS guardada en: Planillas/{os.path.basename(res_ods or ruta_ods)}")
+                except Exception as e_ods:
+                    self.after(0, self.agregar_log_telemetria, f"[ERROR] No se pudo generar la planilla .ODS: {e_ods}")
 
-        time.sleep(0.2)
-        self.cola_eventos.put(("fin_formacion", total))
+        except Exception as e:
+            self.after(0, self.agregar_log_telemetria, f"[CRITICO] Error no controlado durante la carga: {e}")
+            if MODULOS_DISPONIBLES:
+                finalizar_log_incompleto(config, str(e))
+        finally:
+            self.cola_eventos.put(("fin_formacion", len(cargados_exitosos)))
 
-    def _hilo_proceso_carga_servicios(self):
-        self._agregar_log("[INICIO] Proceso de Servicios Comunitarios iniciado.")
-
-        usuarios = self.participantes_cargados or [
-            {"nombre": "Beatriz", "apellido": "Gómez", "cedula": "15432987"},
-            {"nombre": "Carlos", "apellido": "Mendoza", "cedula": "12876543"},
-            {"nombre": "Elena", "apellido": "Rivas", "cedula": "20345678"},
-        ]
-
+    def _hilo_proceso_carga_servicios(self, usuarios: list, config_bot: dict, config_servicio: dict):
         total = len(usuarios)
-        for idx, u in enumerate(usuarios, 1):
-            time.sleep(0.4)
-            pct = idx / total
-            nombre_comp = f"{u.get('nombre', '')} {u.get('apellido', '')}".strip()
-            doc = u.get('cedula') or u.get('cedula_escolar') or "S/C"
+        id_srv = config_bot.get("id_servicio", "")
+        tipo_srv = config_servicio.get("tipo_servicio", "")
+        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Servicios Comunitarios real iniciado para {total} usuarios.")
+        self.after(0, self.agregar_log_telemetria, f"[SERVICIO] ID: {id_srv} | Tipo: {tipo_srv}")
 
+        if MODULOS_DISPONIBLES:
+            guardar_estado_sesion_servicios(config_bot, config_servicio, usuarios, 0)
+
+        def cb_log(msg):
+            self.after(0, self.agregar_log_telemetria, msg)
+
+        def cb_progreso(actual, total_p, desc=""):
+            pct = actual / total_p if total_p > 0 else 0.0
             self.cola_eventos.put(("progreso", pct))
-            self._agregar_log(f"[OK] Usuario {idx}/{total}: {nombre_comp} ({doc}) registrado en servicio.")
 
-        self.cola_eventos.put(("fin_servicios", total))
+        cargados_exitosos = []
+        fallidos = []
+        tiempo_seg = 0.0
+
+        try:
+            cargados_exitosos, fallidos, tiempo_seg = ejecutar_carga_servicios_infoapp(
+                usuarios,
+                config_bot,
+                config_servicio,
+                indice_inicio=0,
+                fn_guardar_checkpoint=guardar_estado_sesion_servicios,
+                log_callback=cb_log,
+                progreso_callback=cb_progreso
+            )
+
+            if len(cargados_exitosos) >= total:
+                limpiar_estado_sesion_servicios()
+                self.after(0, self.agregar_log_telemetria, f"[OK] Servicios registrados con éxito: {len(cargados_exitosos)}/{total} en {tiempo_seg:.1f}s.")
+            else:
+                self.after(0, self.agregar_log_telemetria, f"[AVISO] Registro parcial de servicios: {len(cargados_exitosos)}/{total} ({len(fallidos)} incidencias).")
+
+            try:
+                ruta_excel = generar_reporte_auditoria_servicios(config_bot, config_servicio, cargados_exitosos, fallidos)
+                if ruta_excel:
+                    self.after(0, self.agregar_log_telemetria, f"[AUDITORÍA] Reporte Excel de servicios generado: logs/{os.path.basename(ruta_excel)}")
+            except Exception as e_excel:
+                self.after(0, self.agregar_log_telemetria, f"[AVISO] Error al generar reporte Excel: {e_excel}")
+
+        except Exception as e:
+            self.after(0, self.agregar_log_telemetria, f"[CRITICO] Error no controlado durante servicios: {e}")
+        finally:
+            self.cola_eventos.put(("fin_servicios", len(cargados_exitosos)))
 
     def animar_progreso(self, valor_objetivo: float, paso_actual=None):
         """Avanza la barra de progreso de forma suave sin saltos bruscos."""
@@ -1984,27 +2721,32 @@ class JsBotGUI(ctk.CTk):
         self._detener_pulso_estado()
         self.animar_progreso(1.0)
         self.btn_iniciar_formacion.configure(state="normal", text="INICIAR CARGA AUTOMATIZADA", fg_color="#1f538d")
-        self._agregar_log(f"[FINALIZADO] Proceso completado: {total} registros procesados.")
+        self._agregar_log(f"[FINALIZADO] Proceso de formación completado: {total} registros procesados.")
 
     def _finalizar_ejecucion_servicios(self, total: int):
         self.ejecutando_tarea = False
         self._detener_pulso_estado()
         self.animar_progreso(1.0)
         self.btn_iniciar_servicios.configure(state="normal", text="INICIAR CARGA DE SERVICIOS", fg_color="#2E7D32")
-        self._agregar_log(f"[FINALIZADO] Servicios registrados: {total} usuarios procesados.")
+        self._agregar_log(f"[FINALIZADO] Servicios comunitarios completados: {total} usuarios procesados.")
 
     def _abrir_directorio_salidas(self):
-        if MODULOS_DISPONIBLES:
-            abrir_archivo_asistido(BASE_DIR)
-            self._agregar_log(f"[REPORTES] Abriendo directorio de salidas: {BASE_DIR}")
+        planillas_dir = os.path.join(BASE_DIR, "Planillas")
+        os.makedirs(planillas_dir, exist_ok=True)
+        exito = abrir_archivo_o_directorio_sistema(planillas_dir)
+        if exito:
+            self._agregar_log(f"[REPORTES] Abriendo directorio de planillas: {planillas_dir}")
         else:
-            self._agregar_log(f"[REPORTES] Directorio de salidas: {BASE_DIR}")
+            self._agregar_log(f"[ADVERTENCIA] No se pudo abrir automáticamente: {planillas_dir}")
 
     def _abrir_plantilla_base(self):
         plantilla = os.path.join(BASE_DIR, "config", "plantilla_base.ods")
-        if os.path.exists(plantilla) and MODULOS_DISPONIBLES:
-            abrir_archivo_asistido(plantilla)
-            self._agregar_log(f"[REPORTES] Abriendo plantilla base: {plantilla}")
+        if os.path.exists(plantilla):
+            exito = abrir_archivo_o_directorio_sistema(plantilla)
+            if exito:
+                self._agregar_log(f"[REPORTES] Abriendo plantilla base: {plantilla}")
+            else:
+                self._agregar_log(f"[ADVERTENCIA] No se pudo abrir automáticamente: {plantilla}")
         else:
             self._agregar_log(f"[ADVERTENCIA] No se localizó la plantilla: {plantilla}")
 
@@ -2012,6 +2754,8 @@ class JsBotGUI(ctk.CTk):
         if threading.current_thread() is not threading.main_thread():
             if hasattr(self, "cola_eventos"):
                 self.cola_eventos.put(("log", mensaje))
+            else:
+                self.after(0, lambda: self._agregar_log(mensaje))
             return
 
         ts = datetime.now().strftime("%H:%M:%S")

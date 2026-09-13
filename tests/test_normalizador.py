@@ -237,6 +237,24 @@ class TestDeduplicarParticipantes(unittest.TestCase):
             builtins.input = original_input
         self.assertEqual(len(res), 2)
 
+    def test_modo_no_interactivo_descarta_duplicados_sin_input(self):
+        lista = [self._p("Ana", cedula="111"), self._p("Ana", cedula="111"), self._p("Carlos", cedula="222")]
+        # En modo no interactivo (GUI), no debe llamar a input ni InquirerPy y debe retornar tupla (unicos, reporte)
+        unicos, reporte = deduplicar_participantes(lista, modo_interactivo=False)
+        self.assertEqual(len(unicos), 2)
+        self.assertEqual(reporte["duplicados_omitidos"], 1)
+        self.assertEqual(reporte["total_original"], 3)
+        self.assertEqual(reporte["total_unicos"], 2)
+        self.assertIn("Ana", reporte["nombres"][0])
+
+    def test_modo_no_interactivo_sin_duplicados(self):
+        lista = [self._p("Ana", cedula="111"), self._p("Carlos", cedula="222")]
+        unicos, reporte = deduplicar_participantes(lista, modo_interactivo=False)
+        self.assertEqual(len(unicos), 2)
+        self.assertEqual(reporte["duplicados_omitidos"], 0)
+        self.assertEqual(reporte["total_original"], 2)
+        self.assertEqual(reporte["total_unicos"], 2)
+
 
 class TestDetectarCabeceras(unittest.TestCase):
     def _df(self, filas):
