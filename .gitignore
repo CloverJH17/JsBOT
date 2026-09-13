@@ -12,3 +12,7 @@ pruebas/
 .pytest_cache/
 .vscode/
 .idea/
+backups/
+Reportes_Auditoria/
+logs/
+

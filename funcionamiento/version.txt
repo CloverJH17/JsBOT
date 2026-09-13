@@ -1,9 +1,153 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 12 de Septiembre de 2026
+Fecha Última   : 13 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.2.8] — 13 de Septiembre de 2026 (Validación Estricta de Documentos, Eliminación de CE Apócrifas y Alerta de Datos Críticos)
+--------------------------------------------------------------------------------
+• ELIMINACIÓN DE CÉDULA ESCOLAR APÓCRIFA ('11111111'):
+  - En `modulos/normalizador_datos.py`, se eliminó el fallback que inventaba el comodín '11111111' y generaba cédulas escolares falsas idénticas ('11811111111') para menores sin C.I. de tutor.
+  - Los participantes sin C.I. propia ni C.I. de tutor ahora se clasifican estrictamente como `cedulado = 'sin_documento'`, manteniendo `cedula_escolar = ''` y `cedula_padre = ''`.
+  - Se incorporó la función `auditar_integridad_lote()` para evaluar faltantes críticos y bloquear cargas ciegas.
+• PREVISUALIZACIÓN Y MODAL DE ADVERTENCIA EN GUI:
+  - En `modulos/interfaz_grafica.py`, la tabla de auditoría pre-vuelo ahora refleja con honestidad el estado real: tipo 'Sin Doc' y diagnóstico '[!] Sin Doc' en color rojo (#E74C3C) en lugar del falso positivo '[OK] Listo'.
+  - Se implementó un modal interactivo de advertencia al cargar archivos donde todos o parte de los participantes carecen de documento, informando que InfoApp exige la cédula del representante.
+  - Bloqueo preventivo en botones de ejecución (Formación y Servicios) si ningún registro cuenta con documento.
+• HARDENING EN AUTOMATIZADOR WEB:
+  - En `modulos/automatizador_web.py` (`registrar_alumno_en_web` y `registrar_nuevo_usuario_perfil`), se eliminó el fallback apócrifo '11111111' que generaba correos repetidos y duplicados de usuarios en InfoApp, abortando limpiamente registros imposibles con reporte de auditoría.
+• SUITE DE PRUEBAS:
+  - Creado `tests/test_validacion_documentos.py` con 5 pruebas dedicadas (281 tests ejecutados con 100% de éxito en toda la suite).
+
+--------------------------------------------------------------------------------
+[v4.2.7] — 13 de Septiembre de 2026 (Aislamiento de Criterio UID, Auto-Filtro Excel en Pestaña 1 y Depuración de Toolbar)
+--------------------------------------------------------------------------------
+• AISLAMIENTO ESTRICTO EN BÚSQUEDAS POR UID:
+  - En `modulos/auditor_reportes.py` y `modulos/interfaz_grafica.py`, al auditar por UID, los filtros `info_id` y `estado` se vacían estrictamente para que InfoApp devuelva todas las actividades del facilitador independientemente del infocentro o sede en la que se encuentre registrado.
+• AUTO-FILTRO EN LA PRIMERA PESTAÑA DE EXCEL:
+  - En `exportar_reporte_excel`, se añadió `ws_fac.auto_filter.ref = f"A1:H{max(current_row, 2)}"`, permitiendo desplegar los filtros nativos de Excel en todas las columnas (A a H) de la hoja "Resumen por Facilitador".
+• DEPURACIÓN DE TOOLBAR Y ELIMINACIÓN DE ELEMENTOS REDUNDANTES:
+  - Se eliminó completamente la barra inferior (`bottom_bar`) que generaba un recuadro vacío debajo de los botones.
+  - Se eliminó el botón duplicado `[ Abrir Reporte ]` de la vista; ahora el botón `[ 💾 Exportar Reporte... ]` unifica tanto la selección de guardado como la apertura inmediata del archivo.
+  - El selector de tipo de archivo (`combo_aud_formato`) y el botón de exportación se dimensionaron con anchos ajustados (135px) junto a los 3 botones de inspección, garantizando visibilidad total y cero solapamiento o desbordamiento en pantalla.
+• PRUEBAS Y VALIDACIÓN:
+  - 276 pruebas unitarias aprobadas al 100% en toda la suite.
+
+--------------------------------------------------------------------------------
+[v4.2.6] — 13 de Septiembre de 2026 (Reestructuración UI Inspector: Ventanas Modales al Frente, KPIs Enriquecidos y Toolbar Unificada)
+--------------------------------------------------------------------------------
+• ELIMINACIÓN DE TABLAS EMBEBIDAS REDUNDANTES:
+  - Se eliminó el bloque inferior de tablas embebidas fijas, optimizando el espacio visual y la ergonomía del dashboard de auditoría.
+• VENTANAS DE INSPECCIÓN AL FRENTE Y MODALES ESTRICTAS:
+  - Las 3 ventanas de inspección (`Formaciones y Actividades`, `Servicios a Usuarios`, `Resumen por Facilitador`) ahora se ejecutan garantizadamente DELANTE de la ventana principal (`transient`, `lift`, `attributes('-topmost')`, `focus_force`).
+  - Modalidad bloqueante estricta (`grab_set()`): no se puede interactuar con la ventana principal ni cambiar de pestaña hasta cerrar la ventana de inspección.
+• TARJETAS DE KPIS AMPLIADAS Y ENRIQUECIDAS:
+  - Diseño ampliado y de alto impacto visual para las 4 tarjetas de resultados.
+  - Nuevas métricas detalladas calculadas: promedio de estudiantes por formación/aula, sedes únicas participantes, servicio comunitario principal más solicitado y margen de balance auditado.
+• TOOLBAR UNIFICADA DE ACCIÓN Y EXPORTACIÓN:
+  - Reubicación del selector de formato y botón de exportación: se eliminaron de la fila de búsqueda superior y se ubicaron a la derecha de los botones de inspección.
+  - El panel de búsqueda ahora cuenta con un botón `[ 🔍 Iniciar Auditoría ]` más amplio y centrado.
+• ZERO REGRESSION:
+  - 274 pruebas unitarias aprobadas al 100% en toda la suite.
+
+--------------------------------------------------------------------------------
+[v4.2.5] — 13 de Septiembre de 2026 (DOM Fallback Parser, Modo Turbo HTTP, Ventanas Flotantes & Exportación Multiformato)
+--------------------------------------------------------------------------------
+• PARSER CON FALLBACK ROBUSTO AL DOM EN INFOAPP:
+  - Doble mecanismo de extracción en `parsear_pagina_actividades_bs4`: si faltan etiquetas ocultas `<p>` (`data_dimensiones`, `data_titulo`, etc.), extrae automáticamente desde las celdas visibles `<td>` (fecha, dimensiones pedagógicas, sede, facilitador y badges de estudiantes/productos).
+  - Generación de identificadores únicos sintéticos cuando no existe `id_activity` en el DOM para evitar omisiones de filas.
+• MODO TURBO (ACELERACIÓN HTTP CONCURRENTE):
+  - Switch interactivo `[ ⚡ Modo Turbo (HTTP) ]` en el encabezado del Inspector (activo por defecto).
+  - Desacoplamiento automático: autenticación con Selenium WebDriver -> exportación de cookies a `requests.Session()` -> cierre inmediato del WebDriver -> scraping paralelo y concurrente HTTP para máxima velocidad y mínimo consumo de CPU/RAM.
+  - Soporte de modo alternativo visual con WebDriver paso a paso si el switch se desactiva.
+• VENTANAS FLOTANTES REACTIVAS EN PESTAÑAS:
+  - Vinculación automática del evento de selección de pestañas en `self.tabview_auditoria`: al hacer clic en Formaciones, Servicios o Facilitadores, se despliega automáticamente la ventana modal flotante (1100x650) con buscador en tiempo real y cabeceras clickeables para ordenar.
+  - Eliminación de botones redundantes internos `[ ⛶ Abrir en Ventana Flotante ]` para una interfaz más limpia.
+  - Blindaje con comprobación de visibilidad de ventana para ejecución transparente en entornos de pruebas headless.
+• EXPORTACIÓN DINÁMICA MULTIFORMATO CON DIÁLOGO INTERACTIVO:
+  - ComboBox interactivo con 5 formatos exactos: Excel (.xlsx), LibreOffice (.odt), Documento PDF (.pdf), CSV plano (.csv) y Vista en Pantalla (Consola).
+  - Botón interactivo `[ 💾 Exportar Reporte... ]` habilitado reactivamente al completar la auditoría.
+  - Integración de generadores puros de la biblioteca estándar para LibreOffice `.odt` (vía `zipfile`) y PDF 1.4 (`exportar_reporte_pdf`), eliminando dependencias externas pesadas.
+  - Integración con diálogo nativo `filedialog.asksaveasfilename` y apertura automática con la aplicación predeterminada del sistema operativo.
+• CABLEADO REAL BACKEND ↔ GUI Y SUITE DE PRUEBAS EXPANDIDA:
+  - Conexión completa de los parámetros hacia `ar.ejecutar_auditoria` con telemetría thread-safe.
+  - Suite de pruebas de inspector expandida a 14 tests unitarios específicos y 271/271 tests pasando a nivel global en el proyecto.
+
+--------------------------------------------------------------------------------
+[v4.2.4] — 13 de Septiembre de 2026 (Blindaje de Telemetría GUI, Tablas Vacías & Caché JSON)
+--------------------------------------------------------------------------------
+• DESACOPLAMIENTO DE TERMINAL Y CANALIZACIÓN DE TELEMETRÍA:
+  - Redirección total y thread-safe de cualquier mensaje del motor de inspección hacia la consola de telemetría de la GUI (textbox_logs / agregar_log_telemetria) vía callback.
+  - Implementación de diálogos modales nativos CTkToplevel (_mostrar_modal_confirmacion) con botones interactivos Sí / Cancelar para confirmaciones de usuario sin tocar stdin.
+• GESTIÓN ROBUSTA DE RESULTADOS VACÍOS:
+  - Detección precisa de 0 actividades y 0 servicios (o tablas informativas de InfoApp sin registros).
+  - Reseteo automático de KPIs a 0 y estado de cuadre '● Sin Registros'.
+  - Notificación visual instantánea mediante Toast flotante no intrusivo y aviso en telemetría: '[AVISO] No se encontraron actividades o usuarios en el rango seleccionado.'
+• CACHÉ LIGERO JSON LOCAL:
+  - Módulo de persistencia y recarga rápida en logs/ultima_busqueda_inspector.json (guardar_cache_inspector y cargar_cache_inspector).
+  - Botón '[ ⚡ Cargar Caché ]' en la barra superior del Inspector para recuperar y previsualizar la última auditoría sin reconsultar la red.
+• SUITE DE PRUEBAS DEDICADA:
+  - Creación de tests/test_inspector_suite.py cubriendo 10 pruebas unitarias de tablas vacías, persistencia/resiliencia de caché JSON y robustez ante parámetros nulos, incompletos o inválidos.
+
+--------------------------------------------------------------------------------
+[v4.2.3] — 13 de Septiembre de 2026 (Reestructuración Integral UI/UX, Excel Agrupado & Aceleración HTTP)
+--------------------------------------------------------------------------------
+• MODAL REACTIVO DE CREDENCIALES DE AUDITOR:
+  - Despliegue de modal CTkToplevel 'Credenciales de Auditor / Jefatura' al activar el switch si no existen credenciales en [AUDITORIA] de config/config.ini.
+  - Almacenamiento seguro y reactivo con actualización visual en tiempo real de la etiqueta de estado: 'Rol Auditor (Activo: {usuario})'.
+• CAMPOS DE BÚSQUEDA REACTIVOS Y DINÁMICOS:
+  - SegmentedButton conmuta entre Modo UID, Modo Infocentro y Modo Resumen Estadal (26 entidades federales) mostrando u ocultando dinámicamente (.grid() / .grid_remove()) los campos correspondientes.
+  - Fila 1 fija con fechas Desde/Hasta, selector de formato y botón verde de inicio.
+• CONSOLA DE TELEMETRÍA UNIFICADA:
+  - Eliminación de visor interno redundante; redirección total del flujo de auditoría hacia la consola principal inferior y el canal general de logs.
+• VENTANAS FLOTANTES DEDICADAS (1100x650):
+  - Botón '[ ⛶ Abrir en Ventana Flotante ]' para Formaciones/Actividades, Servicios a Usuarios y Resumen por Facilitador con buscador en tiempo real, conteo de filas y cabeceras ordenables interactivas.
+• ACELERACIÓN HÍBRIDA HTTP + BEAUTIFULSOUP:
+  - Autenticación inicial con Selenium WebDriver, transferencia atómica de cookies a requests.Session() y desacoplamiento inmediato del navegador (driver.quit()) para máxima velocidad de consulta concurrente.
+• EXCEL PROFESIONAL JERÁRQUICO Y AGRUPADO:
+  - Hoja 1 'Resumen por Facilitador' agrupada por Infocentro ('🏢 INFOCENTRO: {codigo_sede}') con subtotales por sede, total general, bordes grises finos, auto_filter y freeze_panes="A2".
+  - Hojas 2 y 3 con detalle cualitativo pedagógico completo de Formaciones y Servicios.
+
+--------------------------------------------------------------------------------
+[v4.2.1] — 13 de Septiembre de 2026 (Firma Polimórfica de Auditoría & Responsividad de Layout)
+--------------------------------------------------------------------------------
+• FIRMA UNIVERSAL POLIMÓRFICA EN 'modulos/auditor_reportes.py':
+  - Función 'ejecutar_auditoria' adaptada para aceptar tanto tuplas posicionales como argumentos nombrados (uid, info_id, estado, start_at, finish_at, fecha_inicio, fecha_fin, rol_auditor, formato, exportar_formato, callback_log, progreso_callback, **kwargs).
+  - Eliminación definitiva del error 'TypeError: unexpected keyword argument uid'.
+  - Sanitización de codificación de salida para evitar 'UnicodeEncodeError' en consolas Windows (cp1252).
+• RESPONSIVIDAD Y LAYOUT EN 2 FILAS EN 'modulos/interfaz_grafica.py':
+  - Reestructuración del panel de parámetros de búsqueda en un grid balanceado de 2 filas x 4 columnas con pesos elásticos.
+  - Fila 0: Controles de UID, Código de Infocentro y Estado / Región (con span de 2 columnas).
+  - Fila 1: Selectores de fecha Desde y Hasta, formato de exportación y botón verde '[ 🔍 Iniciar Auditoría ]' con ancho completo visible (100% libre de recortes en 1020x670).
+  - Armonización de la invocación en hilo demonio con parámetros desempaquetados de forma limpia.
+
+--------------------------------------------------------------------------------
+[v4.2.0] — 13 de Septiembre de 2026 (Módulo Inspector de Auditoría, Balance Operativo & Respaldo)
+--------------------------------------------------------------------------------
+• RESPALDO INTEGRAL AUTOMÁTICO (SAFE BACKUP):
+  - Creación de copia de seguridad integral pre-inspector en 'backups/backup_v4.1.0_pre_inspector/'.
+  - Protección y exclusión de 'backups/' y 'Reportes_Auditoria/' en '.gitignore'.
+• MOTOR OFICIAL DE AUDITORÍA WEB E INSPECCIÓN ('modulos/auditor_reportes.py'):
+  - Extracción paginada y no truncada de Actividades ('view=report') y Servicios ('view=services').
+  - Captura cualitativa de jerarquía pedagógica completa (<p class="data_dimensiones">), áreas temáticas, talleres específicos y badges numéricos de participantes.
+  - Soporte de auditorías individuales (por facilitador UID), institucionales (por código Infocentro) y estadales/regionales masivas (resumen por estado).
+  - Verificación estricta de balance matemático: Total Actividades = Formaciones + Productos Comunicacionales + Otras Actividades.
+  - Exportación automática a libro Excel enriquecido (.xlsx) con 4 hojas estilizadas (Resumen Ejecutivo, Actividades Detalladas, Servicios a Usuarios y Matriz por Facilitador) y archivo plano (.csv).
+• VISTA COMPLETA DEL INSPECTOR EN LA INTERFAZ GRÁFICA ('modulos/interfaz_grafica.py'):
+  - Renombrado de botón histórico a 'Planillas / ODS' y adición del nuevo acceso 'Reportes' en la barra lateral.
+  - Panel superior de configuración con selector segmentado de modo (Por Facilitador UID, Por Infocentro Código, Resumen Estadal Región).
+  - Entradas dinámicas reactivas, selector de estados venezolanos y rango de fechas con valores predeterminados.
+  - Switch de activación de 'Rol de Auditor / Jefatura' para consultas de ámbito estadal.
+  - 4 Tarjetas de Métricas Rápidas (KPIs): Total Actividades, Formados Reales, Servicios Brindados y Estado de Cuadre Matemático en vivo.
+  - Contenedor de 4 pestañas (CTkTabview):
+    1. '🎓 Formaciones y Actividades': Tabla interactiva con badges y jerarquía pedagógica.
+    2. '🛠️ Servicios a Usuarios': Tabla interactiva con desglose de atenciones ciudadanas.
+    3. '👥 Resumen por Facilitador': Matriz comparativa multi-facilitador para sedes o regiones.
+    4. '💻 Telemetría en Vivo': Terminal en tiempo real de scraping web Selenium.
+  - Botón de acción directa para abrir el último reporte exportado en 'Reportes_Auditoria/'.
+  - Desacoplamiento multihilo seguro mediante 'queue.Queue' para cero congelamientos de interfaz.
 
 --------------------------------------------------------------------------------
 [v4.1.0] — 12 de Septiembre de 2026 (Gestión de Credenciales, ONLYOFFICE & PyPI Fast)

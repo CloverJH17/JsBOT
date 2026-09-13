@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: INTERFAZ GRÁFICA NATIVA (interfaz_grafica.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.1.0
+Sistema   : JsBOT (Robotic Process Automation) — v4.2.0
 Tecnología: Python + CustomTkinter (Dark Mode con acentos #3B8ED0 y #22c55e)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
@@ -88,6 +88,7 @@ try:
         cargar_config_servicios
     )
     from modulos import config_manager as cm
+    from modulos import auditor_reportes as ar
     MODULOS_DISPONIBLES = True
 except Exception as e:
     MODULOS_DISPONIBLES = False
@@ -108,7 +109,7 @@ class JsBotGUI(ctk.CTk):
         super().__init__()
 
         # 1. Configuración de Ventana Principal (Calibrada para 1366x768)
-        self.title("JsBOT (RPA) — Versión 4.1.0")
+        self.title("JsBOT (RPA) — Versión 4.2.0")
         self.geometry("1020x670")
         self.minsize(980, 620)
 
@@ -127,6 +128,25 @@ class JsBotGUI(ctk.CTk):
         self.reporte_deduplicacion_actual = None
         self.archivo_actual_ruta = ""
         self.ejecutando_tarea = False
+
+        # Variables de Auditoría / Inspector (v4.2.0)
+        hoy_dt = datetime.now()
+        primer_dia_mes = hoy_dt.replace(day=1).strftime("%Y-%m-%d")
+        hoy_str = hoy_dt.strftime("%Y-%m-%d")
+
+        self.var_modo_auditoria = tk.StringVar(value="Por Facilitador (UID)")
+        self.var_criterio_uid = tk.StringVar(value="1325")
+        self.var_criterio_infoid = tk.StringVar(value="NRYAR24")
+        self.var_criterio_estado = tk.StringVar(value="Yaracuy")
+        self.var_fecha_desde_aud = tk.StringVar(value=primer_dia_mes)
+        self.var_fecha_hasta_aud = tk.StringVar(value=hoy_str)
+        self.var_rol_auditor = tk.BooleanVar(value=False)
+        self.var_modo_turbo = tk.BooleanVar(value=True)
+        self.var_exportar_formato = tk.StringVar(value="Excel (.xlsx)")
+        self.ejecutando_auditoria = False
+        self.resultado_auditoria_actual = None
+        self.ruta_ultimo_reporte_auditoria = ""
+        self.directorio_reportes_auditoria = os.path.join(BASE_DIR, "Reportes_Auditoria")
 
         # Control de microanimaciones no bloqueantes (after)
         self._animando_pulso = False
@@ -190,7 +210,7 @@ class JsBotGUI(ctk.CTk):
         self._iniciar_escucha_cola()
 
         # Log inicial de bienvenida
-        self._agregar_log("[OK] Entorno gráfico JsBOT v4.1 inicializado (Resolución 1020x670).")
+        self._agregar_log("[OK] Entorno gráfico JsBOT v4.2 inicializado (Resolución 1020x670).")
         if MODULOS_DISPONIBLES:
             self._agregar_log("[OK] Módulos de verificación y normalización vinculados en modo lectura.")
         else:
@@ -210,12 +230,22 @@ class JsBotGUI(ctk.CTk):
                     self._finalizar_ejecucion_formacion(datos)
                 elif tipo == "fin_servicios":
                     self._finalizar_ejecucion_servicios(datos)
+                elif tipo == "fin_auditoria":
+                    self._finalizar_ejecucion_auditoria(datos)
+                elif tipo == "log_auditoria":
+                    self._agregar_log_auditoria(datos)
+                elif tipo == "progreso_auditoria":
+                    self._actualizar_progreso_auditoria(datos)
         except queue.Empty:
             pass
         except Exception:
             pass
         finally:
-            self.after(35, self._iniciar_escucha_cola)
+            try:
+                if self.winfo_exists():
+                    self.after(35, self._iniciar_escucha_cola)
+            except Exception:
+                pass
 
     def _centrar_ventana(self, ancho: int, alto: int):
         """Calcula las coordenadas para centrar la ventana en la pantalla del usuario."""
@@ -284,7 +314,7 @@ class JsBotGUI(ctk.CTk):
     def _crear_barra_lateral(self):
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(8, weight=1)  # Empujador elástico
+        self.sidebar_frame.grid_rowconfigure(10, weight=1)  # Empujador elástico
 
         # 1. Logo de Robot en Sidebar
         if self.iconos.get("robot_logo"):
@@ -305,7 +335,7 @@ class JsBotGUI(ctk.CTk):
 
         self.sub_label = ctk.CTkLabel(
             self.sidebar_frame,
-            text="Versión 4.1.0",
+            text="Versión 4.2.0",
             font=ctk.CTkFont(size=11),
             text_color="#8E8E93"
         )
@@ -323,7 +353,8 @@ class JsBotGUI(ctk.CTk):
             ("Credenciales", "Credenciales", "cuenta"),
             ("Formacion", "Formación", "formacion"),
             ("Servicios", "Servicios", "servicios"),
-            ("Reportes", "Reportes / ODS", "reportes"),
+            ("Planillas", "Planillas / ODS", "reportes"),
+            ("Reportes", "Reportes", "reportes"),
         ]
 
         for idx, (clave, texto, icono_k) in enumerate(secciones_superiores, start=4):
@@ -358,7 +389,7 @@ class JsBotGUI(ctk.CTk):
             hover_color="#2B2B36",
             command=lambda: self._mostrar_seccion("Creditos")
         )
-        btn_creditos.grid(row=9, column=0, padx=12, pady=(0, 2), sticky="ew")
+        btn_creditos.grid(row=11, column=0, padx=12, pady=(0, 2), sticky="ew")
         self.nav_buttons["Creditos"] = btn_creditos
 
         # 6. Botón Ajustes
@@ -375,12 +406,12 @@ class JsBotGUI(ctk.CTk):
             hover_color="#2B2B36",
             command=lambda: self._mostrar_seccion("Ajustes")
         )
-        btn_ajustes.grid(row=10, column=0, padx=12, pady=(0, 10), sticky="ew")
+        btn_ajustes.grid(row=12, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.nav_buttons["Ajustes"] = btn_ajustes
 
         # 7. Tarjeta de Estado en el pie
         self.status_card = ctk.CTkFrame(self.sidebar_frame, corner_radius=10, fg_color="#181822", border_width=1, border_color="#292938")
-        self.status_card.grid(row=11, column=0, padx=12, pady=(0, 16), sticky="sew")
+        self.status_card.grid(row=13, column=0, padx=12, pady=(0, 16), sticky="sew")
 
         self.lbl_status = ctk.CTkLabel(
             self.status_card,
@@ -418,7 +449,11 @@ class JsBotGUI(ctk.CTk):
             "cuenta": "Credenciales",
             "formacion": "Formacion",
             "servicios": "Servicios",
+            "planillas": "Planillas",
+            "ods": "Planillas",
             "reportes": "Reportes",
+            "inspector": "Reportes",
+            "auditoria": "Reportes",
             "creditos": "Creditos",
             "ajustes": "Ajustes"
         }
@@ -465,7 +500,8 @@ class JsBotGUI(ctk.CTk):
         self.vistas["Credenciales"] = self.frame_credenciales
         self.vistas["Formacion"] = self._crear_vista_formacion(self.vistas_container)
         self.vistas["Servicios"] = self._crear_vista_servicios(self.vistas_container)
-        self.vistas["Reportes"] = self._crear_vista_reportes(self.vistas_container)
+        self.vistas["Planillas"] = self._crear_vista_reportes(self.vistas_container)
+        self.vistas["Reportes"] = self.frame_reportes = self._crear_vista_inspector(self.vistas_container)
         self.vistas["Creditos"] = self._crear_vista_creditos(self.vistas_container)
         self.vistas["Ajustes"] = self._crear_vista_ajustes(self.vistas_container)
 
@@ -1380,6 +1416,1276 @@ class JsBotGUI(ctk.CTk):
         return frame
 
     # -------------------------------------------------------------------------
+    # D.2 VISTA INSPECTOR DE AUDITORÍA Y BALANCE OPERATIVO (v4.2.0)
+    # -------------------------------------------------------------------------
+    def _crear_vista_inspector(self, padre) -> ctk.CTkFrame:
+        frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
+        frame.grid_columnconfigure(0, weight=1)
+
+        # 1. Encabezado
+        header = ctk.CTkFrame(frame, fg_color="transparent")
+        header.pack(fill="x", padx=16, pady=(10, 4))
+
+        lbl_title = ctk.CTkLabel(
+            header,
+            text="Inspector de Auditoría",
+            image=self.iconos.get("reportes"),
+            compound="left",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_title.pack(side="left")
+
+        # Switch Rol Auditor
+        self.switch_rol_auditor = ctk.CTkSwitch(
+            header,
+            text="Rol Auditor",
+            variable=self.var_rol_auditor,
+            font=ctk.CTkFont(size=11),
+            progress_color="#1f538d",
+            command=self._al_cambiar_rol_auditor
+        )
+        self.switch_rol_auditor.pack(side="right", padx=(6, 0))
+
+        # Switch Modo Turbo (Aceleración HTTP)
+        self.switch_modo_turbo = ctk.CTkSwitch(
+            header,
+            text="⚡ Turbo",
+            variable=self.var_modo_turbo,
+            font=ctk.CTkFont(size=11),
+            progress_color="#27AE60"
+        )
+        self.switch_modo_turbo.pack(side="right", padx=(6, 4))
+
+        btn_abrir_dir_reportes = ctk.CTkButton(
+            header,
+            text="📂 Reportes",
+            font=ctk.CTkFont(size=11),
+            width=90,
+            height=28,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._abrir_directorio_reportes_auditoria
+        )
+        btn_abrir_dir_reportes.pack(side="right", padx=3)
+
+        self.btn_cargar_cache = ctk.CTkButton(
+            header,
+            text="⚡ Caché",
+            font=ctk.CTkFont(size=11),
+            width=80,
+            height=28,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._cargar_ultima_busqueda_cache
+        )
+        self.btn_cargar_cache.pack(side="right", padx=3)
+
+        # 2. Tarjeta de Criterios y Parámetros
+        params_card = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        params_card.pack(fill="x", padx=16, pady=(4, 6))
+
+        # Fila 1: SegmentedButton Modo
+        row_mode = ctk.CTkFrame(params_card, fg_color="transparent")
+        row_mode.pack(fill="x", padx=10, pady=(6, 4))
+
+        lbl_modo = ctk.CTkLabel(row_mode, text="Modo:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#C0C0C8")
+        lbl_modo.pack(side="left", padx=(0, 8))
+
+        self.seg_modo_auditoria = ctk.CTkSegmentedButton(
+            row_mode,
+            values=["Por Facilitador (UID)", "Por Infocentro (Código)", "Resumen Estadal (Región)"],
+            variable=self.var_modo_auditoria,
+            font=ctk.CTkFont(size=11),
+            selected_color="#1f538d",
+            selected_hover_color="#14375e",
+            command=self._al_cambiar_modo_auditoria
+        )
+        self.seg_modo_auditoria.pack(side="left", fill="x", expand=True)
+
+        # Contenedor de inputs con grid de 2 filas balanceadas y responsivas
+        frame_filtros_inputs = ctk.CTkFrame(params_card, fg_color="transparent")
+        frame_filtros_inputs.pack(fill="x", padx=10, pady=(2, 8))
+
+        frame_filtros_inputs.grid_columnconfigure(0, weight=1)
+        frame_filtros_inputs.grid_columnconfigure(1, weight=1)
+        frame_filtros_inputs.grid_columnconfigure(2, weight=2)
+        frame_filtros_inputs.grid_columnconfigure(3, weight=2)
+
+        # FILA 0: Criterios de Identificación (Reactivos y condicionales)
+        # Columna 0: UID
+        self.box_aud_uid = ctk.CTkFrame(frame_filtros_inputs, fg_color="transparent")
+        self.box_aud_uid.grid(row=0, column=0, columnspan=4, sticky="ew", padx=(0, 0), pady=(4, 2))
+        self.lbl_aud_uid = ctk.CTkLabel(self.box_aud_uid, text="UID Facilitador:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8E8E98")
+        self.lbl_aud_uid.pack(side="left", padx=(0, 6))
+        self.entry_aud_uid = ctk.CTkEntry(self.box_aud_uid, textvariable=self.var_criterio_uid, height=28, font=ctk.CTkFont(size=11), placeholder_text="ej: 1325")
+        self.entry_aud_uid.pack(side="left", fill="x", expand=True)
+
+        # Columna 1: Cód. Infocentro
+        self.box_aud_infoid = ctk.CTkFrame(frame_filtros_inputs, fg_color="transparent")
+        self.lbl_aud_infoid = ctk.CTkLabel(self.box_aud_infoid, text="Código de Infocentro:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8E8E98")
+        self.lbl_aud_infoid.pack(side="left", padx=(0, 6))
+        self.entry_aud_infoid = ctk.CTkEntry(self.box_aud_infoid, textvariable=self.var_criterio_infoid, height=28, font=ctk.CTkFont(size=11), placeholder_text="ej: NRYAR24")
+        self.entry_aud_infoid.pack(side="left", fill="x", expand=True)
+
+        # Columna 2..3: Estado / Región
+        self.box_aud_estado = ctk.CTkFrame(frame_filtros_inputs, fg_color="transparent")
+        self.lbl_aud_estado = ctk.CTkLabel(self.box_aud_estado, text="Región / Entidad Federal:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8E8E98")
+        self.lbl_aud_estado.pack(side="left", padx=(0, 6))
+
+        estados_vzla = list(getattr(ar, "LISTA_ESTADOS_VENEZUELA", [
+            "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", "Carabobo",
+            "Cojedes", "Delta Amacuro", "Falcón", "Guárico", "Lara", "Mérida", "Miranda",
+            "Monagas", "Nueva Esparta", "Portuguesa", "Sucre", "Táchira", "Trujillo",
+            "La Guaira", "Yaracuy", "Zulia", "Distrito Capital", "Dependencias Federales", "Guayana Esequiba"
+        ]))
+        self.combo_aud_estado = ctk.CTkComboBox(
+            self.box_aud_estado,
+            values=estados_vzla,
+            variable=self.var_criterio_estado,
+            height=28,
+            font=ctk.CTkFont(size=11)
+        )
+        self.combo_aud_estado.pack(side="left", fill="x", expand=True)
+
+        # FILA 1: Rango Temporal y Botón de Inicio de Búsqueda (Sin selector de exportar)
+        # Columna 0: Desde
+        box_desde = ctk.CTkFrame(frame_filtros_inputs, fg_color="transparent")
+        box_desde.grid(row=1, column=0, sticky="ew", padx=(0, 6), pady=(4, 2))
+        lbl_desde = ctk.CTkLabel(box_desde, text="Desde:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8E8E98")
+        lbl_desde.pack(side="left", padx=(0, 4))
+        self.entry_aud_desde = ctk.CTkEntry(box_desde, textvariable=self.var_fecha_desde_aud, height=28, font=ctk.CTkFont(size=11))
+        self.entry_aud_desde.pack(side="left", fill="x", expand=True)
+
+        # Columna 1: Hasta
+        box_hasta = ctk.CTkFrame(frame_filtros_inputs, fg_color="transparent")
+        box_hasta.grid(row=1, column=1, sticky="ew", padx=(0, 6), pady=(4, 2))
+        lbl_hasta = ctk.CTkLabel(box_hasta, text="Hasta:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#8E8E98")
+        lbl_hasta.pack(side="left", padx=(0, 4))
+        self.entry_aud_hasta = ctk.CTkEntry(box_hasta, textvariable=self.var_fecha_hasta_aud, height=28, font=ctk.CTkFont(size=11))
+        self.entry_aud_hasta.pack(side="left", fill="x", expand=True)
+
+        # Columna 2..3: Botón Iniciar Auditoría (Ocupa ambas columnas para máxima visibilidad y ergonomía)
+        self.btn_iniciar_auditoria = ctk.CTkButton(
+            frame_filtros_inputs,
+            text="🔍 Iniciar Auditoría",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#219653",
+            height=28,
+            command=self._iniciar_auditoria_thread
+        )
+        self.btn_iniciar_auditoria.grid(row=1, column=2, columnspan=2, sticky="ew", padx=(6, 0), pady=(4, 2))
+
+        # 3. Tarjetas KPIs Ampliadas con Métricas Detalladas (Aprovechamiento óptimo del espacio)
+        kpi_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        kpi_frame.pack(fill="x", padx=16, pady=(4, 6))
+        kpi_frame.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="kpi")
+
+        # KPI 1: Actividades Registradas
+        kpi1 = ctk.CTkFrame(kpi_frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        kpi1.grid(row=0, column=0, padx=(0, 5), sticky="nsew")
+        ctk.CTkLabel(kpi1, text="📊 TOTAL ACTIVIDADES", font=ctk.CTkFont(size=10, weight="bold"), text_color="#8E8E98").pack(pady=(8, 2))
+        self.lbl_kpi_actividades = ctk.CTkLabel(kpi1, text="0", font=ctk.CTkFont(size=22, weight="bold"), text_color="#38BDF8")
+        self.lbl_kpi_actividades.pack(pady=(0, 2))
+        self.lbl_kpi_actividades_sub = ctk.CTkLabel(kpi1, text="0 Form | 0 Prod | 0 Otr", font=ctk.CTkFont(size=10, weight="bold"), text_color="#E0E0E8")
+        self.lbl_kpi_actividades_sub.pack(pady=(0, 2))
+        self.lbl_kpi_actividades_det = ctk.CTkLabel(kpi1, text="Sin actividades cargadas", font=ctk.CTkFont(size=9), text_color="#6C7A89")
+        self.lbl_kpi_actividades_det.pack(pady=(0, 8))
+
+        # KPI 2: Formados Reales
+        kpi2 = ctk.CTkFrame(kpi_frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        kpi2.grid(row=0, column=1, padx=5, sticky="nsew")
+        ctk.CTkLabel(kpi2, text="🎓 FORMADOS REALES", font=ctk.CTkFont(size=10, weight="bold"), text_color="#8E8E98").pack(pady=(8, 2))
+        self.lbl_kpi_formados = ctk.CTkLabel(kpi2, text="0", font=ctk.CTkFont(size=22, weight="bold"), text_color="#2ECC71")
+        self.lbl_kpi_formados.pack(pady=(0, 2))
+        self.lbl_kpi_formados_sub = ctk.CTkLabel(kpi2, text="Participantes en aula", font=ctk.CTkFont(size=10, weight="bold"), text_color="#E0E0E8")
+        self.lbl_kpi_formados_sub.pack(pady=(0, 2))
+        self.lbl_kpi_formados_det = ctk.CTkLabel(kpi2, text="Promedio: 0.0 alumnos / aula", font=ctk.CTkFont(size=9), text_color="#6C7A89")
+        self.lbl_kpi_formados_det.pack(pady=(0, 8))
+
+        # KPI 3: Servicios Brindados
+        kpi3 = ctk.CTkFrame(kpi_frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        kpi3.grid(row=0, column=2, padx=5, sticky="nsew")
+        ctk.CTkLabel(kpi3, text="🛠️ SERVICIOS BRINDADOS", font=ctk.CTkFont(size=10, weight="bold"), text_color="#8E8E98").pack(pady=(8, 2))
+        self.lbl_kpi_servicios = ctk.CTkLabel(kpi3, text="0", font=ctk.CTkFont(size=22, weight="bold"), text_color="#A855F7")
+        self.lbl_kpi_servicios.pack(pady=(0, 2))
+        self.lbl_kpi_servicios_sub = ctk.CTkLabel(kpi3, text="Atenciones ciudadanas", font=ctk.CTkFont(size=10, weight="bold"), text_color="#E0E0E8")
+        self.lbl_kpi_servicios_sub.pack(pady=(0, 2))
+        self.lbl_kpi_servicios_det = ctk.CTkLabel(kpi3, text="0 Cedulados • 0 Sin cédula", font=ctk.CTkFont(size=9), text_color="#6C7A89")
+        self.lbl_kpi_servicios_det.pack(pady=(0, 8))
+
+        # KPI 4: Control de Cuadre
+        kpi4 = ctk.CTkFrame(kpi_frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        kpi4.grid(row=0, column=3, padx=(5, 0), sticky="nsew")
+        ctk.CTkLabel(kpi4, text="⚖️ ESTADO DE CUADRE", font=ctk.CTkFont(size=10, weight="bold"), text_color="#8E8E98").pack(pady=(8, 2))
+        self.lbl_kpi_cuadre = ctk.CTkLabel(kpi4, text="● En Espera", font=ctk.CTkFont(size=16, weight="bold"), text_color="#8E8E98")
+        self.lbl_kpi_cuadre.pack(pady=(0, 2))
+        self.lbl_kpi_cuadre_sub = ctk.CTkLabel(kpi4, text="Balance matemático", font=ctk.CTkFont(size=10, weight="bold"), text_color="#E0E0E8")
+        self.lbl_kpi_cuadre_sub.pack(pady=(0, 2))
+        self.lbl_kpi_cuadre_det = ctk.CTkLabel(kpi4, text="Fórmula: Act = Form+Prod+Otr", font=ctk.CTkFont(size=9), text_color="#6C7A89")
+        self.lbl_kpi_cuadre_det.pack(pady=(0, 8))
+
+        # 4. Barra de Acciones: Botones de Inspección Detallada (Izquierda) y Exportación (Derecha)
+        toolbar_inspeccion = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        toolbar_inspeccion.pack(fill="x", padx=16, pady=(6, 8))
+
+        # Grupo Izquierdo: Botones de Inspección que abren Ventana Flotante Modal al frente
+        box_botones_insp = ctk.CTkFrame(toolbar_inspeccion, fg_color="transparent")
+        box_botones_insp.pack(side="left", padx=(10, 4), pady=8)
+
+        self.btn_ver_actividades = ctk.CTkButton(
+            box_botones_insp,
+            text="🎓 Formaciones",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            width=120,
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=lambda: self._abrir_ventana_flotante_inspeccion("actividades")
+        )
+        self.btn_ver_actividades.pack(side="left", padx=(0, 4))
+
+        self.btn_ver_servicios = ctk.CTkButton(
+            box_botones_insp,
+            text="🛠️ Servicios",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            width=105,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self._abrir_ventana_flotante_inspeccion("servicios")
+        )
+        self.btn_ver_servicios.pack(side="left", padx=(0, 4))
+
+        self.btn_ver_facilitadores = ctk.CTkButton(
+            box_botones_insp,
+            text="👥 Facilitadores",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            width=120,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self._abrir_ventana_flotante_inspeccion("facilitadores")
+        )
+        self.btn_ver_facilitadores.pack(side="left", padx=(0, 4))
+
+        # Grupo Derecho: Selector de Formato + Botón de Exportar (Empacados de Izquierda a Derecha)
+        box_exportacion = ctk.CTkFrame(toolbar_inspeccion, fg_color="transparent")
+        box_exportacion.pack(side="right", padx=(4, 10), pady=8)
+
+        lbl_formato = ctk.CTkLabel(
+            box_exportacion,
+            text="Formato:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#8E8E98"
+        )
+        lbl_formato.pack(side="left", padx=(0, 4))
+
+        self.combo_aud_formato = ctk.CTkComboBox(
+            box_exportacion,
+            values=[
+                "Excel (.xlsx)",
+                "LibreOffice (.odt)",
+                "Documento PDF (.pdf)",
+                "CSV plano (.csv)",
+                "Vista en Pantalla (Consola)"
+            ],
+            variable=self.var_exportar_formato,
+            width=135,
+            height=32,
+            font=ctk.CTkFont(size=11)
+        )
+        self.combo_aud_formato.pack(side="left", padx=(0, 6))
+
+        self.btn_exportar_reporte_dialogo = ctk.CTkButton(
+            box_exportacion,
+            text="💾 Exportar Reporte...",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            width=135,
+            state="disabled",
+            fg_color="#27AE60",
+            hover_color="#219653",
+            command=self._accion_exportar_reporte_dialogo
+        )
+        self.btn_exportar_reporte_dialogo.pack(side="left")
+
+        # Elementos de compatibilidad con backend y tests (sin ocupar espacio en pantalla)
+        self.btn_abrir_reporte_auditoria = ctk.CTkButton(
+            frame,
+            text="📊 Abrir Reporte",
+            state="disabled",
+            command=self._abrir_ultimo_reporte_auditoria
+        )
+        self.lbl_auditoria_estado = ctk.CTkLabel(
+            frame,
+            text="Esperando inicio de auditoría..."
+        )
+
+        # Objetos de compatibilidad con tests y arquitectura previa
+        class _TabviewCompatProxy:
+            def __init__(self):
+                self._tab_dict = {
+                    "🎓 Formaciones y Actividades": {},
+                    "🛠️ Servicios a Usuarios": {},
+                    "👥 Resumen por Facilitador": {}
+                }
+                self._tab_actual = "🎓 Formaciones y Actividades"
+
+            def get(self):
+                return self._tab_actual
+
+            def set(self, val):
+                self._tab_actual = val
+
+            def add(self, name):
+                self._tab_dict[name] = {}
+                return None
+
+        self.tabview_auditoria = _TabviewCompatProxy()
+
+        class _ScrollFrameCompat:
+            def winfo_children(self):
+                return []
+
+        self.scroll_tab_actividades = _ScrollFrameCompat()
+        self.scroll_tab_servicios = _ScrollFrameCompat()
+        self.scroll_tab_facilitadores = _ScrollFrameCompat()
+        self.txt_telemetria_auditoria = None
+
+        # Ajustar modo inicial reactivo
+        self._al_cambiar_modo_auditoria()
+
+        return frame
+
+    def _al_cambiar_modo_auditoria(self, valor=None):
+        """Ajusta reactivamente las entradas según el modo de auditoría seleccionado."""
+        modo = self.var_modo_auditoria.get()
+        if "UID" in modo:
+            if hasattr(self, "box_aud_uid") and self.box_aud_uid:
+                self.box_aud_uid.grid(row=0, column=0, columnspan=4, sticky="ew", padx=(0, 0), pady=(4, 2))
+            if hasattr(self, "box_aud_infoid") and self.box_aud_infoid:
+                self.box_aud_infoid.grid_remove()
+            if hasattr(self, "box_aud_estado") and self.box_aud_estado:
+                self.box_aud_estado.grid_remove()
+            if hasattr(self, "entry_aud_uid") and self.entry_aud_uid:
+                self.entry_aud_uid.configure(state="normal")
+            self._agregar_log_auditoria("[MODO] Selección: Por Facilitador (UID). Mostrando campo UID.")
+        elif "Infocentro" in modo:
+            if hasattr(self, "box_aud_uid") and self.box_aud_uid:
+                self.box_aud_uid.grid_remove()
+            if hasattr(self, "box_aud_infoid") and self.box_aud_infoid:
+                self.box_aud_infoid.grid(row=0, column=0, columnspan=4, sticky="ew", padx=(0, 0), pady=(4, 2))
+            if hasattr(self, "box_aud_estado") and self.box_aud_estado:
+                self.box_aud_estado.grid_remove()
+            if hasattr(self, "entry_aud_infoid") and self.entry_aud_infoid:
+                self.entry_aud_infoid.configure(state="normal")
+            self._agregar_log_auditoria("[MODO] Selección: Por Infocentro (Código). Mostrando campo Cód Info.")
+        else:
+            if hasattr(self, "box_aud_uid") and self.box_aud_uid:
+                self.box_aud_uid.grid_remove()
+            if hasattr(self, "box_aud_infoid") and self.box_aud_infoid:
+                self.box_aud_infoid.grid_remove()
+            if hasattr(self, "box_aud_estado") and self.box_aud_estado:
+                self.box_aud_estado.grid(row=0, column=0, columnspan=4, sticky="ew", padx=(0, 0), pady=(4, 2))
+            if hasattr(self, "combo_aud_estado") and self.combo_aud_estado:
+                self.combo_aud_estado.configure(state="normal")
+            self._agregar_log_auditoria("[MODO] Selección: Resumen Estadal (Región). Mostrando selector de Estado.")
+
+    def _al_cambiar_rol_auditor(self):
+        """Maneja el switch de permisos de rol de auditor / jefatura."""
+        rol = self.var_rol_auditor.get()
+        if rol:
+            config = configparser.ConfigParser()
+            u_aud = ""
+            c_aud = ""
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    config.read(CONFIG_FILE, encoding="utf-8")
+                    if config.has_section("AUDITORIA"):
+                        u_aud = config.get("AUDITORIA", "usuario", fallback="").strip()
+                        c_aud = config.get("AUDITORIA", "clave", fallback="").strip()
+                except Exception:
+                    pass
+
+            if u_aud and c_aud:
+                self.switch_rol_auditor.configure(text=f"Rol Auditor (Activo: {u_aud})")
+                self._agregar_log_auditoria(f"[ROL AUDITOR] Activado (Perfil: {u_aud}). Se usarán credenciales con permisos de auditoría.")
+            else:
+                self._mostrar_modal_credenciales_auditor()
+        else:
+            self.switch_rol_auditor.configure(text="Rol Auditor / Jefatura")
+            self._agregar_log_auditoria("[ROL AUDITOR] Desactivado: Se usarán credenciales estándar [LOGIN].")
+
+    def _mostrar_modal_credenciales_auditor(self):
+        """Despliega modal CTkToplevel para capturar y persistir credenciales de Auditor / Jefatura."""
+        modal = ctk.CTkToplevel(self)
+        modal.title("Credenciales de Auditor / Jefatura")
+        modal.geometry("440x330")
+        modal.resizable(False, False)
+        modal.configure(fg_color="#1E1E28")
+        modal.transient(self)
+        modal.grab_set()
+
+        try:
+            x = self.winfo_x() + max(0, (self.winfo_width() - 440) // 2)
+            y = self.winfo_y() + max(0, (self.winfo_height() - 330) // 2)
+            modal.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        header = ctk.CTkFrame(modal, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(16, 8))
+        ctk.CTkLabel(
+            header,
+            text="Credenciales de Auditor / Jefatura",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#FFFFFF"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            header,
+            text="Ingrese el usuario y contraseña con permisos para consultar InfoApp estadal:",
+            font=ctk.CTkFont(size=10),
+            text_color="#A1A1AA",
+            wraplength=400,
+            justify="left"
+        ).pack(anchor="w", pady=(2, 0))
+
+        form_box = ctk.CTkFrame(modal, fg_color="#161620", corner_radius=8, border_width=1, border_color="#292938")
+        form_box.pack(fill="x", padx=20, pady=8)
+
+        ctk.CTkLabel(form_box, text="Usuario / Correo:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#D1D1D6").pack(anchor="w", padx=14, pady=(10, 2))
+        entry_user = ctk.CTkEntry(form_box, height=32, font=ctk.CTkFont(size=11), placeholder_text="ej: coord_yaracuy")
+        entry_user.pack(fill="x", padx=14, pady=(0, 8))
+
+        ctk.CTkLabel(form_box, text="Contraseña:", font=ctk.CTkFont(size=11, weight="bold"), text_color="#D1D1D6").pack(anchor="w", padx=14, pady=(2, 2))
+        entry_pass = ctk.CTkEntry(form_box, height=32, font=ctk.CTkFont(size=11), show="*", placeholder_text="Contraseña de InfoApp")
+        entry_pass.pack(fill="x", padx=14, pady=(0, 14))
+
+        # Cargar valores previos si existen
+        config = configparser.ConfigParser()
+        if os.path.exists(CONFIG_FILE):
+            try:
+                config.read(CONFIG_FILE, encoding="utf-8")
+                if config.has_section("AUDITORIA"):
+                    prev_u = config.get("AUDITORIA", "usuario", fallback="")
+                    entry_user.insert(0, prev_u)
+            except Exception:
+                pass
+
+        btn_row = ctk.CTkFrame(modal, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=(10, 14))
+
+        def al_cerrar_cancelar():
+            conf_check = configparser.ConfigParser()
+            tiene_cred = False
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    conf_check.read(CONFIG_FILE, encoding="utf-8")
+                    if conf_check.has_section("AUDITORIA"):
+                        u = conf_check.get("AUDITORIA", "usuario", fallback="").strip()
+                        c = conf_check.get("AUDITORIA", "clave", fallback="").strip()
+                        if u and c:
+                            tiene_cred = True
+                except Exception:
+                    pass
+            if not tiene_cred:
+                self.var_rol_auditor.set(False)
+                self.switch_rol_auditor.configure(text="Rol Auditor / Jefatura")
+            modal.destroy()
+
+        modal.protocol("WM_DELETE_WINDOW", al_cerrar_cancelar)
+
+        def guardar_credenciales_auditor():
+            usr = entry_user.get().strip()
+            pwd = entry_pass.get().strip()
+            if not usr or not pwd:
+                self._mostrar_modal_mensaje("Campos Requeridos", "Debe ingresar tanto el usuario como la contraseña.", tipo="aviso")
+                return
+
+            try:
+                cfg = configparser.ConfigParser()
+                if os.path.exists(CONFIG_FILE):
+                    cfg.read(CONFIG_FILE, encoding="utf-8")
+                if not cfg.has_section("AUDITORIA"):
+                    cfg.add_section("AUDITORIA")
+                cfg.set("AUDITORIA", "usuario", usr)
+                cfg.set("AUDITORIA", "clave", pwd)
+                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                    cfg.write(f)
+
+                self.var_rol_auditor.set(True)
+                self.switch_rol_auditor.configure(text=f"Rol Auditor (Activo: {usr})")
+                self.agregar_log_telemetria(f"[ROL AUDITOR] Credenciales de auditor guardadas y activas para: {usr}")
+                modal.destroy()
+            except Exception as err:
+                self._mostrar_modal_mensaje("Error al Guardar", f"No se pudieron guardar las credenciales: {err}", tipo="error")
+
+        btn_cancelar = ctk.CTkButton(
+            btn_row,
+            text="Cancelar",
+            font=ctk.CTkFont(size=11),
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            width=100,
+            command=al_cerrar_cancelar
+        )
+        btn_cancelar.pack(side="left")
+
+        btn_guardar = ctk.CTkButton(
+            btn_row,
+            text="Guardar Credenciales de Auditor",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#219653",
+            command=guardar_credenciales_auditor
+        )
+        btn_guardar.pack(side="right")
+
+    def _al_seleccionar_tab_auditoria(self):
+        """Abre automáticamente la ventana flotante de inspección detallada al seleccionar una pestaña."""
+        try:
+            if not self.winfo_ismapped() or not self.winfo_viewable():
+                return
+        except Exception:
+            return
+
+        if not self.resultado_auditoria_actual:
+            return
+
+        tab_actual = self.tabview_auditoria.get()
+        if "Actividades" in tab_actual or "Formaciones" in tab_actual:
+            self._abrir_ventana_flotante_inspeccion("actividades")
+        elif "Servicios" in tab_actual:
+            self._abrir_ventana_flotante_inspeccion("servicios")
+        elif "Facilitador" in tab_actual:
+            self._abrir_ventana_flotante_inspeccion("facilitadores")
+
+    def _abrir_ventana_flotante_inspeccion(self, tipo: str = "facilitadores"):
+        """Despliega una ventana modal maximizable (1100x650) con buscador reactivo y cabeceras ordenables."""
+        modal = ctk.CTkToplevel(self)
+        modal.geometry("1100x650")
+        modal.minsize(850, 480)
+        modal.configure(fg_color="#1E1E28")
+
+        titulos_map = {
+            "actividades": "🎓 Formaciones y Actividades — Inspección Detallada",
+            "servicios": "🛠️ Servicios a Usuarios — Inspección Detallada",
+            "facilitadores": "👥 Resumen por Facilitador — Inspección Detallada"
+        }
+        titulo_modal = titulos_map.get(tipo, "Inspección Detallada")
+        modal.title(titulo_modal)
+
+        try:
+            x = self.winfo_x() + max(0, (self.winfo_width() - 1100) // 2)
+            y = self.winfo_y() + max(0, (self.winfo_height() - 650) // 2)
+            modal.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
+        # Asegurar ejecución DELANTE de la ventana principal y comportamiento MODAL BLOQUEANTE
+        modal.transient(self)
+        modal.lift()
+        modal.attributes("-topmost", True)
+        modal.after(150, lambda: modal.attributes("-topmost", False))
+        modal.focus_force()
+        modal.grab_set()
+
+        def _cerrar_modal():
+            try:
+                modal.grab_release()
+            except Exception:
+                pass
+            modal.destroy()
+
+        modal.protocol("WM_DELETE_WINDOW", _cerrar_modal)
+
+        # 1. Barra Superior con Buscador y Contador
+        top_bar = ctk.CTkFrame(modal, fg_color="#161620", height=50)
+        top_bar.pack(fill="x", padx=12, pady=(10, 6))
+        top_bar.pack_propagate(False)
+
+        ctk.CTkLabel(
+            top_bar,
+            text=titulo_modal,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#FFFFFF"
+        ).pack(side="left", padx=12)
+
+        entry_busqueda = ctk.CTkEntry(
+            top_bar,
+            placeholder_text="🔍 Filtrar por nombre, UID, tema o sede...",
+            width=360,
+            height=30,
+            font=ctk.CTkFont(size=11)
+        )
+        entry_busqueda.pack(side="left", padx=12)
+
+        lbl_contador = ctk.CTkLabel(
+            top_bar,
+            text="Registros: 0",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#2ECC71"
+        )
+        lbl_contador.pack(side="left", padx=8)
+
+        btn_cerrar = ctk.CTkButton(
+            top_bar,
+            text="✕ Cerrar",
+            width=80,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color="#C0392B",
+            hover_color="#962D22",
+            command=_cerrar_modal
+        )
+        btn_cerrar.pack(side="right", padx=12)
+
+        # 2. Contenedor de Tabla
+        table_container = ctk.CTkFrame(modal, fg_color="#121218", corner_radius=8)
+        table_container.pack(fill="both", expand=True, padx=12, pady=(0, 10))
+
+        # Estado de ordenamiento en memoria
+        sort_state = {"col": "total_act" if tipo == "facilitadores" else "fecha", "reverse": True}
+
+        res = self.resultado_auditoria_actual or {}
+        if tipo == "facilitadores":
+            facs_dict = res.get("resumen_facilitadores", {})
+            datos_base = []
+            for f_uid, d in facs_dict.items():
+                datos_base.append({
+                    "uid": str(f_uid),
+                    "nombre": str(d.get("nombre", f"UID {f_uid}")),
+                    "info_id": str(d.get("info_id", "")),
+                    "formaciones": int(d.get("formaciones", 0)),
+                    "estudiantes": int(d.get("estudiantes", 0)),
+                    "productos": int(d.get("productos", 0)),
+                    "otras": int(d.get("otras", 0)),
+                    "servicios": int(d.get("servicios", 0)),
+                    "total_act": int(d.get("total_act", 0)),
+                })
+        elif tipo == "servicios":
+            datos_base = list(res.get("servicios", []))
+        else:
+            datos_base = list(res.get("formaciones", []) + res.get("productos", []) + res.get("otras_actividades", []))
+
+        # Cabeceras
+        headers_frame = ctk.CTkFrame(table_container, fg_color="#181824", corner_radius=6, height=32)
+        headers_frame.pack(fill="x", padx=4, pady=(4, 2))
+        headers_frame.pack_propagate(False)
+
+        scroll_filas = ctk.CTkScrollableFrame(table_container, fg_color="#121218", corner_radius=6)
+        scroll_filas.pack(fill="both", expand=True, padx=4, pady=(0, 4))
+
+        def ordenar_por(col_name):
+            if sort_state["col"] == col_name:
+                sort_state["reverse"] = not sort_state["reverse"]
+            else:
+                sort_state["col"] = col_name
+                sort_state["reverse"] = True
+            render_tabla()
+
+        def render_tabla():
+            for w in scroll_filas.winfo_children():
+                w.destroy()
+
+            q = entry_busqueda.get().strip().lower()
+
+            filtrados = []
+            for item in datos_base:
+                if not q:
+                    filtrados.append(item)
+                else:
+                    texto_completo = " ".join(str(v) for v in item.values()).lower()
+                    if q in texto_completo:
+                        filtrados.append(item)
+
+            c = sort_state["col"]
+            rev = sort_state["reverse"]
+            try:
+                filtrados.sort(key=lambda x: x.get(c, 0) if isinstance(x.get(c, 0), (int, float)) else str(x.get(c, "")).lower(), reverse=rev)
+            except Exception:
+                pass
+
+            lbl_contador.configure(text=f"Mostrando {len(filtrados)} de {len(datos_base)} registros")
+
+            if not filtrados:
+                ctk.CTkLabel(
+                    scroll_filas,
+                    text="No se encontraron registros que coincidan con la búsqueda.",
+                    font=ctk.CTkFont(size=11),
+                    text_color="#8E8E98"
+                ).pack(pady=30)
+                return
+
+            for idx, item in enumerate(filtrados, start=1):
+                bg = "#181824" if idx % 2 == 0 else "#1E1E2C"
+                row_f = ctk.CTkFrame(scroll_filas, fg_color=bg, corner_radius=6, height=34)
+                row_f.pack(fill="x", pady=2, padx=2)
+                row_f.pack_propagate(False)
+
+                if tipo == "facilitadores":
+                    ctk.CTkLabel(row_f, text=str(item.get("uid", "")), width=65, font=ctk.CTkFont(size=10, weight="bold"), text_color="#3B8ED0").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("nombre", "")), font=ctk.CTkFont(size=10, weight="bold"), text_color="#FFFFFF", anchor="w").pack(side="left", fill="x", expand=True, padx=6)
+                    ctk.CTkLabel(row_f, text=str(item.get("info_id", "")), width=80, font=ctk.CTkFont(size=10), text_color="#F39C12", anchor="center").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("formaciones", 0)), width=80, font=ctk.CTkFont(size=10), text_color="#C0C0C8", anchor="center").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("estudiantes", 0)), width=85, font=ctk.CTkFont(size=10, weight="bold"), text_color="#2ECC71", anchor="center").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("productos", 0)), width=75, font=ctk.CTkFont(size=10), text_color="#C0C0C8", anchor="center").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("otras", 0)), width=70, font=ctk.CTkFont(size=10), text_color="#C0C0C8", anchor="center").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("servicios", 0)), width=75, font=ctk.CTkFont(size=10, weight="bold"), text_color="#9B59B6", anchor="center").pack(side="left", padx=2)
+
+                    b_tot = ctk.CTkFrame(row_f, fg_color="#1E3A5F", corner_radius=6, width=65, height=22)
+                    b_tot.pack(side="left", padx=(2, 8))
+                    b_tot.pack_propagate(False)
+                    ctk.CTkLabel(b_tot, text=str(item.get("total_act", 0)), font=ctk.CTkFont(size=10, weight="bold"), text_color="#60A5FA").place(relx=0.5, rely=0.5, anchor="center")
+
+                elif tipo == "servicios":
+                    ctk.CTkLabel(row_f, text=str(idx), width=35, font=ctk.CTkFont(size=10), text_color="#8E8E98").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("fecha", "S/F")), width=90, font=ctk.CTkFont(size=10), text_color="#C0C0C8").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("servicio", "")), width=180, font=ctk.CTkFont(size=10, weight="bold"), text_color="#38BDF8", anchor="w").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("cedula", "") or "No cedulado"), width=110, font=ctk.CTkFont(family="Consolas", size=10), text_color="#F39C12", anchor="center").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("usuario", "")), font=ctk.CTkFont(size=10), text_color="#FFFFFF", anchor="w").pack(side="left", fill="x", expand=True, padx=6)
+                    ctk.CTkLabel(row_f, text=str(item.get("profesion", "") or "S/D"), width=130, font=ctk.CTkFont(size=10), text_color="#8E8E98", anchor="w").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("info_id", "")), width=85, font=ctk.CTkFont(size=10), text_color="#A1A1AA", anchor="center").pack(side="left", padx=(2, 6))
+
+                else:  # actividades
+                    ctk.CTkLabel(row_f, text=str(idx), width=35, font=ctk.CTkFont(size=10), text_color="#8E8E98").pack(side="left", padx=2)
+                    ctk.CTkLabel(row_f, text=str(item.get("fecha", "S/F")), width=85, font=ctk.CTkFont(size=10), text_color="#C0C0C8").pack(side="left", padx=2)
+
+                    dims = item.get("dimensiones", "").lower()
+                    if "aprendizaje" in dims or "robótica" in dims or "taller" in dims:
+                        t_lbl, t_fg, t_tc = "Formación", "#1E4D2B", "#2ECC71"
+                    elif item.get("productos", 0) > 0 or "contenido" in dims:
+                        t_lbl, t_fg, t_tc = "Producto", "#1B3A57", "#3B8ED0"
+                    else:
+                        t_lbl, t_fg, t_tc = "Otras Act.", "#3D2B52", "#9B59B6"
+
+                    b_tipo = ctk.CTkFrame(row_f, fg_color=t_fg, corner_radius=4, width=90, height=22)
+                    b_tipo.pack(side="left", padx=4)
+                    b_tipo.pack_propagate(False)
+                    ctk.CTkLabel(b_tipo, text=t_lbl, font=ctk.CTkFont(size=9, weight="bold"), text_color=t_tc).place(relx=0.5, rely=0.5, anchor="center")
+
+                    tema = item.get("taller") or item.get("area") or item.get("titulo") or "Sin tema"
+                    tit = item.get("titulo", "")
+                    desc = f"{tema} — {tit}" if (tit and tit != tema) else tema
+                    ctk.CTkLabel(row_f, text=desc, font=ctk.CTkFont(size=10, weight="bold"), text_color="#FFFFFF", anchor="w").pack(side="left", fill="x", expand=True, padx=6)
+                    ctk.CTkLabel(row_f, text=str(item.get("responsable", "") or f"UID {item.get('uid', '')}"), width=140, font=ctk.CTkFont(size=10), text_color="#A1A1AA", anchor="w").pack(side="left", padx=4)
+                    ctk.CTkLabel(row_f, text=str(item.get("info_id", "")), width=75, font=ctk.CTkFont(size=10), text_color="#F39C12", anchor="center").pack(side="left", padx=2)
+
+                    n_p = item.get("participantes", 0)
+                    b_p = ctk.CTkFrame(row_f, fg_color="#1E3A5F" if n_p > 0 else "#252533", corner_radius=10, width=46, height=22)
+                    b_p.pack(side="left", padx=(2, 6))
+                    b_p.pack_propagate(False)
+                    ctk.CTkLabel(b_p, text=str(n_p), font=ctk.CTkFont(size=10, weight="bold"), text_color="#60A5FA" if n_p > 0 else "#8E8E98").place(relx=0.5, rely=0.5, anchor="center")
+
+        if tipo == "facilitadores":
+            cols_def = [
+                ("UID", "uid", 65),
+                ("Facilitador / Responsable", "nombre", 0),
+                ("Sede", "info_id", 80),
+                ("Formaciones", "formaciones", 80),
+                ("Estudiantes", "estudiantes", 85),
+                ("Productos", "productos", 75),
+                ("Otras", "otras", 70),
+                ("Servicios", "servicios", 75),
+                ("Total Act.", "total_act", 65),
+            ]
+        elif tipo == "servicios":
+            cols_def = [
+                ("#", None, 35),
+                ("Fecha", "fecha", 90),
+                ("Servicio Prestado", "servicio", 180),
+                ("Cédula / ID", "cedula", 110),
+                ("Nombre del Usuario", "usuario", 0),
+                ("Profesión", "profesion", 130),
+                ("Sede", "info_id", 85),
+            ]
+        else:
+            cols_def = [
+                ("#", None, 35),
+                ("Fecha", "fecha", 85),
+                ("Tipo", "dimensiones", 90),
+                ("Tema Pedagógico / Taller / Título", "titulo", 0),
+                ("Facilitador / Responsable", "responsable", 140),
+                ("Sede", "info_id", 75),
+                ("Part.", "participantes", 46),
+            ]
+
+        for label, col_key, width in cols_def:
+            if col_key:
+                btn = ctk.CTkButton(
+                    headers_frame,
+                    text=label,
+                    font=ctk.CTkFont(size=10, weight="bold"),
+                    fg_color="transparent",
+                    text_color="#3B8ED0",
+                    hover_color="#2B2B36",
+                    command=lambda k=col_key: ordenar_por(k)
+                )
+            else:
+                btn = ctk.CTkLabel(headers_frame, text=label, font=ctk.CTkFont(size=10, weight="bold"), text_color="#3B8ED0")
+
+            if width > 0:
+                btn.configure(width=width)
+                btn.pack(side="left", padx=2)
+            else:
+                btn.pack(side="left", fill="x", expand=True, padx=4)
+
+        entry_busqueda.bind("<KeyRelease>", lambda e: render_tabla())
+        render_tabla()
+
+    def _iniciar_auditoria_thread(self):
+        """Valida parámetros y despacha el hilo secundario de auditoría."""
+        if self.ejecutando_auditoria or self.ejecutando_tarea:
+            self._mostrar_modal_mensaje("JsBOT Ocupado", "Ya hay una tarea o auditoría en curso. Por favor espere a que termine.", tipo="aviso")
+            return
+
+        modo = self.var_modo_auditoria.get()
+        uid = self.var_criterio_uid.get().strip()
+        infoid = self.var_criterio_infoid.get().strip()
+        estado = self.var_criterio_estado.get().strip()
+        f_desde = self.var_fecha_desde_aud.get().strip()
+        f_hasta = self.var_fecha_hasta_aud.get().strip()
+        rol = self.var_rol_auditor.get()
+        formato = self.var_exportar_formato.get().lower()
+
+        if "consola" in formato or "pantalla" in formato:
+            formato_exp = "consola"
+        elif "odt" in formato or "libreoffice" in formato:
+            formato_exp = "odt"
+        elif "pdf" in formato:
+            formato_exp = "pdf"
+        elif "csv" in formato:
+            formato_exp = "csv"
+        else:
+            formato_exp = "excel"
+
+        try:
+            datetime.strptime(f_desde, "%Y-%m-%d")
+            datetime.strptime(f_hasta, "%Y-%m-%d")
+        except ValueError:
+            self._mostrar_modal_mensaje("Error en Fechas", "Las fechas deben tener el formato AAAA-MM-DD (ej: 2026-09-01).", tipo="error")
+            return
+
+        if "UID" in modo:
+            if not uid:
+                self._mostrar_modal_mensaje("Falta UID", "En el modo 'Por Facilitador' debe especificar el UID a consultar.", tipo="aviso")
+                return
+            c_uid = uid
+            c_infoid = ""   # No restringir por infocentro al consultar un facilitador específico
+            c_estado = ""   # No restringir por estado al consultar un facilitador específico
+        elif "Infocentro" in modo:
+            if not infoid:
+                self._mostrar_modal_mensaje("Falta Cód. Infocentro", "En el modo 'Por Infocentro' debe especificar el código de la sede (ej: NRYAR24).", tipo="aviso")
+                return
+            c_uid = ""      # Consultar todos los facilitadores pertenecientes a esa sede
+            c_infoid = infoid
+            c_estado = ""
+        else:
+            if not estado:
+                self._mostrar_modal_mensaje("Falta Estado", "En el modo 'Resumen Estadal' debe seleccionar el estado a auditar.", tipo="aviso")
+                return
+            c_uid = ""
+            c_infoid = ""
+            c_estado = estado
+
+        self.ejecutando_auditoria = True
+        self.btn_iniciar_auditoria.configure(text="⏳ Auditando...", state="disabled", fg_color="#E67E22")
+        self.btn_abrir_reporte_auditoria.configure(state="disabled")
+        if hasattr(self, "btn_exportar_reporte_dialogo"):
+            self.btn_exportar_reporte_dialogo.configure(state="disabled")
+        self.lbl_auditoria_estado.configure(text="Conectando con InfoApp y auditando...", text_color="#3B8ED0")
+        self.lbl_kpi_cuadre.configure(text="● Consultando...", text_color="#3B8ED0")
+
+        modo_turbo = self.var_modo_turbo.get()
+
+        params = {
+            "uid": c_uid,
+            "info_id": c_infoid,
+            "estado": c_estado,
+            "fecha_inicio": f_desde,
+            "fecha_fin": f_hasta,
+            "rol_auditor": rol,
+            "exportar_formato": formato_exp,
+            "modo_turbo": modo_turbo
+        }
+
+        t = threading.Thread(target=self._hilo_auditoria_worker, args=(params,), daemon=True)
+        t.start()
+
+    def _hilo_auditoria_worker(self, params: dict):
+        """Worker en segundo plano para ejecutar la auditoría sin congelar la GUI."""
+        def callback_progreso(msg: str):
+            self.cola_eventos.put(("log_auditoria", msg))
+
+        try:
+            self.cola_eventos.put(("log_auditoria", "Iniciando motor de auditoría oficial v4.2.5..."))
+            resultado = ar.ejecutar_auditoria(
+                uid=params.get("uid"),
+                info_id=params.get("info_id"),
+                estado=params.get("estado"),
+                fecha_inicio=params.get("fecha_inicio"),
+                fecha_fin=params.get("fecha_fin"),
+                start_at=params.get("fecha_inicio"),
+                finish_at=params.get("fecha_fin"),
+                rol_auditor=params.get("rol_auditor", False),
+                exportar_formato=params.get("exportar_formato", "excel"),
+                formato=params.get("exportar_formato", "excel"),
+                modo_turbo=params.get("modo_turbo", True),
+                callback_log=callback_progreso,
+                progreso_callback=callback_progreso
+            )
+            self.cola_eventos.put(("fin_auditoria", resultado))
+        except Exception as e:
+            self.cola_eventos.put(("fin_auditoria", {"exito": False, "error": str(e)}))
+
+    def _finalizar_ejecucion_auditoria(self, resultado: dict):
+        """Actualiza la interfaz con los datos y métricas recibidos de la auditoría."""
+        self.ejecutando_auditoria = False
+        self.btn_iniciar_auditoria.configure(text="🔍 Iniciar Auditoría", state="normal", fg_color="#27AE60")
+        self.resultado_auditoria_actual = resultado
+
+        if not resultado.get("exito"):
+            err = resultado.get("error", "Error desconocido")
+            self.lbl_auditoria_estado.configure(text=f"Error en auditoría: {err}", text_color="#E74C3C")
+            self.lbl_kpi_cuadre.configure(text="● Error", text_color="#E74C3C")
+            self.lbl_kpi_cuadre_sub.configure(text="Fallo de conexión", text_color="#E74C3C")
+            if hasattr(self, "btn_exportar_reporte_dialogo"):
+                self.btn_exportar_reporte_dialogo.configure(state="disabled")
+            self._mostrar_modal_mensaje("Fallo en Auditoría", f"No se pudo completar la inspección:\n{err}", tipo="error")
+            return
+
+        tot_act = resultado.get("total_actividades", 0)
+        n_form = len(resultado.get("formaciones", []))
+        n_prod = len(resultado.get("productos", []))
+        n_otr = len(resultado.get("otras_actividades", []))
+        tot_est = resultado.get("total_estudiantes", 0)
+        tot_srv = resultado.get("total_servicios", 0)
+        cuadro_ok = resultado.get("cuadre_perfecto", False)
+
+        # Gestión de resultados vacíos (Directiva v4.2.4)
+        if tot_act == 0 and tot_srv == 0:
+            self.lbl_kpi_actividades.configure(text="0")
+            self.lbl_kpi_actividades_sub.configure(text="0 Form | 0 Prod | 0 Otr")
+            if hasattr(self, "lbl_kpi_actividades_det"):
+                self.lbl_kpi_actividades_det.configure(text="Rango sin actividad")
+            self.lbl_kpi_formados.configure(text="0")
+            if hasattr(self, "lbl_kpi_formados_det"):
+                self.lbl_kpi_formados_det.configure(text="0 aulas registradas")
+            self.lbl_kpi_servicios.configure(text="0")
+            if hasattr(self, "lbl_kpi_servicios_det"):
+                self.lbl_kpi_servicios_det.configure(text="0 atenciones registradas")
+            self.lbl_kpi_cuadre.configure(text="● Sin Registros", text_color="#A1A1AA")
+            self.lbl_kpi_cuadre_sub.configure(text="0 actividades encontradas", text_color="#A1A1AA")
+            if hasattr(self, "lbl_kpi_cuadre_det"):
+                self.lbl_kpi_cuadre_det.configure(text="Sin discrepancias")
+
+            self._poblar_tab_actividades([])
+            self._poblar_tab_servicios([])
+            self._poblar_tab_facilitadores({})
+
+            msg_aviso = "[AVISO] No se encontraron actividades o usuarios en el rango seleccionado."
+            self._agregar_log_auditoria(msg_aviso)
+            self.lbl_auditoria_estado.configure(text=msg_aviso, text_color="#F39C12")
+            self.btn_abrir_reporte_auditoria.configure(state="disabled")
+            if hasattr(self, "btn_exportar_reporte_dialogo"):
+                self.btn_exportar_reporte_dialogo.configure(state="disabled")
+            self._mostrar_toast(msg_aviso)
+
+            try:
+                ar.guardar_cache_inspector(resultado)
+            except Exception:
+                pass
+            return
+
+        self.lbl_kpi_actividades.configure(text=str(tot_act))
+        self.lbl_kpi_actividades_sub.configure(text=f"{n_form} Form | {n_prod} Prod | {n_otr} Otr")
+        todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
+        if hasattr(self, "lbl_kpi_actividades_det"):
+            sedes_unicas = len(set(str(a.get("info_id", "")).strip() for a in todas_act if a.get("info_id")))
+            self.lbl_kpi_actividades_det.configure(text=f"Total: {tot_act} act • {sedes_unicas} sede(s)")
+
+        self.lbl_kpi_formados.configure(text=str(tot_est))
+        self.lbl_kpi_formados_sub.configure(text=f"{tot_est} Participantes en aula")
+        if hasattr(self, "lbl_kpi_formados_det"):
+            prom = (tot_est / n_form) if n_form > 0 else 0.0
+            self.lbl_kpi_formados_det.configure(text=f"Promedio: {prom:.1f} est / formación ({n_form} aulas)")
+
+        self.lbl_kpi_servicios.configure(text=str(tot_srv))
+        ced = resultado.get("cedulados_serv", 0)
+        no_ced = resultado.get("no_cedulados_serv", 0)
+        self.lbl_kpi_servicios_sub.configure(text=f"{ced} Cedulados | {no_ced} Sin Cédula")
+        if hasattr(self, "lbl_kpi_servicios_det"):
+            conteo_s = resultado.get("conteo_servicios", {})
+            if conteo_s:
+                top_srv_nom = max(conteo_s, key=conteo_s.get)
+                if len(top_srv_nom) > 22:
+                    top_srv_nom = top_srv_nom[:20] + ".."
+                self.lbl_kpi_servicios_det.configure(text=f"Top: {top_srv_nom} ({conteo_s[max(conteo_s, key=conteo_s.get)]})")
+            else:
+                self.lbl_kpi_servicios_det.configure(text=f"{tot_srv} atenciones registradas")
+
+        if cuadro_ok:
+            self.lbl_kpi_cuadre.configure(text="● Cuadrado (100%)", text_color="#2ECC71")
+            self.lbl_kpi_cuadre_sub.configure(text="Coincidencia exacta", text_color="#2ECC71")
+            if hasattr(self, "lbl_kpi_cuadre_det"):
+                self.lbl_kpi_cuadre_det.configure(text="Diferencia: 0 • Balance verificado", text_color="#2ECC71")
+        else:
+            tot_proc = resultado.get("total_procesadas", n_form + n_prod + n_otr)
+            dif = tot_act - tot_proc
+            self.lbl_kpi_cuadre.configure(text="● Descuadre", text_color="#E74C3C")
+            self.lbl_kpi_cuadre_sub.configure(text=f"Diferencia: {dif} act.", text_color="#E74C3C")
+            if hasattr(self, "lbl_kpi_cuadre_det"):
+                self.lbl_kpi_cuadre_det.configure(text=f"Reportadas: {tot_act} | Auditadas: {tot_proc}", text_color="#E74C3C")
+
+        self._poblar_tab_actividades(todas_act)
+        self._poblar_tab_servicios(resultado.get("servicios", []))
+        self._poblar_tab_facilitadores(resultado.get("resumen_facilitadores", {}))
+
+        # Habilitar botones de inspección y exportación dinámica
+        if hasattr(self, "btn_exportar_reporte_dialogo"):
+            self.btn_exportar_reporte_dialogo.configure(state="normal")
+        if hasattr(self, "btn_ver_actividades"):
+            self.btn_ver_actividades.configure(state="normal")
+        if hasattr(self, "btn_ver_servicios"):
+            self.btn_ver_servicios.configure(state="normal")
+        if hasattr(self, "btn_ver_facilitadores"):
+            self.btn_ver_facilitadores.configure(state="normal")
+
+        ruta_exp = resultado.get("archivo_exportado", "")
+        if ruta_exp and os.path.exists(ruta_exp):
+            self.ruta_ultimo_reporte_auditoria = ruta_exp
+            self.btn_abrir_reporte_auditoria.configure(state="normal", fg_color="#1f538d", hover_color="#14375e")
+            self.lbl_auditoria_estado.configure(
+                text=f"Auditoría exitosa: {tot_act} actividades, {tot_est} formados, {tot_srv} servicios. Reporte exportado.",
+                text_color="#2ECC71"
+            )
+        else:
+            self.btn_abrir_reporte_auditoria.configure(state="disabled")
+            self.lbl_auditoria_estado.configure(
+                text=f"Auditoría finalizada: {tot_act} actividades, {tot_est} formados, {tot_srv} servicios.",
+                text_color="#2ECC71"
+            )
+
+        try:
+            self.tabview_auditoria.set("🎓 Formaciones y Actividades")
+        except Exception:
+            pass
+
+        # Guardar en caché ligero local
+        try:
+            ar.guardar_cache_inspector(resultado)
+        except Exception:
+            pass
+
+    def _actualizar_progreso_auditoria(self, pct):
+        """Callback para sincronizar avance porcentual si se activa barra."""
+        pass
+
+    def _poblar_tab_actividades(self, actividades: list):
+        """Método de compatibilidad para procesar o actualizar actividades en memoria."""
+        pass
+
+    def _poblar_tab_servicios(self, servicios: list):
+        """Método de compatibilidad para procesar o actualizar servicios en memoria."""
+        pass
+
+    def _poblar_tab_facilitadores(self, facilitadores: dict):
+        """Método de compatibilidad para procesar o actualizar facilitadores en memoria."""
+        pass
+
+    def _abrir_ultimo_reporte_auditoria(self):
+        """Abre el último archivo exportado (.xlsx o .csv)."""
+        if self.ruta_ultimo_reporte_auditoria and os.path.exists(self.ruta_ultimo_reporte_auditoria):
+            abrir_archivo_o_directorio_sistema(self.ruta_ultimo_reporte_auditoria)
+            self._agregar_log_auditoria(f"[SISTEMA] Abriendo reporte: {self.ruta_ultimo_reporte_auditoria}")
+        else:
+            self._mostrar_modal_mensaje("Reporte no disponible", "No hay un archivo de reporte generado recientemente.", tipo="aviso")
+
+    def _accion_exportar_reporte_dialogo(self):
+        """Despliega el diálogo interactivo para guardar el reporte en el formato seleccionado o mostrarlo en telemetría."""
+        if not self.resultado_auditoria_actual:
+            self._mostrar_modal_mensaje("Sin Datos", "Debe ejecutar una auditoría antes de exportar el reporte.", tipo="aviso")
+            return
+
+        formato_str = self.var_exportar_formato.get()
+        fecha_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        res = self.resultado_auditoria_actual
+
+        if "Consola" in formato_str or "Pantalla" in formato_str:
+            resumen_txt = ar.generar_resumen_consola(res)
+            self._agregar_log_auditoria("\n" + resumen_txt)
+            self._mostrar_toast("Resumen ejecutivo visualizado en telemetría.")
+            return
+
+        fmt_low = formato_str.lower()
+        if "odt" in fmt_low or "libreoffice" in fmt_low:
+            def_ext = ".odt"
+            ftypes = [("Documento LibreOffice Writer", "*.odt"), ("Todos los archivos", "*.*")]
+            formato_clave = "odt"
+        elif "pdf" in fmt_low:
+            def_ext = ".pdf"
+            ftypes = [("Documento Portable PDF", "*.pdf"), ("Todos los archivos", "*.*")]
+            formato_clave = "pdf"
+        elif "csv" in fmt_low:
+            def_ext = ".csv"
+            ftypes = [("Valores separados por comas", "*.csv"), ("Todos los archivos", "*.*")]
+            formato_clave = "csv"
+        else:
+            def_ext = ".xlsx"
+            ftypes = [("Libro de Microsoft Excel", "*.xlsx"), ("Todos los archivos", "*.*")]
+            formato_clave = "excel"
+
+        nombre_sugerido = f"Auditoria_InfoApp_{fecha_stamp}{def_ext}"
+        os.makedirs(self.directorio_reportes_auditoria, exist_ok=True)
+
+        ruta_elegida = filedialog.asksaveasfilename(
+            initialdir=self.directorio_reportes_auditoria,
+            initialfile=nombre_sugerido,
+            defaultextension=def_ext,
+            filetypes=ftypes,
+            title=f"Guardar Reporte de Auditoría ({formato_str})"
+        )
+
+        if not ruta_elegida:
+            return
+
+        try:
+            ruta_final = ar.exportar_reporte_auditoria(res, formato=formato_clave, ruta_destino=ruta_elegida)
+            self.ruta_ultimo_reporte_auditoria = ruta_final
+            self.btn_abrir_reporte_auditoria.configure(state="normal", fg_color="#1f538d", hover_color="#14375e")
+            self._agregar_log_auditoria(f"💾 Reporte exportado exitosamente en: {ruta_final}")
+            self._mostrar_toast(f"Reporte exportado: {os.path.basename(ruta_final)}")
+            abrir_archivo_o_directorio_sistema(ruta_final)
+        except Exception as e:
+            self._agregar_log_auditoria(f"❌ Error al exportar reporte: {e}")
+            self._mostrar_modal_mensaje("Error de Exportación", f"No se pudo generar el reporte:\n{e}", tipo="error")
+
+    def _abrir_directorio_reportes_auditoria(self):
+        """Abre el explorador de archivos en la carpeta Reportes_Auditoria/."""
+        rep_dir = os.path.join(BASE_DIR, "Reportes_Auditoria")
+        os.makedirs(rep_dir, exist_ok=True)
+        abrir_archivo_o_directorio_sistema(rep_dir)
+        self._agregar_log_auditoria(f"[SISTEMA] Abriendo directorio de reportes: {rep_dir}")
+
+    def _limpiar_log_auditoria(self):
+        """Limpia el visor de telemetría principal."""
+        self._limpiar_logs()
+
+    def _agregar_log_auditoria(self, texto: str):
+        """Redirige registros de auditoría hacia la consola unificada de telemetría."""
+        self.agregar_log_telemetria(f"[AUDITORÍA] {texto}")
+
+    def _cargar_ultima_busqueda_cache(self):
+        """Carga en la interfaz los resultados cacheados de la última auditoría."""
+        datos = self.cargar_cache_inspector()
+        if not datos or not datos.get("exito"):
+            self._mostrar_modal_mensaje("Sin Caché", "No se encontró ningún caché de búsqueda reciente.", tipo="info")
+            return False
+        self._finalizar_ejecucion_auditoria(datos)
+        self._agregar_log_auditoria("[CACHE] Datos cargados desde la última búsqueda almacenada.")
+        self._mostrar_toast("Caché de auditoría cargado con éxito")
+        return True
+
+    def guardar_cache_inspector(self, resultado: dict, ruta_archivo: str = None) -> str:
+        """Persiste los resultados de auditoría en el caché ligero JSON."""
+        return ar.guardar_cache_inspector(resultado, ruta_archivo)
+
+    def cargar_cache_inspector(self, ruta_archivo: str = None) -> dict:
+        """Carga los resultados de auditoría desde el caché ligero JSON."""
+        return ar.cargar_cache_inspector(ruta_archivo)
+
+    def _mostrar_modal_confirmacion(self, titulo: str, mensaje: str, callback_si=None, callback_no=None):
+        """
+        Despliega un diálogo modal de confirmación con CTkToplevel y botones Sí / Cancelar,
+        garantizando cero dependencias de consola o sys.stdin.
+        """
+        modal = ctk.CTkToplevel(self)
+        modal.title(titulo)
+        ancho, alto = 480, 200
+        pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho) // 2)
+        pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto) // 2)
+        modal.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
+        modal.resizable(False, False)
+        modal.transient(self)
+        modal.grab_set()
+
+        f_top = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
+        f_top.pack(fill="x")
+        ctk.CTkLabel(f_top, text=f"❓ {titulo}", font=ctk.CTkFont(size=13, weight="bold"), text_color="#3B8ED0").pack(anchor="w", padx=16, pady=10)
+
+        f_body = ctk.CTkFrame(modal, fg_color="transparent")
+        f_body.pack(fill="both", expand=True, padx=20, pady=12)
+        ctk.CTkLabel(f_body, text=mensaje, font=ctk.CTkFont(size=11), text_color="#E0E0E8", justify="left", wraplength=440).pack(anchor="w", fill="x")
+
+        f_btns = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0, height=48)
+        f_btns.pack(fill="x", side="bottom")
+
+        def al_confirmar():
+            try:
+                modal.destroy()
+            except Exception:
+                pass
+            if callback_si:
+                callback_si()
+
+        def al_cancelar():
+            try:
+                modal.destroy()
+            except Exception:
+                pass
+            if callback_no:
+                callback_no()
+
+        ctk.CTkButton(f_btns, text="Cancelar", width=90, fg_color="#4A4A5A", hover_color="#5A5A6A", command=al_cancelar).pack(side="right", padx=(6, 16), pady=8)
+        ctk.CTkButton(f_btns, text="Confirmar", width=100, fg_color="#27AE60", hover_color="#219653", command=al_confirmar).pack(side="right", padx=6, pady=8)
+
+    def _mostrar_toast(self, mensaje: str, duracion_ms: int = 3500):
+        """Muestra una notificación flotante estilo Toast no intrusiva y sin bloqueo."""
+        try:
+            toast = ctk.CTkToplevel(self)
+            toast.withdraw()
+            toast.overrideredirect(True)
+            try:
+                toast.attributes("-topmost", True)
+            except Exception:
+                pass
+
+            frame = ctk.CTkFrame(toast, fg_color="#1E1E28", border_width=1, border_color="#F39C12", corner_radius=8)
+            frame.pack(fill="both", expand=True, padx=2, pady=2)
+
+            lbl = ctk.CTkLabel(
+                frame,
+                text=f"🔔 {mensaje}",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="#F39C12",
+                padx=16,
+                pady=10
+            )
+            lbl.pack()
+
+            toast.update_idletasks()
+            w = toast.winfo_reqwidth()
+            h = toast.winfo_reqheight()
+
+            x = self.winfo_x() + self.winfo_width() - w - 24
+            y = self.winfo_y() + self.winfo_height() - h - 36
+            toast.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+            toast.deiconify()
+
+            def cerrar_toast():
+                try:
+                    if toast.winfo_exists():
+                        toast.destroy()
+                except Exception:
+                    pass
+
+            self.after(duracion_ms, cerrar_toast)
+        except Exception:
+            pass
+
+    # -------------------------------------------------------------------------
     # E. VISTA 5: CRÉDITOS Y AUTORÍA (PESTAÑA NATIVA EMBEBIDA)
     # -------------------------------------------------------------------------
     def _crear_vista_creditos(self, padre) -> ctk.CTkFrame:
@@ -1880,6 +3186,7 @@ class JsBotGUI(ctk.CTk):
             text_color="#D1D1D6"
         )
         self.textbox_logs.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 10))
+        self.txt_telemetria_auditoria = self.textbox_logs
 
     def _copiar_logs(self):
         """Copia el contenido del visor de telemetría al portapapeles con feedback temporal."""
@@ -2108,7 +3415,9 @@ class JsBotGUI(ctk.CTk):
             for p in participantes:
                 if p.get('cedulado') == 'si' or p.get('cedula'):
                     ci_saime += 1
-                elif p.get('cedulado') == 'escolar' or p.get('cedula_escolar'):
+                elif p.get('cedula_escolar'):
+                    ci_escolar += 1
+                elif p.get('cedula_padre'):
                     ci_escolar += 1
                 else:
                     menores_sin_doc += 1
@@ -2118,6 +3427,22 @@ class JsBotGUI(ctk.CTk):
                 tiene_doc = bool(p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre'))
                 if not (tiene_nombre and tiene_doc):
                     inconsistencias += 1
+
+            if menores_sin_doc > 0:
+                self._agregar_log(f"[ADVERTENCIA] Se detectaron {menores_sin_doc} participantes SIN DOCUMENTO ni Cédula de Representante.")
+                self._agregar_log(f"[AVISO] Sin documento de tutor, InfoApp no permite registrar ni buscar a estos menores.")
+                if menores_sin_doc == total:
+                    self._mostrar_modal_mensaje(
+                        titulo="Participantes Sin Documento",
+                        mensaje=(
+                            f"Se detectaron {total} participantes en '{os.path.basename(ruta)}' sin Cédula de Identidad ni Cédula de Representante.\n\n"
+                            "⚠️ IMPORTANTE:\n"
+                            "• InfoApp exige la Cédula del Representante para registrar menores o generar su Cédula Escolar.\n"
+                            "• Sin cédula ni representante, tampoco es posible buscarlos en el sistema.\n\n"
+                            "👉 Añade al menos la Cédula del Representante en el archivo para habilitar la carga."
+                        ),
+                        tipo="aviso"
+                    )
 
             if inconsistencias == 0:
                 if dup_omitidos > 0:
@@ -2277,8 +3602,8 @@ class JsBotGUI(ctk.CTk):
                 doc_str = f"V-{ced}" if ced else "V-(S/N)"
                 tipo_str = "SAIME"
                 tipo_color = "#3B8ED0"
-            elif ced_esc or cedulado_flag == 'escolar':
-                doc_str = f"CE-{ced_esc}" if ced_esc else f"Rep:{ced_pad}"
+            elif ced_esc:
+                doc_str = f"CE-{ced_esc}"
                 tipo_str = "Escolar"
                 tipo_color = "#F39C12"
             elif ced_pad:
@@ -2286,9 +3611,9 @@ class JsBotGUI(ctk.CTk):
                 tipo_str = "Menor S/C"
                 tipo_color = "#9B59B6"
             else:
-                doc_str = "S/C"
-                tipo_str = "Menor S/C"
-                tipo_color = "#9B59B6"
+                doc_str = "S/C (Sin Doc)"
+                tipo_str = "Sin Doc"
+                tipo_color = "#E74C3C"
 
             edad = p.get('edad')
             nac = p.get('nacimiento') or ''
@@ -2303,10 +3628,14 @@ class JsBotGUI(ctk.CTk):
 
             tlf_str = p.get('telefono') or "No reg."
 
-            es_valido = bool(p.get('nombre') and p.get('apellido') and (ced or ced_esc or ced_pad))
-            if es_valido:
+            tiene_doc = bool(ced or ced_esc or ced_pad)
+            tiene_nombre = bool(p.get('nombre') and p.get('apellido'))
+            if tiene_nombre and tiene_doc:
                 diag_str = "[OK] Listo"
                 diag_color = "#30D158"
+            elif not tiene_doc:
+                diag_str = "[!] Sin Doc"
+                diag_color = "#E74C3C"
             else:
                 diag_str = "[!] Revisar"
                 diag_color = "#E74C3C"
@@ -2389,6 +3718,21 @@ class JsBotGUI(ctk.CTk):
             )
             return
 
+        # 1.1 Validar que los participantes tengan identificación para interactuar con InfoApp
+        con_doc = [p for p in self.participantes_cargados if p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre')]
+        if not con_doc:
+            self._agregar_log("[ERROR] Bloqueo preventivo: Ningún participante posee Cédula propia ni de Representante.")
+            self._mostrar_modal_mensaje(
+                titulo="Documentos Requeridos",
+                mensaje=(
+                    "No se puede iniciar la carga masiva porque ningún participante tiene documento de identidad ni cédula de representante.\n\n"
+                    "InfoApp exige la Cédula del Representante para registrar menores o generar su Cédula Escolar.\n\n"
+                    "👉 Por favor añade al menos la columna de Cédula del Representante al archivo para continuar."
+                ),
+                tipo="error"
+            )
+            return
+
         # 2. Validar sintaxis y presencia de id_activity en la URL
         url = self.entry_url_formacion.get().strip()
         id_actividad = extraer_id_actividad(url) if MODULOS_DISPONIBLES else ""
@@ -2463,6 +3807,21 @@ class JsBotGUI(ctk.CTk):
             self._mostrar_modal_mensaje(
                 titulo="Archivo Requerido",
                 mensaje="Debes examinar y cargar un archivo de usuarios válido (.xlsx, .csv, .txt) antes de iniciar la carga de servicios.",
+                tipo="error"
+            )
+            return
+
+        # 1.1 Validar que los usuarios tengan identificación para interactuar con InfoApp
+        con_doc = [p for p in self.participantes_cargados if p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre')]
+        if not con_doc:
+            self._agregar_log("[ERROR] Bloqueo preventivo: Ningún usuario posee Cédula propia ni de Representante.")
+            self._mostrar_modal_mensaje(
+                titulo="Documentos Requeridos",
+                mensaje=(
+                    "No se puede iniciar la carga masiva porque ningún usuario tiene documento de identidad ni cédula de representante.\n\n"
+                    "InfoApp exige un documento para buscar usuarios o registrar perfiles nuevos.\n\n"
+                    "👉 Por favor añade al menos la columna de Cédula al archivo para continuar."
+                ),
                 tipo="error"
             )
             return

@@ -291,9 +291,11 @@ def registrar_alumno_en_web(driver, alumno: dict, config: dict) -> tuple:
     elif cedulado_tipo == "escolar" and alumno.get('cedula_escolar'):
         cedula_busqueda = alumno['cedula_escolar']
         tipo_busqueda = "cedula_escolar"
-    else:
+    elif alumno.get('cedula_padre'):
         cedula_busqueda = alumno.get('cedula_padre', '')
         tipo_busqueda = "parent_ref"
+    else:
+        return False, "Participante sin documento propio ni de representante (imposible registrar o buscar en InfoApp)"
 
     # Navegar a la actividad solo si no estamos en ella
     if not driver.current_url or "id_activity" not in driver.current_url:
@@ -715,7 +717,7 @@ def registrar_nuevo_usuario_perfil(driver, persona: dict, config_servicio: dict)
     ape_2 = " ".join(partes_ape[1:]) if len(partes_ape) > 1 else ""
 
     es_cedulado = (persona.get('cedulado') == 'si' and bool(persona.get('cedula')))
-    cedula_padre_num = re.sub(r'\D', '', str(persona.get('cedula_padre', '11111111'))) or "11111111"
+    cedula_padre_num = re.sub(r'\D', '', str(persona.get('cedula_padre', '')))
 
     if es_cedulado:
         cedula_raw = str(persona.get('cedula', '')).strip()
@@ -726,13 +728,15 @@ def registrar_nuevo_usuario_perfil(driver, persona: dict, config_servicio: dict)
         parent_dni_val = "No aplica"
         child_num_val = "0"
         correo_unico = f"ci{cedula_num}@infocentro.gob.ve"
-    else:
+    elif cedula_padre_num and len(cedula_padre_num) >= 5:
         cedula_num = ""
         nacionalidad = "V"
         has_doc_val = "No/Menor de edad"
         parent_dni_val = cedula_padre_num
         child_num_val = "1"
         correo_unico = f"ci{cedula_padre_num}_hijo1@infocentro.gob.ve"
+    else:
+        return False, "Menor sin documento propio ni cédula de representante válida (imposible registrar perfil en InfoApp)"
 
     telefono = persona.get('telefono', '0412-0000000')
     genero_str = "Mujer" if persona.get('genero') == 'F' else "Hombre"

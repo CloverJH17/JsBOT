@@ -1,91 +1,80 @@
 ========================================================================================
-                          DIAGRAMA DE FLUJO INTEGRAL — JsBOT v3.0
+                     DIAGRAMA DE FLUJO INTEGRAL — JsBOT v4.2.7
 ========================================================================================
 
-  [ INICIO: run.bat ]
-                │
-                ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │ FASE 0: VERIFICACIÓN DE ENTORNO Y RECUPERACIÓN              │
-  │ • Comprobación de librerías desde requirements.txt.         │
-  │ • ¿Existe 'logs/session_state.json' de sesión previa?       │
-  └──────────────────────────────┬──────────────────────────────┘
-                                 │
-                ┌────────────────┴────────────────┐
-             SÍ │                                 │ NO
-                ▼                                 ▼
-  ┌───────────────────────────┐     ┌───────────────────────────┐
-  │ MENÚ DE RESURRECCIÓN:     │     │ FASE 1: INGESTA ETL       │
-  │ ¿Retomar carga en curso?  │     │ • Selector interactivo    │
-  │ • SÍ ➔ Salta a FASE 4     │     │   (.xlsx, .xls, .ods,     │
-  │   (Usa URL y participante │     │    .csv | Bloquea .pdf)   │
-  │    donde quedó guardado)  │     │ • Selector de hojas       │
-  │ • NO ➔ Continúa a FASE 1  │     │   (Individual o Todas)    │
-  └─────────────┬─────────────┘     └─────────────┬─────────────┘
-                │                                 │
-                └────────────────┬────────────────┘
-                                 │
-                                 ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │ FASE 2: NORMALIZACIÓN INTELIGENTE Y DEDUPLICACIÓN           │
-  │ • Mapeo Regex bilingüe, SQL y tolerante a typos.            │
-  │ • Title Case inteligente con partículas en minúsculas.      │
-  │ • Data Sniffing: Identifica teléfonos en columnas genéricas.│
-  │ • Conversión de fechas seriales de Excel (42595 ➔ fecha).   │
-  │ • CLASIFICACIÓN DE DOCUMENTOS EN 3 CATEGORÍAS:              │
-  │   1. Cedulado (SAIME propia) ➔ ¿Cedulado? = 'Si'.           │
-  │   2. Cédula Escolar (>= 10 años sin SAIME):                 │
-  │      Fórmula: 1 + YY + CI_Rep_8 (ej. 11607579666).          │
-  │   3. Menor (< 10 años sin SAIME) ➔ ¿Cedulado? = 'No'.       │
-  │ • Deduplicación interactiva pre-carga en terminal.          │
-  │ • Respaldo preventivo en disco: 'estudiantes.csv' en raíz.  │
-  └──────────────────────────────┬──────────────────────────────┘
-                                 │
-                                 ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │ FASE 3: CONFIGURACIÓN WEB Y AUTENTICACIÓN                   │
-  │ • Ingesta de URL y extracción de ID de actividad.           │
-  │ • Confirmación interactiva de credenciales (config.ini).    │
-  │ • Creación de log: logs/[EN_PROCESO]_Actividad_<ID>...      │
-  │ • Inicialización de Checkpoint: 'logs/session_state.json'.  │
-  └──────────────────────────────┬──────────────────────────────┘
-                                 │
-                                 ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │ FASE 4: AUTOMATIZACIÓN INFOAPP (MOTOR MULTI-NAVEGADOR)      │
-  │ • Cascada: Mozilla Firefox ➔ Google Chrome ➔ Edge.          │
-  │ • Verificación de login (reintento si falla la clave).      │
-  │ • Panel Rich en vivo con progreso, ETA y métricas.          │
-  └──────────────────────────────┬──────────────────────────────┘
-                                 │
-                                 ▼
-                  ┌─────────────────────────────┐
-                  │ ¿Quedan alumnos por cargar? │
-                  └──────────────┬──────────────┘
-                                 │
-                ┌────────────────┴────────────────┐
-             SÍ │                                 │ NO
-                ▼                                 ▼
-  ┌───────────────────────────┐     ┌───────────────────────────┐
-  │ CICLO POR PARTICIPANTE:   │     │ FASE 5: PLANILLA OFICIAL  │
-  │ • Verificación de ventana │     │ • Lectura de metadatos    │
-  │   (auto-reapertura viva). │     │   (config/datos_actividad)│
-  │ • Desbloqueo de #cover-spin│    │ • Edición interactiva     │
-  │ • Búsqueda superior AJAX: │     │   campo por campo.        │
-  │   - Cedulado ➔ document_id│     │ • Modificación nativa XML │
-  │   - Escolar ➔ cedula_esc  │     │   en 'plantilla_base.ods' │
-  │   - Menor ➔ parent_ref    │     │ • Diálogo de guardado.    │
-  │ • Inyección segura JS     │     └─────────────┬─────────────┘
-  │   (cédula escolar vacía). │                   │
-  │ • Clic Guardar/Agregar.   │                   ▼
-  │ • VERIFICACIÓN ESTRICTA:  │     ┌───────────────────────────┐
-  │   Recarga y escaneo tabla.│     │ FASE 6: AUDITORÍA Y CIERRE│
-  │   - ¿Está? ➔ [+] Éxito.   │     │ • Reporte Excel (.xlsx)   │
-  │   - ¿No? ➔ Captura error  │     │   en 'logs/Auditoria_...'.│
-  │     y menú de incidencia. │     │ • Resumen estadístico.    │
-  │ • Actualiza Checkpoint    │     │ • Renombra log a:         │
-  │   en 'session_state.json'.│     │   logs/[COMPLETADO]...    │
-  └─────────────┬─────────────┘     │ • Limpia checkpoint.      │
-                │                   │ • Cierre de navegador.    │
-                ▼                   └───────────────────────────┘
-      [Siguiente alumno]
+                                [ INICIO: main.py ]
+                                         │
+                                         ▼
+            ┌────────────────────────────────────────────────────────┐
+            │ FASE 0: VERIFICACIÓN DE ENTORNO Y ARQUITECTURA BIMODAL │
+            │ • Diagnóstico pre-vuelo (Python >= 3.10, PyPI, SO).    │
+            │ • Detección de suite ofimática y navegadores.          │
+            │ • Selección de modo: GUI CustomTkinter o CLI Rich.     │
+            └───────────────────────────┬────────────────────────────┘
+                                        │
+                    ┌───────────────────┴───────────────────┐
+                    ▼                                       ▼
+  ╔═══════════════════════════════════╗   ╔═══════════════════════════════════╗
+  ║    RAMA A: CARGA MASIVA RPA       ║   ║    RAMA B: INSPECTOR AUDITORÍA    ║
+  ║     (Formación y Servicios)       ║   ║    (Balance Operativo v4.2.7)     ║
+  ╚═════════════════╤═════════════════╝   ╚═════════════════╤═════════════════╝
+                    │                                       │
+                    ▼                                       ▼
+  ┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+  │ A1: INGESTA Y NORMALIZACIÓN ETL   │   │ B1: CRITERIOS Y AISLAMIENTO       │
+  │ • Lectura .xlsx, .xls, .ods, .csv │   │ • Modo: Facilitador / Infocentro  │
+  │ • Clasificación Cédula SAIME,     │   │   o Resumen Estadal (Región).     │
+  │   Escolar o Menor s/documento.    │   │ • Aislamiento estricto: al buscar │
+  │ • Title Case y corrección CE.     │   │   por UID se limpia el infocentro.│
+  │ • Respaldo 'estudiantes.csv'.     │   │ • Rango de fechas y Rol Auditor.  │
+  └─────────────────┬─────────────────┘   └─────────────────┬─────────────────┘
+                    │                                       │
+                    ▼                                       ▼
+  ┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+  │ A2: PRE-VUELO Y DEDUPLICACIÓN     │   │ B2: MOTOR DE CONSULTA INFOAPP     │
+  │ • Visor modal tabular reactivo.   │   │ • Autenticación inicial Selenium. │
+  │ • Filtro de registros repetidos.  │   │ • ¿Modo Turbo HTTP activo?        │
+  │ • Saneamiento preventivo de lote. │   │   - SÍ ➔ Extrae cookies, cierra   │
+  └─────────────────┬─────────────────┘   │     WebDriver y ejecuta requests  │
+                    │                     │     concurrente (hasta 10 hilos). │
+                    ▼                     │   - NO ➔ Scraping con Selenium.   │
+  ┌───────────────────────────────────┐   └─────────────────┬─────────────────┘
+  │ A3: INYECCIÓN DOM Y VERIFICACIÓN  │                     │
+  │ • Cascada: Firefox -> Chrome/Edge │                     ▼
+  │ • Desbloqueo AJAX (#cover-spin).  │   ┌───────────────────────────────────┐
+  │ • Inyección JS y clic Guardar.    │   │ B3: PARSER DOM FALLBACK & CUADRE  │
+  │ • RECARGA Y ESCANEO EN VIVO:      │   │ • Capa 1: Metadatos en enlaces.   │
+  │   - ¿Aparece en tabla? ➔ Éxito.   │   │ • Capa 2: Fallback desde celdas   │
+  │   - ¿Falla? ➔ Screenshot & Pausa. │   │   visibles <td> y badges numéricos│
+  │ • Checkpoint 'session_state.json' │   │ • Clasificación: Formación,       │
+  └─────────────────┬─────────────────┘   │   Producto u Otras Actividades.   │
+                    │                     │ • Ecuación: Total == F + P + O    │
+                    ▼                     │ • Balance y Cuadre Matemático.    │
+  ┌───────────────────────────────────┐   └─────────────────┬─────────────────┘
+  │ A4: CIERRE Y ACTAS FORMATIVAS     │                     │
+  │ • Edición nativa XML de ODS       │                     ▼
+  │   ('config/plantilla_base.ods').  │   ┌───────────────────────────────────┐
+  │ • Guardado en 'Planillas/'.       │   │ B4: DASHBOARD Y MODALES AL FRENTE │
+  │ • Reporte Excel de incidencias en │   │ • 4 KPIs enriquecidos (promedios, │
+  │   'logs/Auditoria_Carga_*.xlsx'.  │   │   sedes únicas, trámite top).     │
+  │ • Limpieza limpia de checkpoint.  │   │ • Ventanas modales al frente      │
+  └───────────────────────────────────┘   │   (1100x650) con grab_set():      │
+                                          │   - 🎓 Formaciones y Actividades  │
+                                          │   - 🛠️ Servicios a Usuarios       │
+                                          │   - 👥 Resumen por Facilitador    │
+                                          │   (Buscador en vivo y sort).      │
+                                          └─────────────────┬─────────────────┘
+                                                            │
+                                                            ▼
+                                          ┌───────────────────────────────────┐
+                                          │ B5: EXPORTACIÓN MULTIFORMATO      │
+                                          │ • Selector de 5 formatos:         │
+                                          │   Excel (.xlsx), ODT, PDF, CSV,   │
+                                          │   o Vista en Pantalla (Consola).  │
+                                          │ • Botón único 'Exportar Reporte': │
+                                          │   Diálogo interactivo de ruta +   │
+                                          │   apertura automática en el SO.   │
+                                          │ • Excel con auto_filter activo en │
+                                          │   todas las columnas de Hoja 1.   │
+                                          │ • Guardado en 'Reportes_Auditoria'│
+                                          └───────────────────────────────────┘

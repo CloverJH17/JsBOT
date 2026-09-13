@@ -1,5 +1,5 @@
 ===============================================================================
-                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.1.0
+                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.2.7
 ===============================================================================
 
 1. normalizador_datos.py (Motor ETL y Clasificación Tripartita de Documentos):
@@ -15,6 +15,8 @@
   * Cédula Escolar (>= 10 años sin SAIME): `cedulado = 'escolar'`. Genera automáticamente:
     1 (Orden Parto) + YY (Año Nacimiento) + C.I. Representante a 8 dígitos (ej. 11607579666).
   * Menores no escolarizados (< 10 años sin SAIME): `cedulado = 'no'`. Vinculados a C.I. del padre.
+- Detección y corrección de cédulas escolares truncadas por Excel (ej. 12018) regenerando la clave correcta con la cédula del tutor.
+- Protección ante menores sin ningún documento (`auditar_integridad_lote`): alerta preventiva y omisión segura para evitar perfiles corruptos en InfoApp.
 - Compuertas interactivas de seguridad: deduplicación asistida en terminal, resolución de huérfanos, estimación de fechas por edad o fija y asignación de género.
 - Respaldo preventivo en disco: 'estudiantes.csv' en la raíz.
 
@@ -85,16 +87,40 @@
 -------------------------------------------------------------------------------
 - Aplicación de escritorio moderna basada en CustomTkinter con tema oscuro (Dark-Blue).
 - Navegación desacoplada por pestañas en el sidebar lateral:
-  * Formación: Carga masiva de participantes para actividades de formación presencial/virtual, con cableado reactivo de hilo secundario (worker thread) hacia el motor web Selenium, telemetría en vivo, inyección DOM real y generación automática de planillas formativas ODS.
-  * Servicios: Carga de beneficiarios y usuarios atendidos en servicios institucionales.
-  * Credenciales: Panel dedicado directamente en la barra lateral con persistencia reactiva bidireccional en 'config/config.ini' ([LOGIN]), toggle de visibilidad para contraseña protegida y telemetría de confirmación en tiempo real.
-  * Reportes: Generación directa de planillas formativas oficiales (.ods) y acceso rápido a logs.
+  * Formación: Carga masiva de participantes para actividades de formación presencial/virtual, con cableado reactivo de worker thread hacia Selenium, telemetría en vivo, inyección DOM real y generación automática de planillas ODS.
+  * Servicios: Carga de beneficiarios y usuarios atendidos en servicios institucionales con validación SAIME.
+  * Reportes: Módulo Inspector de Auditoría y Balance Operativo v4.2.7:
+    - Selector tripartito reactivo de modos: Por Facilitador (UID), Por Infocentro (Código) o Resumen Estadal (Región).
+    - Aislamiento estricto de criterios: al auditar por UID se limpia el infocentro para buscar globalmente al facilitador en cualquier sede.
+    - Switch Turbo (HTTP) activo por defecto para aceleración máxima.
+    - Switch Rol Auditor / Jefatura con modal de captura de credenciales seguras ([AUDITORIA]).
+    - Tarjetas de KPIs analíticas ampliadas: Actividades totales con sedes únicas, Estudiantes formados con promedio de alumnos por aula, Servicios brindados con trámite más recurrente y Estado de Cuadre matemático al 100%.
+    - Toolbar despejada: 3 botones de inspección (`🎓 Formaciones`, `🛠️ Servicios`, `👥 Facilitadores`) y grupo de exportación (`Formato:` desplegable con 5 tipos y botón interactivo `[ 💾 Exportar Reporte... ]` que guarda y abre el archivo automáticamente).
+    - Ventanas flotantes modales al frente (`_abrir_ventana_flotante_inspeccion`): geometría 1100x650, modal bloqueante estricta (`grab_set()`), buscador reactivo en tiempo real y cabeceras clickeables para ordenar columnas al instante.
+  * Planillas: Generación directa de planillas formativas oficiales (.ods) a partir de listas de participantes.
+  * Credenciales: Panel dedicado en sidebar con persistencia reactiva bidireccional en 'config/config.ini' ([LOGIN]), toggle de contraseña protegida y confirmación en tiempo real.
   * Diagnóstico: Cuadrícula de tarjetas visuales de estado del sistema (Python, SO, librerías, conectividad, navegadores, resolución).
   * Ajustes: Calibración interactiva de timeouts (Login, AJAX, DOM) y parámetros del sistema.
   * Créditos: Reconocimiento institucional, autoría, soporte comunitario y licencias.
-- Tarjeta de pre-vuelo reactiva con métricas automáticas al seleccionar hojas de cálculo (.xlsx, .xls, .ods, .csv).
-- Visor modal 'CTkToplevel' de datos de pre-vuelo con tabla interactiva tipo spreadsheet, coloreado distintivo por categoría (Cedulados, Escolares, Menores S/C) y detalles completos de la nómina.
-- Desacoplamiento definitivo CLI <-> GUI: Supresión total de peticiones o prompts interactivos de consola (InquirerPy / input()) durante la ingesta de archivos desde la interfaz gráfica; resolución automática y deduplicación silenciosa con reporte directo a la telemetría interna de la ventana.
-- Telemetría en tiempo real: Redirección thread-safe mediante cola de eventos ('queue.Queue') para sincronizar logs, progreso interpolado y estados del motor Selenium sin congelar la UI.
-- Arquitectura bimodal: Coexistencia con la consola CLI histórica, gobernada por Feature Flag ('settings.json' o flags de línea de comandos).
-- Consolidación de iconografía oficial en 'config/assets/iconos/': soporte de carga dinámica multiplataforma para diagnóstico, credenciales, formación, servicios, reportes, ajustes e info.
+
+10. auditor_reportes.py (Motor de Auditoría, Balance Operativo y Exportación Multiformato):
+-------------------------------------------------------------------------------
+- Extracción de actividades (`view=report`) y servicios (`view=services`) de InfoApp mediante Selenium o Requests HTTP concurrente.
+- PARSER DE DOBLE CAPA (DOM FALLBACK):
+  * Capa 1: Metadatos en enlaces href (`id_activity`, `user_id`, `code_info`, `activity_title`) y etiquetas `<p>` ocultas.
+  * Capa 2 (Fallback estructural): Extracción resiliente desde celdas visibles `<td>` (fecha, facilitador, infocentro, tema pedagógico y badges de participantes/productos).
+- MODO TURBO (HTTP CONCURRENTE):
+  * Sesión HTTP con `requests.Session` alimentada con las cookies de autenticación de Selenium.
+  * Descarga paralela multihilo con `ThreadPoolExecutor` (hasta 10 workers concurrentes), logrando scraping hasta 10 veces más rápido con mínimo consumo de CPU y RAM.
+- CLASIFICACIÓN MATEMÁTICA Y CUADRE:
+  * Clasifica cada actividad en: Formación pedagógica, Producto comunicacional u Otra actividad comunitaria.
+  * Verificación de la ecuación: `Total Actividades == Formaciones + Productos + Otras Actividades`.
+  * Detección automática de discrepancias y desglose de servicios (Cedulados vs Sin cédula).
+- CACHÉ LIGERO LOCAL:
+  * Persistencia en `logs/ultima_busqueda_inspector.json` para carga instantánea offline.
+- EXPORTACIÓN MULTIFORMATO:
+  * Libro Excel (.xlsx): 4 pestañas profesionales ("Resumen por Facilitador", "Actividades", "Servicios", "Resumen Ejecutivo") con autofiltro habilitado (`auto_filter.ref`) en todas las columnas de la hoja 1, colores institucionales y subtotales por sede.
+  * LibreOffice Writer (.odt): Generación pura nativa vía `zipfile` y XML OpenDocument sin dependencias pesadas.
+  * Documento PDF (.pdf): Generación vectorial nativa conforme al estándar PDF 1.4 sin bibliotecas externas.
+  * CSV plano (.csv): Exportación delimitada por comas codificada en UTF-8 con BOM para visualización universal.
+  * Vista en Pantalla (Consola): Informe ejecutivo formateado en cajas ASCII para telemetría directa.

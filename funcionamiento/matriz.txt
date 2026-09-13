@@ -1,8 +1,8 @@
 ===============================================================================
-           ÁRBOL DE COMPONENTES Y MATRIZ DEL SISTEMA — JsBOT v4.1.0
+           ÁRBOL DE COMPONENTES Y MATRIZ DEL SISTEMA — JsBOT v4.2.7
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation)
-Versión   : 4.1.0 (Gestión de Credenciales, ONLYOFFICE & PyPI Fast)
+Sistema   : JsBOT (Robotic Process Automation & Analytics)
+Versión   : 4.2.7 (Inspector de Auditoría, Modo Turbo HTTP, Modales al Frente & Auto-Filtro)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
 ===============================================================================
@@ -12,14 +12,14 @@ JsBOT/
 ├── linux.sh                        # Lanzador nativo Canaima/Debian GNU/Linux (PyPI Fast, PEP 668 bypass)
 ├── windows.bat                     # Lanzador nativo Microsoft Windows con verificación de entorno
 ├── instalar.sh                     # Script de clonación/actualización automatizada desde Git
-├── requirements.txt                # Dependencias técnicas optimizadas (v4.1.0)
+├── requirements.txt                # Dependencias técnicas optimizadas (v4.2.7)
 ├── estudiantes.csv                 # Respaldo temporal de la última normalización de datos
-├── README.md                       # Documentación general y guía rápida del sistema
+├── README.md                       # Documentación general, arquitectura y guía rápida del sistema
 ├── REGLAS_IA.md                    # Lineamientos de ingeniería y arquitectura del proyecto
 │
 ├── config/                         # 📂 CONFIGURACIONES, ASSETS Y PLANTILLA BASE
-│   ├── config.ini                  # Credenciales de acceso a InfoApp ([LOGIN]) persistencia reactiva
-│   ├── settings.json               # Configuración global v4.1.0 (interfaz, timeouts, URLs, navegador)
+│   ├── config.ini                  # Credenciales de acceso a InfoApp ([LOGIN] y [AUDITORIA])
+│   ├── settings.json               # Configuración global v4.2.7 (interfaz, timeouts, URLs, navegador)
 │   ├── config_servicios.json       # Parámetros y tipologías para carga masiva de Servicios
 │   ├── datos_actividad.json        # Metadatos institucionales persistentes (facilitador, infocentro)
 │   ├── plantilla_base.ods          # Plantilla oficial en blanco con membretes y estilos ODS
@@ -27,12 +27,13 @@ JsBOT/
 │       └── iconos/                 # Iconografía PNG/SVG multiplataforma para CustomTkinter
 │
 ├── modulos/                        # 📂 MOTOR TÉCNICO MODULAR (Arquitectura Limpia)
-│   ├── __init__.py                 # Metadatos del paquete v4.1.0
-│   ├── interfaz_grafica.py         # GUI nativa CustomTkinter (Formación, Servicios, Credenciales, Reportes, Diagnóstico, Ajustes, Créditos)
+│   ├── __init__.py                 # Metadatos del paquete v4.2.7
+│   ├── interfaz_grafica.py         # GUI nativa CustomTkinter (Formación, Servicios, Inspector, Credenciales, Diagnóstico, Ajustes, Créditos)
+│   ├── auditor_reportes.py         # Motor de inspección, balance operativo, modo turbo HTTP, DOM fallback y exportación multiformato
 │   ├── interfaz_usuario.py         # Interfaz CLI interactiva para terminal (Rich + InquirerPy)
 │   ├── orquestador.py              # Orquestador bimodal maestro, control de estados y métricas
-│   ├── normalizador_datos.py       # Motor ETL universal, clasificación tripartita, Title Case y deduplicación
-│   ├── automatizador_web.py        # Automatización web Selenium multi-navegador con verificación DOM en vivo
+│   ├── normalizador_datos.py       # Motor ETL universal, clasificación tripartita, Title Case, deduplicación y auditoría de lotes
+│   ├── automatizador_web.py        # Automatización web Selenium multi-navegador con verificación DOM en vivo y validación documental
 │   ├── gestor_sesion.py            # Persistencia de sesiones, checkpoints y generación de reportes Excel
 │   ├── generador_planilla.py       # Inyector XML para modificación nativa de planillas oficiales ODS
 │   ├── verificador_entorno.py      # Diagnóstico pre-vuelo (Python, navegadores, ONLYOFFICE/LibreOffice/Excel)
@@ -41,11 +42,20 @@ JsBOT/
 ├── logs/                           # 📂 AUDITORÍA, CHECKPOINTS Y EVIDENCIAS
 │   ├── session_state.json          # Punto de control ante interrupciones en Formación
 │   ├── session_state_servicios.json# Punto de control ante interrupciones en Servicios
+│   ├── ultima_busqueda_inspector.json # Caché ligero local de la última inspección ejecutada
 │   ├── log_actividad_*.txt         # Registros de auditoría en texto plano con marca temporal
-│   ├── Auditoria_Carga_*.xlsx      # Reportes de auditoría en Excel (Exitosos e Incidencias)
+│   ├── Auditoria_Carga_*.xlsx      # Reportes de auditoría de carga en Excel (Exitosos e Incidencias)
 │   └── screenshots/                # 📸 Capturas de pantalla automáticas de incidencias web DOM
 │
-├── tests/                          # 📂 SUITE DE PRUEBAS AUTOMATIZADAS Y RESILIENCIA
+├── Reportes_Auditoria/             # 📂 REPORTES GENERADOS POR EL INSPECTOR (Excel, ODT, PDF, CSV)
+│
+├── Planillas/                      # 📂 ALMACENAMIENTO DE PLANILLAS FORMATIVAS GENERADAS (.ods)
+│
+├── tests/                          # 📂 SUITE DE PRUEBAS AUTOMATIZADAS Y RESILIENCIA (276 Tests)
+│   ├── test_auditor_reportes.py    # Pruebas del motor de auditoría de reportes y balances
+│   ├── test_inspector_suite.py     # Suite integral del inspector (DOM Fallback, Turbo HTTP, Caché, Auto-Filtro)
+│   ├── test_interfaz_inspector.py  # Pruebas unitarias de widgets, modales al frente y reactividad GUI
+│   ├── test_validacion_documentos.py # Pruebas de validación documental y reglas SAIME/Escolar
 │   ├── test_automatizador_web.py   # Pruebas del motor Selenium y manipulación DOM
 │   ├── test_caos_apagon.py         # Simulación de cortes eléctricos y recuperación de checkpoints
 │   ├── test_casos_extremos.py      # Pruebas de estrés y casos extremos en normalización ETL
@@ -58,10 +68,8 @@ JsBOT/
 │   ├── test_validacion_ods.py      # Validación de esquema y datos de salida en hojas ODS
 │   └── test_verificador_entorno.py # Pruebas del diagnóstico pre-vuelo de suites ofimáticas
 │
-├── Planillas/                      # 📂 ALMACENAMIENTO DE PLANILLAS FORMATIVAS GENERADAS (.ods)
-│
 └── funcionamiento/                 # 📂 MANUALES Y DOCUMENTACIÓN TÉCNICA OPERATIVA
     ├── version.txt                 # Historial consolidado de versiones y registro de cambios
-    ├── funcionamiento.txt          # Manual de funcionamiento técnico operativo v4.1.0
-    ├── diagrama de flujo.txt       # Diagrama de flujo integral del sistema bimodal
-    └── matriz.txt                  # Árbol y matriz de componentes del sistema v4.1.0
+    ├── funcionamiento.txt          # Manual de funcionamiento técnico operativo v4.2.7
+    ├── diagrama de flujo.txt       # Diagrama de flujo integral del sistema (Carga RPA + Inspector)
+    └── matriz.txt                  # Árbol y matriz de componentes del sistema v4.2.7

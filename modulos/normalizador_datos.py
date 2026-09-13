@@ -847,8 +847,10 @@ def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = Non
                 ced_alumno = ""
 
             # C. Cédula Escolar Truncada por Excel (ej. 12018)
+            es_ce_truncada = False
             if ced_alumno and 4 <= len(ced_digitos) <= 6 and ced_digitos.startswith(('120', '118', '119', '121', '122', '123', '124')):
                 ced_alumno = ""
+                es_ce_truncada = True
 
             # D. Cédula de adulto en menor (< 30 millones en menores de 10 años / nacidos >= 2015)
             if ced_alumno and ced_digitos.isdigit():
@@ -867,11 +869,20 @@ def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = Non
                 is_cedulado = "escolar"
                 ced_escolar = ced_escolar_previa
                 ced_padre_final = ced_padre
-            else:
+            elif es_ce_truncada:
                 is_cedulado = "escolar"
-                tutor_ci = ced_padre if ced_padre and len(re.sub(r'\D', '', str(ced_padre))) >= 5 else "11111111"
+                tutor_ci = re.sub(r'\D', '', str(ced_padre)) if ced_padre else ""
+                ced_escolar = generar_cedula_escolar(fecha_iso, tutor_ci, "1") if (tutor_ci and len(tutor_ci) >= 5) else ""
+                ced_padre_final = tutor_ci
+            elif ced_padre and len(re.sub(r'\D', '', str(ced_padre))) >= 5:
+                is_cedulado = "escolar"
+                tutor_ci = re.sub(r'\D', '', str(ced_padre))
                 ced_escolar = generar_cedula_escolar(fecha_iso, tutor_ci, "1")
-                ced_padre_final = ced_padre
+                ced_padre_final = tutor_ci
+            else:
+                is_cedulado = "sin_documento"
+                ced_escolar = ""
+                ced_padre_final = ""
 
             participantes.append({
                 'nombre': raw_nom,
@@ -887,6 +898,50 @@ def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = Non
             })
 
     return participantes
+
+def auditar_integridad_lote(participantes: list, ruta_archivo: str = "") -> dict:
+    """
+    Audita la consistencia global de una lista de participantes.
+    Identifica faltantes críticos: participantes sin documento, ausencia de géneros, etc.
+    """
+    total = len(participantes)
+    sin_doc = 0
+    con_saime = 0
+    con_escolar = 0
+    sin_genero = 0
+    sin_nacimiento = 0
+
+    for p in participantes:
+        ced = str(p.get('cedula', '') or '').strip()
+        ced_esc = str(p.get('cedula_escolar', '') or '').strip()
+        ced_pad = str(p.get('cedula_padre', '') or '').strip()
+
+        if ced:
+            con_saime += 1
+        elif ced_esc or (ced_pad and len(ced_pad) >= 5):
+            con_escolar += 1
+        else:
+            sin_doc += 1
+
+        if not p.get('genero'):
+            sin_genero += 1
+        if not p.get('nacimiento'):
+            sin_nacimiento += 1
+
+    requiere_atencion = (sin_doc > 0)
+    bloqueante_registro = (sin_doc == total and total > 0)
+
+    return {
+        "total": total,
+        "sin_documento": sin_doc,
+        "con_saime": con_saime,
+        "con_escolar": con_escolar,
+        "sin_genero": sin_genero,
+        "sin_nacimiento": sin_nacimiento,
+        "requiere_atencion": requiere_atencion,
+        "bloqueante_registro": bloqueante_registro,
+        "archivo": os.path.basename(ruta_archivo) if ruta_archivo else ""
+    }
 
 def ejecutar_modulo_etl(es_solo_planilla: bool = False) -> list:
     """Función de entrada del normalizador ETL para actividades formativas o planillas."""
