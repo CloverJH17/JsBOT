@@ -37,14 +37,9 @@ CONFIG_DIR = os.path.join(BASE_DIR, "config")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "config.ini")
 REPORTES_DIR = os.path.join(BASE_DIR, "Reportes_Auditoria")
 CACHE_INSPECTOR_PATH = os.path.join(BASE_DIR, "logs", "ultima_busqueda_inspector.json")
-
-LISTA_ESTADOS_VENEZUELA = [
-    "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar",
-    "Carabobo", "Cojedes", "Delta Amacuro", "Falcón", "Guárico", "Lara",
-    "Mérida", "Miranda", "Monagas", "Nueva Esparta", "Portuguesa", "Sucre",
-    "Táchira", "Trujillo", "La Guaira", "Yaracuy", "Zulia", "Distrito Capital",
-    "Dependencias Federales", "Guayana Esequiba"
-]
+from modulos.driver_factory import obtener_driver_resiliente
+from modulos.identidad_utils import LISTA_ESTADOS_VENEZUELA
+from modulos.web_utils import limpiar_overlays, esperar_desbloqueo_ajax
 
 def guardar_cache_inspector(resultado: dict, ruta_archivo: str = None) -> str:
     """
@@ -140,47 +135,13 @@ def cargar_credenciales_auditoria(rol_auditor: bool = False) -> tuple:
     return "", ""
 
 def iniciar_driver_auditoria(headless: bool = False):
-    """Instancia el WebDriver con opciones optimizadas para login inicial silencioso o visible."""
-    try:
-        from selenium.webdriver.chrome.options import Options as ChromeOptions
-        opts = ChromeOptions()
-        if headless:
-            opts.add_argument("--headless=new")
-        opts.add_argument("--start-maximized")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--log-level=3")
-        return webdriver.Chrome(options=opts)
-    except Exception:
-        try:
-            from selenium.webdriver.firefox.options import Options as FirefoxOptions
-            opts = FirefoxOptions()
-            if headless:
-                opts.add_argument("--headless")
-            driver = webdriver.Firefox(options=opts)
-            if not headless:
-                driver.maximize_window()
-            return driver
-        except Exception:
-            from selenium.webdriver.edge.options import Options as EdgeOptions
-            opts = EdgeOptions()
-            if headless:
-                opts.add_argument("--headless=new")
-            opts.add_argument("--start-maximized")
-            return webdriver.Edge(options=opts)
+    """Instancia el WebDriver utilizando la factoría centralizada resiliente."""
+    return obtener_driver_resiliente(headless=headless)
 
 def esperar_desbloqueo(driver, timeout: int = 12):
     """Elimina indicadores de carga (#cover-spin) y overlays que bloquean la navegación."""
-    try:
-        driver.execute_script("""
-            document.querySelectorAll('#cover-spin, .toastify, .modal-backdrop, .swal2-container')
-                .forEach(el => { el.style.display = 'none'; });
-        """)
-        WebDriverWait(driver, timeout).until(
-            EC.invisibility_of_element_located((By.ID, "cover-spin"))
-        )
-    except Exception:
-        pass
+    limpiar_overlays(driver)
+    esperar_desbloqueo_ajax(driver, timeout=timeout)
 
 def autenticar_infoapp(driver, usuario: str, clave: str) -> bool:
     """Inicia sesión en el portal de administración de InfoApp."""

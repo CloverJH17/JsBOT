@@ -26,6 +26,12 @@ from selenium.common.exceptions import (
 
 from modulos.gestor_sesion import registrar_evento_log, guardar_estado_sesion
 from modulos import config_manager as cm
+from modulos.driver_factory import obtener_driver_resiliente
+from modulos.web_utils import (
+    limpiar_overlays as core_limpiar_overlays,
+    esperar_desbloqueo_ajax as core_esperar_desbloqueo_ajax,
+    escribir_input_nativo_js
+)
 from modulos.interfaz_usuario import (
     prompt_reintentar_alumno,
     renderizar_panel_carga,
@@ -66,44 +72,22 @@ def capturar_pantalla_error(driver, doc_str: str):
 # -----------------------------------------------------------------------------
 
 def _iniciar_firefox(maximizado: bool):
-    try:
-        from selenium.webdriver.firefox.options import Options as FirefoxOptions
-        opts = FirefoxOptions()
-        driver = webdriver.Firefox(options=opts)
-        if maximizado:
+    """Delega el arranque a la factoría centralizada de WebDriver."""
+    driver = obtener_driver_resiliente(headless=False)
+    if driver and maximizado:
+        try:
             driver.maximize_window()
-        print("🌐 Navegador iniciado: Mozilla Firefox.")
-        return driver
-    except Exception:
-        print("⚠️ Mozilla Firefox no pudo iniciar. Intentando con Google Chrome...")
-        return None
+        except Exception:
+            pass
+    return driver
 
 def _iniciar_chrome(maximizado: bool):
-    try:
-        from selenium.webdriver.chrome.options import Options as ChromeOptions
-        opts = ChromeOptions()
-        if maximizado:
-            opts.add_argument("--start-maximized")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(options=opts)
-        print("🌐 Navegador iniciado: Google Chrome.")
-        return driver
-    except Exception:
-        print("⚠️ Google Chrome no pudo iniciar. Intentando con Microsoft Edge...")
-        return None
+    """Delega el arranque a la factoría centralizada de WebDriver."""
+    return obtener_driver_resiliente(headless=False)
 
 def _iniciar_edge(maximizado: bool):
-    try:
-        from selenium.webdriver.edge.options import Options as EdgeOptions
-        opts = EdgeOptions()
-        if maximizado:
-            opts.add_argument("--start-maximized")
-        driver = webdriver.Edge(options=opts)
-        print("🌐 Navegador iniciado: Microsoft Edge.")
-        return driver
-    except Exception:
-        return None
+    """Delega el arranque a la factoría centralizada de WebDriver."""
+    return obtener_driver_resiliente(headless=False)
 
 FABRICAS_NAVEGADOR = {
     "firefox": _iniciar_firefox,
@@ -126,30 +110,14 @@ def iniciar_navegador():
     return None
 
 def limpiar_overlays(driver):
-    """Elimina toastify, alertas flotantes y modales que bloqueen clics."""
-    try:
-        driver.execute_script("""
-            document.querySelectorAll('.toastify, .alert, .badge, .modal-backdrop, .swal2-container')
-                .forEach(el => el.remove());
-        """)
-    except Exception:
-        pass
+    """Elimina toastify, alertas flotantes y modales delegando a modulos.web_utils."""
+    core_limpiar_overlays(driver)
 
 def esperar_desbloqueo_ajax(driver, timeout=None):
-    """Espera activamente que desaparezca el indicador de carga (#cover-spin) y concluyan peticiones jQuery."""
+    """Espera activamente que desaparezca el indicador de carga delegando a modulos.web_utils."""
     if timeout is None:
         timeout = obtener_timeout_ajax()
-    try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("""
-                let spin = document.getElementById('cover-spin');
-                let spinOculto = !spin || spin.style.display === 'none' || getComputedStyle(spin).display === 'none';
-                let jqListo = (typeof window.jQuery !== 'undefined') ? (window.jQuery.active === 0) : true;
-                return spinOculto && jqListo;
-            """)
-        )
-    except Exception:
-        pass
+    core_esperar_desbloqueo_ajax(driver, timeout=timeout)
 
 def realizar_login(driver, config: dict):
     """Ejecuta el inicio de sesión en InfoApp."""

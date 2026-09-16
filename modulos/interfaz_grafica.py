@@ -27,6 +27,7 @@ import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
 from PIL import Image
+import modulos.entorno as entorno
 
 # Asegurar acceso a la raíz del proyecto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,6 +80,7 @@ try:
         extraer_id_servicio,
         guardar_estado_sesion,
         guardar_estado_sesion_servicios,
+        leer_estado_sesion,
         limpiar_estado_sesion,
         limpiar_estado_sesion_servicios,
         finalizar_log_exito,
@@ -109,7 +111,7 @@ class JsBotGUI(ctk.CTk):
         super().__init__()
 
         # 1. Configuración de Ventana Principal (Calibrada para 1366x768)
-        self.title("JsBOT (RPA) — Versión 4.2.0")
+        self.title("JsBOT (RPA) — Versión 4.3.0")
         self.geometry("1020x670")
         self.minsize(980, 620)
 
@@ -216,6 +218,10 @@ class JsBotGUI(ctk.CTk):
         else:
             self._agregar_log(f"[ADVERTENCIA] Error cargando módulos: {ERROR_IMPORTACION}")
 
+        # Comprobar si hay sesión previa interrumpida por apagón o corte de red
+        if MODULOS_DISPONIBLES:
+            self.after(300, self.comprobar_sesion_interrumpida_gui)
+
     def _iniciar_escucha_cola(self):
         """Procesa de forma continua y segura los eventos emitidos por hilos secundarios (Cero estrés de CPU)."""
         try:
@@ -255,6 +261,75 @@ class JsBotGUI(ctk.CTk):
         pos_x = max(0, int((pantalla_ancho - ancho) / 2))
         pos_y = max(0, int((pantalla_alto - alto) / 2))
         self.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
+
+    def comprobar_sesion_interrumpida_gui(self):
+        """Detecta checkpoints guardados tras caídas de red o apagones y levanta un modal de rescate."""
+        try:
+            estado = leer_estado_sesion()
+            if estado and estado.get("participantes") and estado.get("indice_ultimo_procesado", 0) > 0:
+                total = len(estado["participantes"])
+                idx = estado["indice_ultimo_procesado"]
+                if idx < total:
+                    self._mostrar_modal_recuperacion(estado, idx, total)
+        except Exception as e:
+            self._agregar_log(f"[AVISO] Error al verificar sesión previa: {e}")
+
+    def _mostrar_modal_recuperacion(self, estado: dict, idx: int, total: int):
+        modal = ctk.CTkToplevel(self)
+        modal.title("Sesión Previa Detectada")
+        modal.geometry("460x220")
+        modal.resizable(False, False)
+        try:
+            modal.grab_set()
+        except Exception:
+            pass
+
+        lbl = ctk.CTkLabel(
+            modal,
+            text=f"🚨 Se detectó una sesión interrumpida por corte de luz o red.\n"
+                 f"Actividad ID: {estado.get('id_actividad', 'N/A')}\n"
+                 f"Progreso alcanzado: Alumno {idx} de {total} procesados.\n\n"
+                 f"¿Deseas retomar la carga exactamente donde quedó?",
+            font=("Segoe UI", 13),
+            wraplength=420
+        )
+        lbl.pack(pady=20)
+
+        frame_btns = ctk.CTkFrame(modal, fg_color="transparent")
+        frame_btns.pack(pady=10)
+
+        btn_retomar = ctk.CTkButton(
+            frame_btns,
+            text="Retomar Carga",
+            fg_color="#2ecc71",
+            hover_color="#27ae60",
+            command=lambda: [modal.destroy(), self._reanudar_flujo_desde_estado(estado)]
+        )
+        btn_retomar.pack(side="left", padx=10)
+
+        btn_descartar = ctk.CTkButton(
+            frame_btns,
+            text="Descartar Sesión",
+            fg_color="#e74c3c",
+            hover_color="#c0392b",
+            command=lambda: [limpiar_estado_sesion(), modal.destroy()]
+        )
+        btn_descartar.pack(side="right", padx=10)
+
+    def _reanudar_flujo_desde_estado(self, estado: dict):
+        """Carga los datos y participantes de la sesión interrumpida para continuar."""
+        try:
+            self.participantes_cargados = estado.get("participantes", [])
+            url = estado.get("url") or estado.get("url_actividad") or ""
+            if url and hasattr(self, "entry_url_formacion"):
+                self.entry_url_formacion.delete(0, tk.END)
+                self.entry_url_formacion.insert(0, url)
+            self._cambiar_vista("Formacion")
+            idx = estado.get("indice_ultimo_procesado", 0)
+            total = len(self.participantes_cargados)
+            self._agregar_log(f"[RECUPERACIÓN] Sesión reanudada: Alumno {idx} de {total} participantes.")
+        except Exception as e:
+            self._agregar_log(f"[ERROR] No se pudo reanudar sesión: {e}")
 
     def _cargar_iconos(self):
         """Carga los iconos PNG desde config/assets/iconos/ usando CTkImage."""
@@ -499,6 +574,7 @@ class JsBotGUI(ctk.CTk):
         self.frame_credenciales = self._crear_vista_credenciales(self.vistas_container)
         self.vistas["Credenciales"] = self.frame_credenciales
         self.vistas["Formacion"] = self._crear_vista_formacion(self.vistas_container)
+        self.vistas["Formación"] = self.vistas["Formacion"]
         self.vistas["Servicios"] = self._crear_vista_servicios(self.vistas_container)
         self.vistas["Planillas"] = self._crear_vista_reportes(self.vistas_container)
         self.vistas["Reportes"] = self.frame_reportes = self._crear_vista_inspector(self.vistas_container)

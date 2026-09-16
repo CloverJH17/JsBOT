@@ -63,6 +63,12 @@ from modulos.interfaz_usuario import (
     imprimir_banner
 )
 from modulos import config_manager as cm
+from modulos.identidad_utils import (
+    limpiar_cedula_universal,
+    formatear_telefono_venezolano,
+    formatear_nombre_institucional,
+    LISTA_ESTADOS_VENEZUELA
+)
 
 FORMATOS_VALIDOS = ('.xlsx', '.xls', '.ods', '.csv', '.txt')
 TELEFONO_DEFAULT = cm.telefono_por_defecto()
@@ -218,22 +224,9 @@ def limpiar_texto(val) -> str:
 def formatear_nombre_propio(texto: str) -> str:
     """
     Convierte nombres y apellidos a formato Capitalizado/Title Case
-    respetando partículas intermedias en español (de, del, la, los, y, etc.).
+    respetando partículas intermedias delegando a modulos.identidad_utils.
     """
-    if not texto:
-        return ""
-    palabras = texto.strip().split()
-    if not palabras:
-        return ""
-    
-    resultado = []
-    for i, p in enumerate(palabras):
-        p_lower = p.lower()
-        if i > 0 and p_lower in PARTICULAS_MENORES:
-            resultado.append(p_lower)
-        else:
-            resultado.append(p.capitalize())
-    return " ".join(resultado)
+    return formatear_nombre_institucional(texto)
 
 def es_nombre_valido(nombre: str) -> bool:
     """Verifica que el nombre contenga letras válidas y no sea una fila de totales, estadísticas o ruido."""
@@ -301,29 +294,66 @@ def generar_cedula_escolar(fecha_nac_iso: str, cedula_padre: str, pos_hijo: str 
 
 def limpiar_telefono(val) -> str:
     """
-    Formatea y valida rigurosamente números telefónicos venezolanos:
-    - Normaliza prefijos internacionales (+58, 58).
-    - Ajusta números de 10 dígitos anteponiendo el 0.
-    - Retorna el formato estándar 04XX-XXXXXXX o default '0412-0000000'.
+    Formatea y valida rigurosamente números telefónicos venezolanos delegando a modulos.identidad_utils.
     """
     txt = limpiar_texto(val)
-    if not txt:
-        return TELEFONO_DEFAULT
-    
-    digitos = re.sub(r'\D', '', txt)
-    
-    if digitos.startswith('58') and len(digitos) in (12, 13):
-        digitos = '0' + digitos[2:]
-        
-    if len(digitos) == 10 and digitos.startswith(PREFIJOS_SIN_CERO):
-        digitos = '0' + digitos
-        
-    if len(digitos) == 11 and digitos.startswith(PREFIJOS_VALIDOS_TLF):
-        return f"{digitos[:4]}-{digitos[4:]}"
-    elif len(digitos) == 11:
-        return f"{digitos[:4]}-{digitos[4:]}"
-        
-    return TELEFONO_DEFAULT
+    return formatear_telefono_venezolano(txt, default=TELEFONO_DEFAULT)
+
+def resolver_huerfanos_de_documento(participantes: list, modo_interactivo: bool = True) -> list:
+    """
+    Identifica y gestiona participantes sin documento de identidad propio ni de tutor ('sin_documento').
+    En CLI (modo_interactivo=True), permite consultar u omitir por consola.
+    En GUI (modo_interactivo=False), no bloquea y mantiene los registros para resolución visual.
+    """
+    if not participantes:
+        return []
+    huerfanos = [p for p in participantes if p.get('cedulado') == 'sin_documento' or (not p.get('cedula') and not p.get('cedula_escolar') and not p.get('cedula_padre'))]
+    if not huerfanos:
+        return participantes
+
+    if modo_interactivo and sys.stdin.isatty():
+        try:
+            print(f"\n⚠️  [ATENCIÓN] Se detectaron {len(huerfanos)} participante(s) sin cédula ni representante:")
+            for h in huerfanos[:3]:
+                print(f"   • {h.get('nombre', '')} {h.get('apellido', '')}")
+            resp = input(f"¿Deseas conservar estos registros para carga de cortesía? [S/N] (Enter = Sí): ").strip().lower()
+            if resp == 'n':
+                return [p for p in participantes if p not in huerfanos]
+        except Exception:
+            pass
+
+    return participantes
+
+def resolver_fechas_faltantes(participantes: list, modo_interactivo: bool = True, anio_referencia: int = None) -> list:
+    """
+    Resuelve fechas de nacimiento ausentes calculándolas a partir de la edad si está presente.
+    No bloquea la GUI.
+    """
+    if not participantes:
+        return []
+    anio_actual = anio_referencia or datetime.now().year
+    for p in participantes:
+        if not p.get('nacimiento') and p.get('edad'):
+            try:
+                edad_val = int(p['edad'])
+                if 1 <= edad_val <= 100:
+                    anio_est = anio_actual - edad_val
+                    p['nacimiento'] = f"{anio_est}-01-01"
+            except Exception:
+                pass
+    return participantes
+
+def resolver_telefonos_faltantes(participantes: list, modo_interactivo: bool = True, default: str = None) -> list:
+    """
+    Garantiza que todos los participantes tengan un teléfono asignado usando el valor institucional por defecto.
+    """
+    if not participantes:
+        return []
+    tel_def = default or TELEFONO_DEFAULT
+    for p in participantes:
+        if not p.get('telefono') or p.get('telefono') == "0412-0000000":
+            p['telefono'] = tel_def
+    return participantes
 
 def limpiar_genero(val) -> str:
     """
@@ -540,8 +570,14 @@ def deduplicar_participantes(
                 pointer="> "
             ).execute()
         except Exception:
-            resp = input(f"¿Deseas eliminar los duplicados y dejar solo {len(unicos)} registros únicos? [S/N] (Enter = Sí): ").strip().lower()
-            opc = "KEEP" if resp == 'n' else "DEDUP"
+            if not sys.stdin.isatty():
+                opc = "DEDUP"
+            else:
+                try:
+                    resp = input(f"¿Deseas eliminar los duplicados y dejar solo {len(unicos)} registros únicos? [S/N] (Enter = Sí): ").strip().lower()
+                    opc = "KEEP" if resp == 'n' else "DEDUP"
+                except Exception:
+                    opc = "DEDUP"
 
         if opc == "DEDUP":
             print(f"✅ Lista deduplicada: {len(unicos)} participantes únicos listos para carga.")
