@@ -27,6 +27,7 @@ from selenium.common.exceptions import (
 from modulos.gestor_sesion import registrar_evento_log, guardar_estado_sesion
 from modulos import config_manager as cm
 from modulos.driver_factory import obtener_driver_resiliente
+import modulos.entorno as entorno
 from modulos.web_utils import (
     limpiar_overlays as core_limpiar_overlays,
     esperar_desbloqueo_ajax as core_esperar_desbloqueo_ajax,
@@ -39,10 +40,18 @@ from modulos.interfaz_usuario import (
     limpiar_consola
 )
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCREENSHOTS_DIR = os.path.join(BASE_DIR, "logs", "screenshots")
-CONFIG_DIR = os.path.join(BASE_DIR, "config")
-SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
+try:
+    from playwright.sync_api import sync_playwright
+    PLAYWRIGHT_DISPONIBLE = True
+except ImportError:
+    sync_playwright = None
+    PLAYWRIGHT_DISPONIBLE = False
+
+BASE_DIR = str(entorno.RAIZ_PROYECTO)
+SCREENSHOTS_DIR = str(entorno.CARPETA_SCREENSHOTS)
+CONFIG_DIR = str(entorno.CARPETA_CONFIG)
+SETTINGS_FILE = str(entorno.ARCHIVO_SETTINGS)
+
 
 def obtener_timeout_ajax() -> int:
     """Obtiene el timeout de espera AJAX configurado en settings.json (por defecto 15s)."""
@@ -120,6 +129,184 @@ def iniciar_navegador():
 
     print("\n❌ ERROR: No se encontró ningún navegador compatible (Firefox, Chrome o Edge).")
     return None
+
+# =============================================================================
+# MOTOR PLAYWRIGHT CONTEXTO PERSISTENTE Y AUTO-WAITING
+# =============================================================================
+
+def iniciar_contexto_playwright(user_data_dir: str = None, headless: bool = False, navegador: str = "chromium"):
+    """
+    Inicia un contexto persistente con Playwright (launch_persistent_context) que mantiene
+    cookies de sesión, caché y credenciales de InfoApp en data/playwright_context.
+    """
+    if not PLAYWRIGHT_DISPONIBLE or sync_playwright is None:
+        raise RuntimeError("Playwright no está instalado o disponible en el entorno.")
+
+    if user_data_dir is None:
+        user_data_dir = str(entorno.CARPETA_DATA / "playwright_context")
+    os.makedirs(user_data_dir, exist_ok=True)
+
+    pw = sync_playwright().start()
+    browser_type = getattr(pw, navegador, pw.chromium)
+    
+    args = ["--start-maximized"]
+    if sys.platform.startswith("linux"):
+        args.extend(["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
+
+    context = browser_type.launch_persistent_context(
+        user_data_dir=user_data_dir,
+        headless=headless,
+        args=args,
+        no_viewport=True
+    )
+    return pw, context
+
+def registrar_alumno_playwright(page, alumno: dict, config: dict) -> tuple:
+    """
+    Registra a un participante usando Playwright con auto-waiting nativo:
+      - page.locator("#q_participante").fill(cedula_id)
+      - page.locator("#user_has_document").select_option("Si")
+      - page.locator("button.btn-primary.btn-block").click()
+    """
+    url_actividad = config.get('url', '')
+    cedulado_tipo = alumno.get('cedulado', 'si')
+
+    if cedulado_tipo == "si" and alumno.get('cedula'):
+        cedula_busqueda = alumno['cedula']
+        tipo_busqueda = "document_id"
+    elif cedulado_tipo == "escolar" and alumno.get('cedula_escolar'):
+        cedula_busqueda = alumno['cedula_escolar']
+        tipo_busqueda = "cedula_escolar"
+    elif alumno.get('cedula_padre'):
+        cedula_busqueda = alumno.get('cedula_padre', '')
+        tipo_busqueda = "parent_ref"
+    else:
+        return False, "Participante sin documento propio ni de representante"
+
+    if not page.url or "id_activity" not in page.url:
+        page.goto(url_actividad)
+        page.wait_for_load_state("domcontentloaded")
+
+    # 1. Búsqueda superior con Auto-Waiting
+    page.locator("#search_field").select_option(tipo_busqueda)
+    page.locator("#q_participante").fill(str(cedula_busqueda))
+    
+    lupa_btn = page.locator("button[onclick*='codigoAJAX'], button.btn-primary.btn-block").first
+    lupa_btn.click()
+
+    # 2. Esperar respuesta AJAX / presencia de campo name
+    page.locator("#name").wait_for(state="attached", timeout=10000)
+    nombre_detectado = page.locator("#name").input_value()
+    es_preexistente = bool(nombre_detectado and nombre_detectado.strip() != "")
+
+    partes_nom = alumno.get('nombre', '').split()
+    nom_1 = partes_nom[0] if partes_nom else alumno.get('nombre', '')
+    nom_2 = " ".join(partes_nom[1:]) if len(partes_nom) > 1 else ""
+
+    partes_ape = alumno.get('apellido', '').split()
+    ape_1 = partes_ape[0] if partes_ape else alumno.get('apellido', '')
+    ape_2 = " ".join(partes_ape[1:]) if len(partes_ape) > 1 else ""
+
+    if not es_preexistente:
+        page.locator("#user_nationality").select_option("V")
+        
+        if cedulado_tipo == "si":
+            page.locator("#user_has_document").select_option("Si")
+            page.locator("#document_id").fill(str(alumno.get('cedula', '')))
+        elif cedulado_tipo == "escolar":
+            try:
+                page.locator("#user_has_document").select_option(label="Cédula escolar")
+            except Exception:
+                page.locator("#user_has_document").select_option("Cédula escolar")
+            page.locator("#cedula_escolar").fill(str(alumno.get('cedula_escolar', '')))
+        else:
+            try:
+                page.locator("#user_has_document").select_option(label="No/No escolarizado")
+            except Exception:
+                page.locator("#user_has_document").select_option("No/No escolarizado")
+            page.locator("#parent_dni").fill(str(alumno.get('cedula_padre', '')))
+            page.locator("#child_number").fill("1")
+
+        page.locator("#name").fill(nom_1)
+        if nom_2:
+            page.locator("#name2").fill(nom_2)
+        page.locator("#lastname").fill(ape_1)
+        if ape_2:
+            page.locator("#lastname2").fill(ape_2)
+
+        if alumno.get('nacimiento'):
+            page.locator("#user_birthdate").fill(str(alumno['nacimiento']))
+        
+        if alumno.get('genero'):
+            gen_val = "1" if alumno['genero'] == 'M' else "2"
+            try:
+                page.locator("#user_gender").select_option(gen_val)
+            except Exception:
+                pass
+
+        page.locator("#user_phone").fill(str(alumno.get('telefono', '0412-0000000')))
+
+    # 3. Guardar con selector auto-waiting
+    page.locator("button.btn-primary.btn-block").click()
+    page.wait_for_timeout(1000)
+    return True, "OK"
+
+class AdaptadorWebHibrido:
+    """
+    Adaptador resiliente e híbrido: ejecuta vía Playwright o con fallback a Selenium.
+    """
+    def __init__(self, motor: str = "auto", user_data_dir: str = None, headless: bool = False):
+        self.motor_preferido = motor
+        self.user_data_dir = user_data_dir
+        self.headless = headless
+        self.pw = None
+        self.context = None
+        self.page = None
+        self.selenium_driver = None
+        self.motor_activo = None
+
+    def iniciar(self):
+        if self.motor_preferido in ("playwright", "auto") and PLAYWRIGHT_DISPONIBLE:
+            try:
+                self.pw, self.context = iniciar_contexto_playwright(
+                    user_data_dir=self.user_data_dir,
+                    headless=self.headless
+                )
+                self.page = self.context.new_page()
+                self.motor_activo = "playwright"
+                return self
+            except Exception as e:
+                if self.motor_preferido == "playwright":
+                    raise e
+                # Fallback
+                pass
+
+        self.selenium_driver = iniciar_navegador()
+        self.motor_activo = "selenium"
+        return self
+
+    def registrar_alumno(self, alumno: dict, config: dict) -> tuple:
+        if self.motor_activo == "playwright" and self.page:
+            return registrar_alumno_playwright(self.page, alumno, config)
+        return registrar_alumno_en_web(self.selenium_driver, alumno, config)
+
+    def cerrar(self):
+        if self.context:
+            try:
+                self.context.close()
+            except Exception:
+                pass
+        if self.pw:
+            try:
+                self.pw.stop()
+            except Exception:
+                pass
+        if self.selenium_driver:
+            try:
+                self.selenium_driver.quit()
+            except Exception:
+                pass
+
 
 def limpiar_overlays(driver):
     """Elimina toastify, alertas flotantes y modales delegando a modulos.web_utils."""

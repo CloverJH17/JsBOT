@@ -16,6 +16,8 @@ import re
 import subprocess
 import pandas as pd
 from datetime import datetime, timedelta
+from python_calamine import CalamineWorkbook
+
 
 # Asegurar codificación UTF-8
 if sys.platform == "win32":
@@ -627,19 +629,31 @@ def seleccionar_archivo_interactivo(titulo: str = "Participantes / Estudiantes")
             return ruta_input
         print(f"❌ El archivo no existe o no es un formato válido (.xlsx, .xls, .ods, .csv, .txt). Intenta de nuevo.")
 
-def detectar_cabeceras(df: pd.DataFrame):
-    """Localiza la fila de encabezados evaluando hasta 15 filas para tolerar membretes institucionales."""
+def detectar_cabecera_avanzada(filas_o_matriz):
+    """
+    Localiza la fila de encabezados evaluando hasta 15 filas para tolerar membretes institucionales.
+    Soporta matrices de Python (listas de listas), tuplas o DataFrames de Pandas.
+    Retorna (mejor_fila, mejor_mapeo).
+    """
+    if isinstance(filas_o_matriz, pd.DataFrame):
+        filas = [list(fila) for _, fila in filas_o_matriz.iterrows()]
+    elif isinstance(filas_o_matriz, (list, tuple)):
+        filas = filas_o_matriz
+    else:
+        filas = list(filas_o_matriz)
+
     mejor_fila = 0
     mejor_mapeo = {}
     max_coincidencias = 0
+    total_filas = len(filas)
 
-    for r_idx in range(min(15, len(df))):
-        fila = df.iloc[r_idx]
+    for r_idx in range(min(15, total_filas)):
+        fila = filas[r_idx]
         mapeo_temp = {}
         coincidencias = 0
 
         for c_idx, val in enumerate(fila):
-            txt_norm = normalizar_col_nombre(str(val))
+            txt_norm = normalizar_col_nombre(str(val if val is not None else ''))
             if not txt_norm:
                 continue
 
@@ -674,21 +688,27 @@ def detectar_cabeceras(df: pd.DataFrame):
             mejor_mapeo = mapeo_temp
 
     # Heurística para columna de teléfono sin encabezado
-    if 'telefono' not in mejor_mapeo and len(df) > mejor_fila + 1:
-        for c_idx in range(len(df.columns)):
+    if 'telefono' not in mejor_mapeo and total_filas > mejor_fila + 1:
+        num_cols = max((len(r) for r in filas[mejor_fila:min(mejor_fila + 16, total_filas)]), default=0)
+        for c_idx in range(num_cols):
             if c_idx in mejor_mapeo.values():
                 continue
             coincidencias_tlf = 0
-            for r_idx in range(mejor_fila + 1, min(mejor_fila + 16, len(df))):
-                val_c = str(df.iloc[r_idx, c_idx]).strip()
-                digs = re.sub(r'\D', '', val_c)
-                if len(digs) in (10, 11) and digs.startswith(PREFIJOS_VALIDOS_TLF + PREFIJOS_SIN_CERO):
-                    coincidencias_tlf += 1
+            for r_idx in range(mejor_fila + 1, min(mejor_fila + 16, total_filas)):
+                if c_idx < len(filas[r_idx]):
+                    val_c = str(filas[r_idx][c_idx] if filas[r_idx][c_idx] is not None else '').strip()
+                    digs = re.sub(r'\D', '', val_c)
+                    if len(digs) in (10, 11) and digs.startswith(PREFIJOS_VALIDOS_TLF + PREFIJOS_SIN_CERO):
+                        coincidencias_tlf += 1
             if coincidencias_tlf >= 2:
                 mejor_mapeo['telefono'] = c_idx
                 break
 
     return mejor_fila, mejor_mapeo
+
+def detectar_cabeceras(df_o_matriz):
+    """Enrutador retrocompatible hacia detectar_cabecera_avanzada."""
+    return detectar_cabecera_avanzada(df_o_matriz)
 
 def procesar_archivo_texto(ruta: str) -> list:
     """
@@ -729,8 +749,11 @@ def procesar_archivo_texto(ruta: str) -> list:
                 })
     return personas
 
-def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = None) -> list:
-    """Lee e interpreta el libro de datos y retorna los participantes estructurados."""
+def procesar_archivo(ruta_archivo: str, hoja_especifica: str = None) -> list:
+    """
+    Ingesta ultrarrápida de matrices con python-calamine (.xlsx, .xls, .ods) en milisegundos.
+    Pasa las filas directamente a detectar_cabecera_avanzada() y genera la lista limpia de participantes.
+    """
     if not os.path.exists(ruta_archivo):
         return []
 
@@ -739,55 +762,60 @@ def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = Non
     if ext == '.txt':
         return procesar_archivo_texto(ruta_archivo)
 
-    hojas_dict = {}
-    if ext == '.csv':
+    hojas_matrices = {}
+
+    if ext in ('.xlsx', '.xls', '.ods'):
+        try:
+            wb = CalamineWorkbook.from_path(ruta_archivo)
+            hojas_disponibles = wb.sheet_names
+            hojas_a_leer = [hoja_especifica] if (hoja_especifica and hoja_especifica in hojas_disponibles) else hojas_disponibles
+            for nombre_hoja in hojas_a_leer:
+                sheet = wb.get_sheet_by_name(nombre_hoja)
+                hojas_matrices[nombre_hoja] = sheet.to_python()
+        except Exception as e:
+            log_etl(f"Aviso python-calamine ({e}). Intentando fallback...")
+            try:
+                if ext == '.ods':
+                    excel_obj = pd.ExcelFile(ruta_archivo, engine='odf')
+                else:
+                    excel_obj = pd.ExcelFile(ruta_archivo)
+                hojas_a_leer = [hoja_especifica] if (hoja_especifica and hoja_especifica in excel_obj.sheet_names) else excel_obj.sheet_names
+                for h in hojas_a_leer:
+                    df = pd.read_excel(excel_obj, sheet_name=h, header=None)
+                    hojas_matrices[h] = [list(r) for _, r in df.iterrows()]
+            except Exception as e_fb:
+                log_etl(f"Error abriendo hoja {ext}: {e_fb}")
+                return []
+    elif ext == '.csv':
         for enc in ('utf-8', 'utf-8-sig', 'latin1', 'cp1252'):
             try:
                 df = pd.read_csv(ruta_archivo, header=None, encoding=enc)
-                hojas_dict["CSV"] = df
+                hojas_matrices["CSV"] = [list(r) for _, r in df.iterrows()]
                 break
             except Exception:
                 continue
-    elif ext == '.ods':
-        try:
-            excel_obj = pd.ExcelFile(ruta_archivo, engine='odf')
-            hojas_a_leer = [hoja_especifica] if (hoja_especifica and hoja_especifica in excel_obj.sheet_names) else excel_obj.sheet_names
-            for h in hojas_a_leer:
-                hojas_dict[h] = pd.read_excel(excel_obj, sheet_name=h, header=None)
-        except Exception as e:
-            log_etl(f"Error abriendo ODS: {e}")
-            return []
-    else:
-        try:
-            excel_obj = pd.ExcelFile(ruta_archivo)
-            hojas_a_leer = [hoja_especifica] if (hoja_especifica and hoja_especifica in excel_obj.sheet_names) else excel_obj.sheet_names
-            for h in hojas_a_leer:
-                hojas_dict[h] = pd.read_excel(excel_obj, sheet_name=h, header=None)
-        except Exception as e:
-            log_etl(f"Error abriendo Excel: {e}")
-            return []
 
     participantes = []
     hoy = datetime.now()
 
-    for nombre_hoja, df_raw in hojas_dict.items():
-        if df_raw.empty or len(df_raw) < 1:
+    for nombre_hoja, matriz_filas in hojas_matrices.items():
+        if not matriz_filas or len(matriz_filas) < 1:
             continue
 
-        mejor_fila, mapa_cols = detectar_cabeceras(df_raw)
+        mejor_fila, mapa_cols = detectar_cabecera_avanzada(matriz_filas)
         log_etl(f"Hoja '{nombre_hoja}': cabecera en fila {mejor_fila}, columnas: {mapa_cols}")
 
-        for r_idx in range(mejor_fila + 1, len(df_raw)):
-            row = df_raw.iloc[r_idx]
+        for r_idx in range(mejor_fila + 1, len(matriz_filas)):
+            row = matriz_filas[r_idx]
 
-            if row.isna().all() or all(limpiar_texto(v) == "" for v in row):
+            if not row or all(limpiar_texto(v) == "" for v in row):
                 continue
 
             def get_val(campo):
                 if campo in mapa_cols:
                     c = mapa_cols[campo]
                     if c < len(row):
-                        return row.iloc[c]
+                        return row[c]
                 return None
 
             ced_alumno = limpiar_cedula(get_val('cedula_alumno'))
@@ -933,6 +961,11 @@ def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = Non
             })
 
     return participantes
+
+def procesar_archivo_participantes(ruta_archivo: str, hoja_especifica: str = None) -> list:
+    """Enrutador retrocompatible hacia procesar_archivo()."""
+    return procesar_archivo(ruta_archivo, hoja_especifica=hoja_especifica)
+
 
 def auditar_integridad_lote(participantes: list, ruta_archivo: str = "") -> dict:
     """

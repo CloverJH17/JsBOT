@@ -15,8 +15,10 @@ import sys
 import json
 import configparser
 import re
+import sqlite3
 from datetime import datetime
 import pandas as pd
+from loguru import logger
 
 if sys.platform == "win32":
     try:
@@ -34,11 +36,14 @@ import modulos.entorno as entorno
 BASE_DIR = str(entorno.RAIZ_PROYECTO)
 CONFIG_DIR = str(entorno.CARPETA_CONFIG)
 LOGS_DIR = str(entorno.CARPETA_LOGS)
+DATA_DIR = str(entorno.CARPETA_DATA)
 
 CONFIG_FILE = str(entorno.ARCHIVO_CONFIG_INI)
 CONFIG_SERV_PATH = os.path.join(CONFIG_DIR, "config_servicios.json")
 SESSION_STATE_FILE = str(entorno.ARCHIVO_ESTADO_SESION)
 SESSION_STATE_SERV_FILE = str(entorno.ARCHIVO_ESTADO_SESION_SERVICIOS)
+DB_FILE = str(entorno.ARCHIVO_DB)
+
 
 def extraer_id_actividad(url: str) -> str:
     """Extrae el ID de la actividad desde los parámetros de la URL de InfoApp."""
@@ -108,14 +113,198 @@ def gestionar_credenciales() -> tuple:
     return u, c
 
 # =============================================================================
-# CHECKPOINTS Y AUDITORÍA DE FORMACIÓN
+# PERSISTENCIA ACID Y AUDITORÍA HISTÓRICA CON SQLITE3
+# =============================================================================
+
+def inicializar_db(db_path: str = None):
+    """Crea y valida el esquema ACID de la base de datos SQLite data/jsbot.db."""
+    ruta = db_path or DB_FILE
+    os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
+    with sqlite3.connect(ruta, timeout=30.0) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS checkpoints (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_actividad TEXT NOT NULL,
+                cedula TEXT,
+                indice INTEGER NOT NULL DEFAULT 0,
+                estado TEXT NOT NULL DEFAULT 'EN_PROCESO',
+                tipo TEXT NOT NULL DEFAULT 'formacion',
+                timestamp TEXT NOT NULL,
+                datos_json TEXT,
+                UNIQUE(id_actividad, tipo)
+            );
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS inscritos_historico (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_actividad TEXT NOT NULL,
+                cedula TEXT NOT NULL,
+                nombre TEXT,
+                telefono TEXT,
+                fecha_registro TEXT NOT NULL
+            );
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkpoints_actividad ON checkpoints(id_actividad, tipo);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_actividad ON inscritos_historico(id_actividad);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_cedula ON inscritos_historico(cedula);")
+        conn.commit()
+
+def guardar_checkpoint_db(id_actividad: str, indice: int, cedula: str = None, estado: str = "EN_PROCESO", tipo: str = "formacion", timestamp: str = None, datos_json: str = None, db_path: str = None):
+    """Persiste un checkpoint transaccional con semántica ACID."""
+    ruta = db_path or DB_FILE
+    inicializar_db(ruta)
+    ts = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with sqlite3.connect(ruta, timeout=30.0) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO checkpoints (id_actividad, cedula, indice, estado, tipo, timestamp, datos_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id_actividad, tipo) DO UPDATE SET
+                cedula = excluded.cedula,
+                indice = excluded.indice,
+                estado = excluded.estado,
+                timestamp = excluded.timestamp,
+                datos_json = excluded.datos_json;
+        """, (str(id_actividad), str(cedula or ''), int(indice), str(estado), str(tipo), ts, str(datos_json or '')))
+        conn.commit()
+
+def obtener_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_path: str = None) -> dict:
+    """Recupera el checkpoint activo más reciente desde SQLite."""
+    ruta = db_path or DB_FILE
+    if not os.path.exists(ruta):
+        return None
+    try:
+        with sqlite3.connect(ruta, timeout=30.0) as conn:
+            cursor = conn.cursor()
+            if id_actividad:
+                cursor.execute("""
+                    SELECT id_actividad, cedula, indice, estado, tipo, timestamp, datos_json
+                    FROM checkpoints
+                    WHERE tipo = ? AND id_actividad = ?
+                    ORDER BY id DESC LIMIT 1;
+                """, (tipo, str(id_actividad)))
+            else:
+                cursor.execute("""
+                    SELECT id_actividad, cedula, indice, estado, tipo, timestamp, datos_json
+                    FROM checkpoints
+                    WHERE tipo = ?
+                    ORDER BY id DESC LIMIT 1;
+                """, (tipo,))
+            fila = cursor.fetchone()
+            if fila:
+                return {
+                    "id_actividad": fila[0],
+                    "cedula": fila[1],
+                    "indice": fila[2],
+                    "estado": fila[3],
+                    "tipo": fila[4],
+                    "timestamp": fila[5],
+                    "datos_json": fila[6]
+                }
+    except Exception:
+        pass
+    return None
+
+def limpiar_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_path: str = None):
+    """Elimina checkpoints completados en SQLite."""
+    ruta = db_path or DB_FILE
+    if not os.path.exists(ruta):
+        return
+    try:
+        with sqlite3.connect(ruta, timeout=30.0) as conn:
+            cursor = conn.cursor()
+            if id_actividad:
+                cursor.execute("DELETE FROM checkpoints WHERE tipo = ? AND id_actividad = ?;", (tipo, str(id_actividad)))
+            else:
+                cursor.execute("DELETE FROM checkpoints WHERE tipo = ?;", (tipo,))
+            conn.commit()
+    except Exception:
+        pass
+
+def registrar_inscrito_historico_db(id_actividad: str, cedula: str, nombre: str, telefono: str, fecha_registro: str = None, db_path: str = None):
+    """Registra una inscripción histórica en la base de datos."""
+    ruta = db_path or DB_FILE
+    inicializar_db(ruta)
+    ts = fecha_registro or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with sqlite3.connect(ruta, timeout=30.0) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO inscritos_historico (id_actividad, cedula, nombre, telefono, fecha_registro)
+            VALUES (?, ?, ?, ?, ?);
+        """, (str(id_actividad), str(cedula), str(nombre or ''), str(telefono or ''), ts))
+        conn.commit()
+
+def consultar_inscritos_historico_db(id_actividad: str = None, cedula: str = None, db_path: str = None) -> list:
+    """Consulta registros históricos por actividad y/o cédula."""
+    ruta = db_path or DB_FILE
+    if not os.path.exists(ruta):
+        return []
+    try:
+        with sqlite3.connect(ruta, timeout=30.0) as conn:
+            cursor = conn.cursor()
+            query = "SELECT id_actividad, cedula, nombre, telefono, fecha_registro FROM inscritos_historico WHERE 1=1"
+            params = []
+            if id_actividad:
+                query += " AND id_actividad = ?"
+                params.append(str(id_actividad))
+            if cedula:
+                query += " AND cedula = ?"
+                params.append(str(cedula))
+            query += " ORDER BY id ASC;"
+            cursor.execute(query, params)
+            filas = cursor.fetchall()
+            return [
+                {
+                    "id_actividad": f[0],
+                    "cedula": f[1],
+                    "nombre": f[2],
+                    "telefono": f[3],
+                    "fecha_registro": f[4]
+                }
+                for f in filas
+            ]
+    except Exception:
+        return []
+
+# =============================================================================
+# CONFIGURACIÓN DE BITÁCORAS CON LOGURU (ROTACIÓN 5MB + COMPRESIÓN ZIP)
+# =============================================================================
+
+def configurar_logger(ruta_log: str = None, nivel: str = "INFO"):
+    """Configura Loguru con rotación automática a 5MB y compresión zip."""
+    if ruta_log is None:
+        ruta_log = str(entorno.CARPETA_LOGS / "actividad_{time:YYYY-MM-DD}.log")
+    os.makedirs(os.path.dirname(os.path.abspath(ruta_log)), exist_ok=True)
+    try:
+        logger.remove()
+    except Exception:
+        pass
+    logger.add(
+        ruta_log,
+        rotation="5 MB",
+        compression="zip",
+        encoding="utf-8",
+        level=nivel,
+        enqueue=True
+    )
+    return logger
+
+try:
+    configurar_logger()
+except Exception:
+    pass
+
+# =============================================================================
+# CHECKPOINTS Y AUDITORÍA DE FORMACIÓN (PUENTE RETROCOMPATIBLE)
 # =============================================================================
 
 def guardar_estado_sesion(config: dict, participantes: list, indice_ultimo: int):
-    """Guarda checkpoint en disco de forma atómica para evitar corrupción ante apagones."""
+    """Guarda checkpoint en disco de forma atómica y en SQLite con persistencia ACID."""
     os.makedirs(LOGS_DIR, exist_ok=True)
+    id_act = config.get("id_actividad", "general")
     datos = {
-        "id_actividad": config.get("id_actividad"),
+        "id_actividad": id_act,
         "url": config.get("url"),
         "usuario": config.get("usuario"),
         "timestamp_str": config.get("timestamp_str"),
@@ -123,6 +312,24 @@ def guardar_estado_sesion(config: dict, participantes: list, indice_ultimo: int)
         "indice_ultimo_procesado": indice_ultimo,
         "participantes": participantes
     }
+    # Persistencia ACID en SQLite
+    try:
+        ced_actual = ""
+        if participantes and 0 <= indice_ultimo < len(participantes):
+            p = participantes[indice_ultimo]
+            ced_actual = p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre') or ''
+        guardar_checkpoint_db(
+            id_actividad=id_act,
+            indice=indice_ultimo,
+            cedula=ced_actual,
+            estado="EN_PROCESO",
+            tipo="formacion",
+            datos_json=json.dumps(datos, ensure_ascii=False)
+        )
+    except Exception:
+        pass
+
+    # Respaldo atómico en JSON
     temp_file = f"{SESSION_STATE_FILE}.tmp"
     with open(temp_file, "w", encoding="utf-8") as f:
         json.dump(datos, f, ensure_ascii=False, indent=4)
@@ -133,6 +340,17 @@ def guardar_estado_sesion(config: dict, participantes: list, indice_ultimo: int)
 def leer_estado_sesion() -> dict:
     """Lee el checkpoint de formación si existe y no está completado."""
     if not os.path.exists(SESSION_STATE_FILE):
+        # Intentar desde SQLite si el archivo físico no está presente
+        try:
+            cp = obtener_checkpoint_db(tipo="formacion")
+            if cp and cp.get("datos_json"):
+                datos = json.loads(cp["datos_json"])
+                total = len(datos.get("participantes", []))
+                ult = datos.get("indice_ultimo_procesado", 0)
+                if total > 0 and ult < total:
+                    return datos
+        except Exception:
+            pass
         return None
     try:
         with open(SESSION_STATE_FILE, "r", encoding="utf-8") as f:
@@ -147,11 +365,16 @@ def leer_estado_sesion() -> dict:
 
 def limpiar_estado_sesion():
     """Elimina el checkpoint de formación tras completar con éxito la carga."""
+    try:
+        limpiar_checkpoint_db(tipo="formacion")
+    except Exception:
+        pass
     if os.path.exists(SESSION_STATE_FILE):
         try:
             os.remove(SESSION_STATE_FILE)
         except Exception:
             pass
+
 
 def inicializar_sesion_actividad() -> dict:
     """Configura la sesión inicial solicitando la URL."""
@@ -326,7 +549,7 @@ def guardar_config_servicios(cfg: dict):
         print(f"⚠️ Error al guardar config de servicios: {e}")
 
 def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, personas: list, indice_ultimo: int):
-    """Guarda checkpoint de servicios de forma atómica."""
+    """Guarda checkpoint de servicios de forma atómica y en SQLite."""
     os.makedirs(LOGS_DIR, exist_ok=True)
     datos = {
         "usuario": config_bot.get("usuario"),
@@ -336,6 +559,22 @@ def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, per
         "indice_ultimo_procesado": indice_ultimo,
         "personas": personas
     }
+    # Guardar en SQLite
+    try:
+        ced_actual = ""
+        if personas and 0 <= indice_ultimo < len(personas):
+            ced_actual = str(personas[indice_ultimo].get('cedula', ''))
+        guardar_checkpoint_db(
+            id_actividad="servicios",
+            indice=indice_ultimo,
+            cedula=ced_actual,
+            estado="EN_PROCESO",
+            tipo="servicios",
+            datos_json=json.dumps(datos, ensure_ascii=False)
+        )
+    except Exception:
+        pass
+
     try:
         temp_file = f"{SESSION_STATE_SERV_FILE}.tmp"
         with open(temp_file, "w", encoding="utf-8") as f:
@@ -348,25 +587,41 @@ def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, per
 
 def leer_estado_sesion_servicios() -> dict:
     """Lee el checkpoint de servicios si existe."""
-    if os.path.exists(SESSION_STATE_SERV_FILE):
+    if not os.path.exists(SESSION_STATE_SERV_FILE):
         try:
-            with open(SESSION_STATE_SERV_FILE, "r", encoding="utf-8") as f:
-                datos = json.load(f)
-            personas = datos.get("personas", [])
-            idx = datos.get("indice_ultimo_procesado", 0)
-            if personas and idx < len(personas):
-                return datos
+            cp = obtener_checkpoint_db(tipo="servicios")
+            if cp and cp.get("datos_json"):
+                datos = json.loads(cp["datos_json"])
+                personas = datos.get("personas", [])
+                idx = datos.get("indice_ultimo_procesado", 0)
+                if personas and idx < len(personas):
+                    return datos
         except Exception:
             pass
+        return None
+    try:
+        with open(SESSION_STATE_SERV_FILE, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        personas = datos.get("personas", [])
+        idx = datos.get("indice_ultimo_procesado", 0)
+        if personas and idx < len(personas):
+            return datos
+    except Exception:
+        pass
     return None
 
 def limpiar_estado_sesion_servicios():
     """Elimina el checkpoint de servicios al concluir exitosamente."""
+    try:
+        limpiar_checkpoint_db(tipo="servicios")
+    except Exception:
+        pass
     if os.path.exists(SESSION_STATE_SERV_FILE):
         try:
             os.remove(SESSION_STATE_SERV_FILE)
         except Exception:
             pass
+
 
 def generar_reporte_auditoria_servicios(config: dict, config_servicio: dict, personas_exitosas: list, fallidos: list) -> str:
     """Genera reporte Excel de auditoría para servicios asentados."""
