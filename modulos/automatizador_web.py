@@ -72,8 +72,8 @@ def capturar_pantalla_error(driver, doc_str: str):
 # -----------------------------------------------------------------------------
 
 def _iniciar_firefox(maximizado: bool):
-    """Delega el arranque a la factoría centralizada de WebDriver."""
-    driver = obtener_driver_resiliente(headless=False)
+    """Delega el arranque a la factoría centralizada de WebDriver con preferencia Firefox."""
+    driver = obtener_driver_resiliente(headless=False, navegador_preferido="firefox")
     if driver and maximizado:
         try:
             driver.maximize_window()
@@ -82,12 +82,24 @@ def _iniciar_firefox(maximizado: bool):
     return driver
 
 def _iniciar_chrome(maximizado: bool):
-    """Delega el arranque a la factoría centralizada de WebDriver."""
-    return obtener_driver_resiliente(headless=False)
+    """Delega el arranque a la factoría centralizada de WebDriver con preferencia Chrome."""
+    driver = obtener_driver_resiliente(headless=False, navegador_preferido="chrome")
+    if driver and maximizado:
+        try:
+            driver.maximize_window()
+        except Exception:
+            pass
+    return driver
 
 def _iniciar_edge(maximizado: bool):
-    """Delega el arranque a la factoría centralizada de WebDriver."""
-    return obtener_driver_resiliente(headless=False)
+    """Delega el arranque a la factoría centralizada de WebDriver con preferencia Edge."""
+    driver = obtener_driver_resiliente(headless=False, navegador_preferido="edge")
+    if driver and maximizado:
+        try:
+            driver.maximize_window()
+        except Exception:
+            pass
+    return driver
 
 FABRICAS_NAVEGADOR = {
     "firefox": _iniciar_firefox,

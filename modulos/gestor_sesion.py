@@ -29,15 +29,16 @@ from modulos.interfaz_usuario import (
     prompt_nuevas_credenciales,
     prompt_url_actividad
 )
+import modulos.entorno as entorno
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_DIR = os.path.join(BASE_DIR, "config")
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
+BASE_DIR = str(entorno.RAIZ_PROYECTO)
+CONFIG_DIR = str(entorno.CARPETA_CONFIG)
+LOGS_DIR = str(entorno.CARPETA_LOGS)
 
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.ini")
+CONFIG_FILE = str(entorno.ARCHIVO_CONFIG_INI)
 CONFIG_SERV_PATH = os.path.join(CONFIG_DIR, "config_servicios.json")
-SESSION_STATE_FILE = os.path.join(LOGS_DIR, "session_state.json")
-SESSION_STATE_SERV_FILE = os.path.join(LOGS_DIR, "session_state_servicios.json")
+SESSION_STATE_FILE = str(entorno.ARCHIVO_ESTADO_SESION)
+SESSION_STATE_SERV_FILE = str(entorno.ARCHIVO_ESTADO_SESION_SERVICIOS)
 
 def extraer_id_actividad(url: str) -> str:
     """Extrae el ID de la actividad desde los parámetros de la URL de InfoApp."""

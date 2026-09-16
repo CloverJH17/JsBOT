@@ -28,9 +28,11 @@ CARPETA_ICONOS = CARPETA_ASSETS / "iconos"
 ARCHIVO_SETTINGS = CARPETA_CONFIG / "settings.json"
 ARCHIVO_PLANTILLA_ODS = CARPETA_CONFIG / "plantilla_base.ods"
 ARCHIVO_ESTADO_SESION = CARPETA_LOGS / "session_state.json"
+ARCHIVO_ESTADO_SESION_SERVICIOS = CARPETA_LOGS / "session_state_servicios.json"
 ARCHIVO_CONFIG_INI = CARPETA_CONFIG / "config.ini"
 
 # Creación garantizada de directorios en disco
+CARPETA_CONFIG.mkdir(parents=True, exist_ok=True)
 CARPETA_LOGS.mkdir(parents=True, exist_ok=True)
 CARPETA_SCREENSHOTS.mkdir(parents=True, exist_ok=True)
 CARPETA_PLANILLAS.mkdir(parents=True, exist_ok=True)

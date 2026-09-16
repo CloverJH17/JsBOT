@@ -13,24 +13,39 @@ LISTA_ESTADOS_VENEZUELA = [
 ]
 
 def limpiar_cedula_universal(valor) -> str:
-    """Sanea el documento nacional admitiendo formatos V- o E- y eliminando puntuación."""
+    """Sanea el documento nacional admitiendo formatos V- o E- y eliminando puntuación y sufijos float."""
     if not valor:
         return ""
+    if isinstance(valor, float):
+        if valor.is_integer():
+            valor = int(valor)
+        else:
+            valor = str(valor).split('.')[0]
     val_str = str(valor).strip().upper()
+    if val_str.endswith(".0") and val_str[:-2].replace(".", "").isdigit():
+        val_str = val_str[:-2]
     val_str = re.sub(r'[\s\.\-]', '', val_str)
+    if val_str in ("0", "000", "SD", "S/D", "SC", "S/C", "NOAPLICA", "NONE", "NAN"):
+        return ""
     if val_str.startswith(('V', 'E')):
         prefijo = val_str[0]
         digitos = re.sub(r'\D', '', val_str[1:])
-        return f"{prefijo}-{digitos}" if digitos else ""
-    digitos = re.sub(r'\D', '', val_str)
-    return f"V-{digitos}" if digitos else ""
+    else:
+        prefijo = 'V'
+        digitos = re.sub(r'\D', '', val_str)
+    if not digitos or len(digitos) < 5 or int(digitos) == 0:
+        return ""
+    return f"{prefijo}-{digitos}"
 
 def formatear_telefono_venezolano(telefono_raw, default: str = "0412-0000000") -> str:
     """Normaliza el número a formato nacional con guion (04XX-XXXXXXX o 02XX-XXXXXXX)."""
     if not telefono_raw:
         return default
     if isinstance(telefono_raw, float):
-        telefono_raw = int(telefono_raw)
+        if telefono_raw.is_integer():
+            telefono_raw = int(telefono_raw)
+        else:
+            telefono_raw = str(telefono_raw).split('.')[0]
     val_str = str(telefono_raw).strip()
     if val_str.endswith(".0") and val_str[:-2].replace(".", "").isdigit():
         val_str = val_str[:-2]
@@ -41,9 +56,8 @@ def formatear_telefono_venezolano(telefono_raw, default: str = "0412-0000000") -
         nums = '0' + nums[2:]
     if len(nums) == 10 and (nums.startswith(('412', '414', '416', '424', '426')) or nums.startswith('2')):
         nums = "0" + nums
-    if len(nums) == 11 and (nums.startswith(('0412', '0414', '0416', '0424', '0426')) or nums.startswith('02')):
-        return f"{nums[:4]}-{nums[4:]}"
-    elif len(nums) == 11:
+    # Validar que el número de 11 dígitos inicie con prefijos móviles (04XX) o fijos (02XX) válidos en Venezuela
+    if len(nums) == 11 and (nums.startswith(('0412', '0414', '0416', '0424', '0426')) or nums.startswith(('04', '02'))):
         return f"{nums[:4]}-{nums[4:]}"
     return default
 

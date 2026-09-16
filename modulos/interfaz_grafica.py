@@ -81,6 +81,7 @@ try:
         guardar_estado_sesion,
         guardar_estado_sesion_servicios,
         leer_estado_sesion,
+        leer_estado_sesion_servicios,
         limpiar_estado_sesion,
         limpiar_estado_sesion_servicios,
         finalizar_log_exito,
@@ -212,7 +213,7 @@ class JsBotGUI(ctk.CTk):
         self._iniciar_escucha_cola()
 
         # Log inicial de bienvenida
-        self._agregar_log("[OK] Entorno gráfico JsBOT v4.2 inicializado (Resolución 1020x670).")
+        self._agregar_log("[OK] Entorno gráfico JsBOT v4.3.0 inicializado (Resolución 1020x670).")
         if MODULOS_DISPONIBLES:
             self._agregar_log("[OK] Módulos de verificación y normalización vinculados en modo lectura.")
         else:
@@ -266,29 +267,40 @@ class JsBotGUI(ctk.CTk):
         """Detecta checkpoints guardados tras caídas de red o apagones y levanta un modal de rescate."""
         try:
             estado = leer_estado_sesion()
-            if estado and estado.get("participantes") and estado.get("indice_ultimo_procesado", 0) > 0:
+            if estado and estado.get("participantes"):
                 total = len(estado["participantes"])
-                idx = estado["indice_ultimo_procesado"]
-                if idx < total:
-                    self._mostrar_modal_recuperacion(estado, idx, total)
+                idx = estado.get("indice_ultimo_procesado", 0)
+                if 0 <= idx < total:
+                    self._mostrar_modal_recuperacion(estado, idx, total, tipo="formacion")
+                    return
+
+            if "leer_estado_sesion_servicios" in globals():
+                estado_srv = leer_estado_sesion_servicios()
+                if estado_srv and estado_srv.get("personas"):
+                    total = len(estado_srv["personas"])
+                    idx = estado_srv.get("indice_ultimo_procesado", 0)
+                    if 0 <= idx < total:
+                        self._mostrar_modal_recuperacion(estado_srv, idx, total, tipo="servicios")
         except Exception as e:
             self._agregar_log(f"[AVISO] Error al verificar sesión previa: {e}")
 
-    def _mostrar_modal_recuperacion(self, estado: dict, idx: int, total: int):
+    def _mostrar_modal_recuperacion(self, estado: dict, idx: int, total: int, tipo: str = "formacion"):
         modal = ctk.CTkToplevel(self)
         modal.title("Sesión Previa Detectada")
-        modal.geometry("460x220")
+        modal.geometry("460x230")
         modal.resizable(False, False)
         try:
             modal.grab_set()
         except Exception:
             pass
 
+        id_ref = estado.get('id_actividad') or estado.get('id_servicio') or 'N/A'
+        tipo_lbl = "Formación" if tipo == "formacion" else "Servicios"
         lbl = ctk.CTkLabel(
             modal,
             text=f"🚨 Se detectó una sesión interrumpida por corte de luz o red.\n"
-                 f"Actividad ID: {estado.get('id_actividad', 'N/A')}\n"
-                 f"Progreso alcanzado: Alumno {idx} de {total} procesados.\n\n"
+                 f"Módulo: {tipo_lbl} | ID: {id_ref}\n"
+                 f"Progreso alcanzado: Alumno/Usuario {idx} de {total} procesados.\n\n"
                  f"¿Deseas retomar la carga exactamente donde quedó?",
             font=("Segoe UI", 13),
             wraplength=420
@@ -303,31 +315,62 @@ class JsBotGUI(ctk.CTk):
             text="Retomar Carga",
             fg_color="#2ecc71",
             hover_color="#27ae60",
-            command=lambda: [modal.destroy(), self._reanudar_flujo_desde_estado(estado)]
+            command=lambda: [modal.destroy(), self._reanudar_flujo_desde_estado(estado, tipo=tipo)]
         )
         btn_retomar.pack(side="left", padx=10)
+
+        def _descartar():
+            if tipo == "formacion":
+                limpiar_estado_sesion()
+            else:
+                if "limpiar_estado_sesion_servicios" in globals():
+                    limpiar_estado_sesion_servicios()
+            modal.destroy()
 
         btn_descartar = ctk.CTkButton(
             frame_btns,
             text="Descartar Sesión",
             fg_color="#e74c3c",
             hover_color="#c0392b",
-            command=lambda: [limpiar_estado_sesion(), modal.destroy()]
+            command=_descartar
         )
         btn_descartar.pack(side="right", padx=10)
 
-    def _reanudar_flujo_desde_estado(self, estado: dict):
-        """Carga los datos y participantes de la sesión interrumpida para continuar."""
+    def _reanudar_flujo_desde_estado(self, estado: dict, tipo: str = "formacion"):
+        """Carga los datos y participantes de la sesión interrumpida para continuar en su índice."""
         try:
-            self.participantes_cargados = estado.get("participantes", [])
-            url = estado.get("url") or estado.get("url_actividad") or ""
-            if url and hasattr(self, "entry_url_formacion"):
-                self.entry_url_formacion.delete(0, tk.END)
-                self.entry_url_formacion.insert(0, url)
-            self._cambiar_vista("Formacion")
-            idx = estado.get("indice_ultimo_procesado", 0)
-            total = len(self.participantes_cargados)
-            self._agregar_log(f"[RECUPERACIÓN] Sesión reanudada: Alumno {idx} de {total} participantes.")
+            if tipo == "servicios":
+                self.participantes_cargados = estado.get("personas", [])
+                self.datos_normalizados_actuales = self.participantes_cargados
+                idx = estado.get("indice_ultimo_procesado", 0)
+                self.indice_inicio_recuperacion_servicios = idx
+                url = estado.get("url") or ""
+                if url and hasattr(self, "entry_url_servicios"):
+                    self.entry_url_servicios.delete(0, tk.END)
+                    self.entry_url_servicios.insert(0, url)
+                self._cambiar_vista("Servicios")
+                total = len(self.participantes_cargados)
+                if hasattr(self, "lbl_prevuelo_servicios_total"):
+                    self.lbl_prevuelo_servicios_total.configure(text=f"Total: {total} usuarios (Reanudando en #{idx + 1})")
+                if hasattr(self, "card_prevuelo_servicios") and self.card_prevuelo_servicios.winfo_manager() != "pack":
+                    self.card_prevuelo_servicios.pack(fill="x", padx=16, pady=(0, 8), before=self.url_container_servicios)
+                self._agregar_log(f"[RECUPERACIÓN] Sesión de servicios reanudada: Usuario {idx} de {total} listos para continuar.")
+            else:
+                self.participantes_cargados = estado.get("participantes", [])
+                self.datos_normalizados_actuales = self.participantes_cargados
+                idx = estado.get("indice_ultimo_procesado", 0)
+                self.indice_inicio_recuperacion_formacion = idx
+                url = estado.get("url") or estado.get("url_actividad") or ""
+                if url and hasattr(self, "entry_url_formacion"):
+                    self.entry_url_formacion.delete(0, tk.END)
+                    self.entry_url_formacion.insert(0, url)
+                self._cambiar_vista("Formacion")
+                total = len(self.participantes_cargados)
+                if hasattr(self, "lbl_prevuelo_formacion_total"):
+                    self.lbl_prevuelo_formacion_total.configure(text=f"Total: {total} participantes (Reanudando en #{idx + 1})")
+                if hasattr(self, "card_prevuelo_formacion") and self.card_prevuelo_formacion.winfo_manager() != "pack":
+                    self.card_prevuelo_formacion.pack(fill="x", padx=16, pady=(0, 8), before=self.url_container_formacion)
+                self._agregar_log(f"[RECUPERACIÓN] Sesión reanudada: Alumno {idx} de {total} participantes listos para continuar.")
         except Exception as e:
             self._agregar_log(f"[ERROR] No se pudo reanudar sesión: {e}")
 
@@ -3983,11 +4026,14 @@ class JsBotGUI(ctk.CTk):
     def _hilo_proceso_carga_formacion(self, participantes: list, config: dict):
         total = len(participantes)
         id_act = config.get("id_actividad", "")
-        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Carga Automatizada real iniciado para {total} participantes.")
+        indice_inicio = getattr(self, "indice_inicio_recuperacion_formacion", 0) or 0
+        self.indice_inicio_recuperacion_formacion = 0
+
+        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Carga Automatizada real iniciado para {total - indice_inicio} participantes (Total lote: {total}).")
         self.after(0, self.agregar_log_telemetria, f"[ACTIVIDAD] ID Actividad: {id_act} | URL: {config.get('url')}")
 
         if MODULOS_DISPONIBLES:
-            guardar_estado_sesion(config, participantes, 0)
+            guardar_estado_sesion(config, participantes, indice_inicio)
 
         def cb_log(msg):
             self.after(0, self.agregar_log_telemetria, msg)
@@ -4004,7 +4050,7 @@ class JsBotGUI(ctk.CTk):
             cargados_exitosos, fallidos, tiempo_seg = ejecutar_carga_infoapp(
                 participantes,
                 config,
-                indice_inicio=0,
+                indice_inicio=indice_inicio,
                 log_callback=cb_log,
                 progreso_callback=cb_progreso
             )
@@ -4049,11 +4095,14 @@ class JsBotGUI(ctk.CTk):
         total = len(usuarios)
         id_srv = config_bot.get("id_servicio", "")
         tipo_srv = config_servicio.get("tipo_servicio", "")
-        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Servicios Comunitarios real iniciado para {total} usuarios.")
+        indice_inicio = getattr(self, "indice_inicio_recuperacion_servicios", 0) or 0
+        self.indice_inicio_recuperacion_servicios = 0
+
+        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Servicios Comunitarios real iniciado para {total - indice_inicio} usuarios (Total lote: {total}).")
         self.after(0, self.agregar_log_telemetria, f"[SERVICIO] ID: {id_srv} | Tipo: {tipo_srv}")
 
         if MODULOS_DISPONIBLES:
-            guardar_estado_sesion_servicios(config_bot, config_servicio, usuarios, 0)
+            guardar_estado_sesion_servicios(config_bot, config_servicio, usuarios, indice_inicio)
 
         def cb_log(msg):
             self.after(0, self.agregar_log_telemetria, msg)
@@ -4071,7 +4120,7 @@ class JsBotGUI(ctk.CTk):
                 usuarios,
                 config_bot,
                 config_servicio,
-                indice_inicio=0,
+                indice_inicio=indice_inicio,
                 fn_guardar_checkpoint=guardar_estado_sesion_servicios,
                 log_callback=cb_log,
                 progreso_callback=cb_progreso

@@ -11,16 +11,14 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 def obtener_driver_resiliente(
     headless: bool = False, 
     timeout_pagina: int = 30, 
-    timeout_script: int = 20
+    timeout_script: int = 20,
+    navegador_preferido: Optional[str] = None
 ) -> Optional[webdriver.Remote]:
     """
-    Instancia y retorna un WebDriver configurado con cascada Chrome -> Firefox -> Edge.
+    Instancia y retorna un WebDriver configurado con cascada Chrome -> Firefox -> Edge (o navegador preferido).
     Inyecta blindaje crítico para entornos Linux/Canaima y timeouts de socket anti-bloqueo.
     """
-    driver = None
-
-    # 1. Intentar instanciar Google Chrome / Chromium
-    try:
+    def _crear_chrome():
         opts_chrome = ChromeOptions()
         if headless:
             opts_chrome.add_argument("--headless=new")
@@ -36,33 +34,52 @@ def obtener_driver_resiliente(
             opts_chrome.add_argument("--remote-debugging-port=9222")
             opts_chrome.set_capability("goog:loggingPrefs", {"browser": "ALL"})
 
-        driver = webdriver.Chrome(options=opts_chrome)
-    except Exception as e_chrome:
-        print(f"⚠️ [DriverFactory] Chrome no pudo inicializarse: {e_chrome}. Intentando con Firefox...")
+        return webdriver.Chrome(options=opts_chrome)
 
-    # 2. Cascada de fallback a Mozilla Firefox
-    if driver is None:
+    def _crear_firefox():
+        opts_ff = FirefoxOptions()
+        if headless:
+            opts_ff.add_argument("--headless")
+        d = webdriver.Firefox(options=opts_ff)
         try:
-            opts_ff = FirefoxOptions()
-            if headless:
-                opts_ff.add_argument("--headless")
-            driver = webdriver.Firefox(options=opts_ff)
-            driver.maximize_window()
-        except Exception as e_ff:
-            print(f"⚠️ [DriverFactory] Firefox no pudo inicializarse: {e_ff}. Intentando con Edge...")
+            d.maximize_window()
+        except Exception:
+            pass
+        return d
 
-    # 3. Cascada de fallback a Microsoft Edge (vital en entornos Windows)
-    if driver is None:
+    def _crear_edge():
+        from selenium.webdriver.edge.options import Options as EdgeOptions
+        opts_edge = EdgeOptions()
+        if headless:
+            opts_edge.add_argument("--headless=new")
+        opts_edge.add_argument("--start-maximized")
+        return webdriver.Edge(options=opts_edge)
+
+    creadores = {
+        "chrome": ("Google Chrome", _crear_chrome),
+        "firefox": ("Mozilla Firefox", _crear_firefox),
+        "edge": ("Microsoft Edge", _crear_edge)
+    }
+
+    if navegador_preferido and str(navegador_preferido).lower() in creadores:
+        pref = str(navegador_preferido).lower()
+        orden = [pref] + [b for b in ("chrome", "firefox", "edge") if b != pref]
+    else:
+        orden = ["chrome", "firefox", "edge"]
+
+    driver = None
+    for nom in orden:
+        label, fn = creadores[nom]
         try:
-            from selenium.webdriver.edge.options import Options as EdgeOptions
-            opts_edge = EdgeOptions()
-            if headless:
-                opts_edge.add_argument("--headless=new")
-            opts_edge.add_argument("--start-maximized")
-            driver = webdriver.Edge(options=opts_edge)
-        except Exception as e_edge:
-            print(f"❌ [DriverFactory] Error crítico: No se pudo levantar ningún navegador: {e_edge}")
-            return None
+            driver = fn()
+            if driver is not None:
+                break
+        except Exception as err:
+            print(f"⚠️ [DriverFactory] {label} no pudo inicializarse: {err}.")
+
+    if driver is None:
+        print("❌ [DriverFactory] Error crítico: No se pudo levantar ningún navegador.")
+        return None
 
     # Inyección estricta de timeouts de transporte contra congelamientos por pérdida de paquetes
     try:

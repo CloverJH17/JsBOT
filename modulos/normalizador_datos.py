@@ -63,6 +63,7 @@ from modulos.interfaz_usuario import (
     imprimir_banner
 )
 from modulos import config_manager as cm
+import modulos.entorno as entorno
 from modulos.identidad_utils import (
     limpiar_cedula_universal,
     formatear_telefono_venezolano,
@@ -73,9 +74,9 @@ from modulos.identidad_utils import (
 FORMATOS_VALIDOS = ('.xlsx', '.xls', '.ods', '.csv', '.txt')
 TELEFONO_DEFAULT = cm.telefono_por_defecto()
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = str(entorno.RAIZ_PROYECTO)
 CSV_BACKUP_PATH = os.path.join(BASE_DIR, "estudiantes.csv")
-LOGS_DIR = os.path.join(BASE_DIR, "logs")
+LOGS_DIR = str(entorno.CARPETA_LOGS)
 
 PARTICULAS_MENORES = {'de', 'del', 'la', 'las', 'los', 'el', 'al', 'y', 'e', 'en', 'o'}
 PREFIJOS_VALIDOS_TLF = ('0412', '0414', '0424', '0416', '0426', '0212', '0254', '0251', '0255', '0281', '0241')
@@ -258,18 +259,16 @@ def normalizar_col_nombre(txt: str) -> str:
 
 def limpiar_cedula(val) -> str:
     """
-    Extrae el documento respetando prefijo de nacionalidad extranjero (E-) o venezolano (V-).
+    Extrae el documento respetando prefijo de nacionalidad extranjero (E-) o venezolano (dígitos limpios).
+    Delega en la fuente única de verdad modulos.identidad_utils.limpiar_cedula_universal.
     Ejemplo: 'E-12345678' -> 'E-12345678', 'E12345678' -> 'E-12345678', 'V12345678' -> '12345678'.
     """
-    txt = limpiar_texto(val).upper().replace(" ", "").replace(".", "")
-    if not txt or txt in ("0", "000", "SD", "S/D", "S/C", "NOAPLICA", "NO APLICA", "NONE"):
+    ced_uni = limpiar_cedula_universal(val)
+    if not ced_uni:
         return ""
-    
-    es_extranjero = txt.startswith("E-") or (txt.startswith("E") and len(txt) > 1 and txt[1:].isdigit())
-    digitos = re.sub(r'\D', '', txt)
-    if digitos and len(digitos) >= 5 and int(digitos) > 0:
-        return f"E-{digitos}" if es_extranjero else digitos
-    return ""
+    if ced_uni.startswith("V-"):
+        return ced_uni[2:]
+    return ced_uni
 
 def generar_cedula_escolar(fecha_nac_iso: str, cedula_padre: str, pos_hijo: str = "1") -> str:
     """

@@ -16,9 +16,10 @@ de modo que el bot nunca deja de arrancar por un problema de configuración.
 
 import os
 import json
+import modulos.entorno as entorno
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SETTINGS_PATH = os.path.join(BASE_DIR, "config", "settings.json")
+BASE_DIR = str(entorno.RAIZ_PROYECTO)
+SETTINGS_PATH = str(entorno.ARCHIVO_SETTINGS)
 
 DEFAULTS = {
     "timeouts": {

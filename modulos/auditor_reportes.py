@@ -32,14 +32,16 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CONFIG_DIR = os.path.join(BASE_DIR, "config")
-CONFIG_PATH = os.path.join(CONFIG_DIR, "config.ini")
+import modulos.entorno as entorno
+
+BASE_DIR = str(entorno.RAIZ_PROYECTO)
+CONFIG_DIR = str(entorno.CARPETA_CONFIG)
+CONFIG_PATH = str(entorno.ARCHIVO_CONFIG_INI)
 REPORTES_DIR = os.path.join(BASE_DIR, "Reportes_Auditoria")
-CACHE_INSPECTOR_PATH = os.path.join(BASE_DIR, "logs", "ultima_busqueda_inspector.json")
+CACHE_INSPECTOR_PATH = os.path.join(str(entorno.CARPETA_LOGS), "ultima_busqueda_inspector.json")
 from modulos.driver_factory import obtener_driver_resiliente
 from modulos.identidad_utils import LISTA_ESTADOS_VENEZUELA
-from modulos.web_utils import limpiar_overlays, esperar_desbloqueo_ajax
+from modulos.web_utils import limpiar_overlays, esperar_desbloqueo_ajax, realizar_login_infoapp
 
 def guardar_cache_inspector(resultado: dict, ruta_archivo: str = None) -> str:
     """
@@ -144,40 +146,8 @@ def esperar_desbloqueo(driver, timeout: int = 12):
     esperar_desbloqueo_ajax(driver, timeout=timeout)
 
 def autenticar_infoapp(driver, usuario: str, clave: str) -> bool:
-    """Inicia sesión en el portal de administración de InfoApp."""
-    wait = WebDriverWait(driver, 15)
-    url_login = "https://infoapp2.infocentro.gob.ve/admin/index.php"
-    driver.get(url_login)
-    esperar_desbloqueo(driver)
-
-    campo_user = wait.until(EC.visibility_of_element_located((By.NAME, "email")))
-    campo_user.clear()
-    campo_user.send_keys(usuario)
-
-    campo_pass = driver.find_element(By.ID, "password")
-    campo_pass.clear()
-    campo_pass.send_keys(clave)
-
-    # Intentar click sobre botón de login con fallback a JS click
-    try:
-        btn = driver.find_element(By.XPATH, "//input[@value='Iniciar Sesión']")
-        try:
-            btn.click()
-        except Exception:
-            driver.execute_script("arguments[0].click();", btn)
-    except Exception:
-        try:
-            btn_sub = driver.find_element(By.XPATH, "//input[@type='submit'] | //button[@type='submit']")
-            try:
-                btn_sub.click()
-            except Exception:
-                driver.execute_script("arguments[0].click();", btn_sub)
-        except Exception:
-            pass
-
-    wait.until(EC.url_changes(url_login))
-    esperar_desbloqueo(driver)
-    return True
+    """Inicia sesión en el portal de administración de InfoApp delegando a web_utils."""
+    return realizar_login_infoapp(driver, usuario, clave)
 
 # =============================================================================
 # 1. PARSEO DE CONTENIDO CON BEAUTIFULSOUP (HTML)

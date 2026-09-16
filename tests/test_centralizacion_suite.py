@@ -56,13 +56,21 @@ class TestCentralizacionEcosistema(unittest.TestCase):
             self.fail(f"La interfaz gráfica colapsó al instanciarse: {e}")
 
     def test_05_casos_borde_identidad(self):
-        """Prueba casos borde: entradas vacías, minúsculas y caracteres especiales."""
+        """Prueba casos borde: entradas vacías, minúsculas, flotantes de Excel y prefijos extranjeros inválidos."""
         self.assertEqual(limpiar_cedula_universal(""), "")
         self.assertEqual(limpiar_cedula_universal(None), "")
         self.assertEqual(limpiar_cedula_universal("v-12.345.678"), "V-12345678")
         self.assertEqual(limpiar_cedula_universal("e-84.321.000"), "E-84321000")
+        self.assertEqual(limpiar_cedula_universal(30348783.0), "V-30348783")
+        self.assertEqual(limpiar_cedula_universal("00000000"), "")
+        self.assertEqual(limpiar_cedula_universal("123"), "")
+        self.assertEqual(limpiar_cedula_universal("SD"), "")
         self.assertEqual(formatear_telefono_venezolano("+58 424 1234567"), "0424-1234567")
         self.assertEqual(formatear_telefono_venezolano("4161234567"), "0416-1234567")
+        self.assertEqual(formatear_telefono_venezolano(4121234567.0), "0412-1234567")
+        # Números extranjeros no venezolanos deben retornar el default
+        self.assertEqual(formatear_telefono_venezolano("+1 555-1234567"), "0412-0000000")
+        self.assertEqual(formatear_telefono_venezolano("12345678901"), "0412-0000000")
         self.assertEqual(formatear_nombre_institucional(""), "")
         self.assertEqual(formatear_nombre_institucional("MARIA DE LOS ANGELES"), "Maria de los Angeles")
 
@@ -91,6 +99,36 @@ class TestCentralizacionEcosistema(unittest.TestCase):
             esperar_desbloqueo_ajax(mock_driver, timeout=1)
         except Exception as e:
             self.fail(f"web_utils no atrapó la excepción: {e}")
+
+    @patch("selenium.webdriver.Firefox")
+    def test_08_driver_factory_preferencia_navegador(self, mock_firefox):
+        """Verifica que si se especifica navegador preferido, se intente primero."""
+        instancia_mock = MagicMock()
+        mock_firefox.return_value = instancia_mock
+        driver = obtener_driver_resiliente(headless=True, navegador_preferido="firefox")
+        self.assertIsNotNone(driver)
+        mock_firefox.assert_called_once()
+
+    def test_09_gui_resurreccion_reanudacion_indice(self):
+        """Verifica que el diálogo de resurrección preserve el índice_inicio para no reiniciar en cero."""
+        try:
+            app = JsBotGUI()
+            app.withdraw()
+            estado_simulado = {
+                "participantes": [
+                    {"nombre": "P1", "cedula": "11111111"},
+                    {"nombre": "P2", "cedula": "22222222"},
+                    {"nombre": "P3", "cedula": "33333333"}
+                ],
+                "indice_ultimo_procesado": 2,
+                "url": "https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=999"
+            }
+            app._reanudar_flujo_desde_estado(estado_simulado, tipo="formacion")
+            self.assertEqual(getattr(app, "indice_inicio_recuperacion_formacion", 0), 2)
+            self.assertEqual(len(app.participantes_cargados), 3)
+            app.destroy()
+        except Exception as e:
+            self.fail(f"Fallo en la reanudación de sesión: {e}")
 
 if __name__ == "__main__":
     unittest.main()
