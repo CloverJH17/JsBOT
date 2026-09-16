@@ -374,6 +374,145 @@ class JsBotGUI(ctk.CTk):
         except Exception as e:
             self._agregar_log(f"[ERROR] No se pudo reanudar sesión: {e}")
 
+    def _mostrar_modal_resolucion_huerfanos(self, huerfanos: list, seccion: str = "Formacion"):
+        """Muestra modal interactivo no bloqueante para asignar C.I. de tutor o gestionar menores sin documento."""
+        modal = ctk.CTkToplevel(self)
+        modal.title("Resolución de Menores sin Cédula ni Tutor")
+        modal.geometry("540x440")
+        modal.resizable(False, False)
+        try:
+            modal.grab_set()
+        except Exception:
+            pass
+
+        lbl_tit = ctk.CTkLabel(
+            modal,
+            text=f"⚠️ Se detectaron {len(huerfanos)} menor(es) sin Cédula ni Representante",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#F39C12"
+        )
+        lbl_tit.pack(pady=(16, 6))
+
+        lbl_desc = ctk.CTkLabel(
+            modal,
+            text="InfoApp requiere vincular un tutor para generar la Cédula Escolar o buscar al participante.\nIngresa la C.I. del Representante para asignar a este grupo:",
+            font=ctk.CTkFont(size=11),
+            text_color="#D1D1D6",
+            wraplength=500
+        )
+        lbl_desc.pack(pady=(0, 10))
+
+        # Lista previa de menores
+        frame_lista = ctk.CTkScrollableFrame(modal, height=130, fg_color="#181822", border_width=1, border_color="#292938")
+        frame_lista.pack(fill="x", padx=20, pady=(0, 12))
+
+        for i, h in enumerate(huerfanos, 1):
+            nom = f"{h.get('nombre', '')} {h.get('apellido', '')}".strip() or "Participante"
+            edad = f"{h.get('edad')} años" if h.get('edad') else "Edad N/D"
+            lbl_item = ctk.CTkLabel(
+                frame_lista,
+                text=f"• #{i} {nom} ({edad})",
+                font=ctk.CTkFont(size=11),
+                anchor="w"
+            )
+            lbl_item.pack(fill="x", padx=6, pady=2)
+
+        # Entrada Cédula Representante
+        row_ci = ctk.CTkFrame(modal, fg_color="transparent")
+        row_ci.pack(fill="x", padx=20, pady=(0, 8))
+
+        lbl_ci = ctk.CTkLabel(row_ci, text="C.I. Representante:", font=ctk.CTkFont(size=11, weight="bold"))
+        lbl_ci.pack(side="left", padx=(0, 8))
+
+        entry_ci_tutor = ctk.CTkEntry(row_ci, placeholder_text="Ej: 12345678 o V-12345678", font=ctk.CTkFont(size=11), height=32)
+        entry_ci_tutor.pack(side="left", fill="x", expand=True)
+
+        lbl_err = ctk.CTkLabel(modal, text="", font=ctk.CTkFont(size=10), text_color="#E74C3C")
+        lbl_err.pack(pady=(0, 8))
+
+        frame_btns = ctk.CTkFrame(modal, fg_color="transparent")
+        frame_btns.pack(pady=(0, 16))
+
+        def _asignar():
+            val = entry_ci_tutor.get().strip()
+            from modulos.identidad_utils import limpiar_cedula_universal
+            ced_limpia = limpiar_cedula_universal(val)
+            if not ced_limpia:
+                lbl_err.configure(text="⚠️ Cédula inválida. Ingresa un número válido de al menos 5 dígitos.")
+                return
+            
+            from modulos.normalizador_datos import asignar_tutor_a_huerfano
+            for h in huerfanos:
+                asignar_tutor_a_huerfano(h, ced_limpia)
+
+            self._agregar_log(f"[TUTOR] Asignada C.I. {ced_limpia} a {len(huerfanos)} menores huérfanos.")
+            modal.destroy()
+            self._actualizar_prevuelo_tras_resolucion(seccion=seccion)
+
+        def _conservar_cortesia():
+            self._agregar_log(f"[AVISO] {len(huerfanos)} menores conservados como carga de cortesía (sin tutor).")
+            modal.destroy()
+
+        def _omitir():
+            self.participantes_cargados = [p for p in self.participantes_cargados if p not in huerfanos]
+            self.datos_normalizados_actuales = self.participantes_cargados
+            self._agregar_log(f"[AVISO] {len(huerfanos)} menores sin tutor omitidos de la lista.")
+            modal.destroy()
+            self._actualizar_prevuelo_tras_resolucion(seccion=seccion)
+
+        btn_asignar = ctk.CTkButton(
+            frame_btns,
+            text="Asignar C.I. Tutor",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#1f538d",
+            hover_color="#14375e",
+            command=_asignar
+        )
+        btn_asignar.pack(side="left", padx=6)
+
+        btn_cortesia = ctk.CTkButton(
+            frame_btns,
+            text="Carga de Cortesía",
+            font=ctk.CTkFont(size=11),
+            fg_color="#4A4A5A",
+            hover_color="#3A3A4A",
+            command=_conservar_cortesia
+        )
+        btn_cortesia.pack(side="left", padx=6)
+
+        btn_omitir = ctk.CTkButton(
+            frame_btns,
+            text="Omitir Menores",
+            font=ctk.CTkFont(size=11),
+            fg_color="#C0392B",
+            hover_color="#962D22",
+            command=_omitir
+        )
+        btn_omitir.pack(side="left", padx=6)
+
+    def _actualizar_prevuelo_tras_resolucion(self, seccion: str = "Formacion"):
+        """Recalcula métricas de pre-vuelo tras editar participantes o asignar tutores."""
+        participantes = self.participantes_cargados or []
+        total = len(participantes)
+        ci_saime = sum(1 for p in participantes if p.get('cedulado') == 'si' or p.get('cedula'))
+        ci_escolar = sum(1 for p in participantes if p.get('cedula_escolar') or p.get('cedula_padre'))
+        menores_sin_doc = sum(1 for p in participantes if not (p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre')))
+
+        desglose_txt = f"{ci_saime} Cedulados  |  {ci_escolar} Escolares  |  {menores_sin_doc} Menores S/C"
+        estado_txt = "● Estructura Actualizada y Válida" if menores_sin_doc == 0 else f"▲ {menores_sin_doc} menor(es) sin tutor"
+        estado_col = "#30D158" if menores_sin_doc == 0 else "#F39C12"
+
+        if seccion == "Servicios":
+            if hasattr(self, "lbl_prevuelo_servicios_total"):
+                self.lbl_prevuelo_servicios_total.configure(text=f"Total: {total} usuarios")
+                self.lbl_prevuelo_servicios_desglose.configure(text=desglose_txt)
+                self.lbl_prevuelo_servicios_estado.configure(text=estado_txt, text_color=estado_col)
+        else:
+            if hasattr(self, "lbl_prevuelo_formacion_total"):
+                self.lbl_prevuelo_formacion_total.configure(text=f"Total: {total} participantes")
+                self.lbl_prevuelo_formacion_desglose.configure(text=desglose_txt)
+                self.lbl_prevuelo_formacion_estado.configure(text=estado_txt, text_color=estado_col)
+
     def _cargar_iconos(self):
         """Carga los iconos PNG desde config/assets/iconos/ usando CTkImage."""
         self.iconos = {}
@@ -595,6 +734,9 @@ class JsBotGUI(ctk.CTk):
                 vista.grid_forget()
 
         self._agregar_log(f"[NAVEGACIÓN] Sección activa: {seccion_clave}")
+
+        if seccion_clave in ("Formacion", "Servicios") and MODULOS_DISPONIBLES:
+            self.after(60, self.comprobar_sesion_interrumpida_gui)
 
     # =========================================================================
     # 2. CONTENEDOR PRINCIPAL Y VISTAS
@@ -3547,21 +3689,12 @@ class JsBotGUI(ctk.CTk):
                 if not (tiene_nombre and tiene_doc):
                     inconsistencias += 1
 
-            if menores_sin_doc > 0:
-                self._agregar_log(f"[ADVERTENCIA] Se detectaron {menores_sin_doc} participantes SIN DOCUMENTO ni Cédula de Representante.")
-                self._agregar_log(f"[AVISO] Sin documento de tutor, InfoApp no permite registrar ni buscar a estos menores.")
-                if menores_sin_doc == total:
-                    self._mostrar_modal_mensaje(
-                        titulo="Participantes Sin Documento",
-                        mensaje=(
-                            f"Se detectaron {total} participantes en '{os.path.basename(ruta)}' sin Cédula de Identidad ni Cédula de Representante.\n\n"
-                            "⚠️ IMPORTANTE:\n"
-                            "• InfoApp exige la Cédula del Representante para registrar menores o generar su Cédula Escolar.\n"
-                            "• Sin cédula ni representante, tampoco es posible buscarlos en el sistema.\n\n"
-                            "👉 Añade al menos la Cédula del Representante en el archivo para habilitar la carga."
-                        ),
-                        tipo="aviso"
-                    )
+            from modulos.normalizador_datos import obtener_huerfanos_de_documento
+            huerfanos_detectados = obtener_huerfanos_de_documento(participantes)
+            if huerfanos_detectados:
+                self._agregar_log(f"[ADVERTENCIA] Se detectaron {len(huerfanos_detectados)} participantes SIN DOCUMENTO ni Cédula de Representante.")
+                self._agregar_log(f"[AVISO] Abriendo diálogo interactivo de resolución de tutor...")
+                self.after(100, lambda: self._mostrar_modal_resolucion_huerfanos(huerfanos_detectados, seccion=seccion))
 
             if inconsistencias == 0:
                 if dup_omitidos > 0:

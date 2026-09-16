@@ -285,8 +285,7 @@ def configurar_logger(ruta_log: str = None, nivel: str = "INFO"):
         rotation="5 MB",
         compression="zip",
         encoding="utf-8",
-        level=nivel,
-        enqueue=True
+        level=nivel
     )
     return logger
 
@@ -476,7 +475,9 @@ def generar_reporte_auditoria_excel(config: dict, exitosos: list, fallidos: list
                     "Acción Sugerida": "Verificar en InfoApp manualmente o corregir datos"
                 })
 
-        while True:
+        max_intentos = 3
+        intento = 0
+        while intento < max_intentos:
             try:
                 with pd.ExcelWriter(ruta_excel, engine='openpyxl') as writer:
                     df_ex = pd.DataFrame(datos_exitosos) if datos_exitosos else pd.DataFrame([{"Mensaje": "No se registraron participantes exitosos"}])
@@ -487,8 +488,16 @@ def generar_reporte_auditoria_excel(config: dict, exitosos: list, fallidos: list
                         df_fa.to_excel(writer, sheet_name="Incidencias", index=False)
                 break
             except PermissionError:
-                print(f"\n⚠️ El archivo '{os.path.basename(ruta_excel)}' está abierto en Excel o LibreOffice.")
-                input("Por favor ciérralo y presiona Enter para reintentar el guardado...")
+                intento += 1
+                if sys.stdin and sys.stdin.isatty():
+                    print(f"\n⚠️ El archivo '{os.path.basename(ruta_excel)}' está abierto en Excel o LibreOffice.")
+                    try:
+                        input("Por favor ciérralo y presiona Enter para reintentar el guardado...")
+                    except Exception:
+                        pass
+                else:
+                    ts_alt = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    ruta_excel = os.path.join(LOGS_DIR, f"Auditoria_Actividad_{id_act}_{ts_alt}.xlsx")
 
         return ruta_excel
     except Exception as e:
@@ -655,7 +664,9 @@ def generar_reporte_auditoria_servicios(config: dict, config_servicio: dict, per
                 "Incidencia / Detalle": f.get('detalle', 'Error no especificado')
             })
 
-        while True:
+        max_intentos = 3
+        intento = 0
+        while intento < max_intentos:
             try:
                 with pd.ExcelWriter(ruta_excel, engine='openpyxl') as writer:
                     df_ex = pd.DataFrame(datos_ex) if datos_ex else pd.DataFrame([{"Mensaje": "Sin exitosos"}])
@@ -665,8 +676,16 @@ def generar_reporte_auditoria_servicios(config: dict, config_servicio: dict, per
                         df_fa.to_excel(writer, sheet_name="Incidencias", index=False)
                 break
             except PermissionError:
-                print(f"\n⚠️ El archivo '{os.path.basename(ruta_excel)}' está abierto en Excel o LibreOffice.")
-                input("Por favor ciérralo y presiona Enter para reintentar el guardado...")
+                intento += 1
+                if sys.stdin and sys.stdin.isatty():
+                    print(f"\n⚠️ El archivo '{os.path.basename(ruta_excel)}' está abierto en Excel o LibreOffice.")
+                    try:
+                        input("Por favor ciérralo y presiona Enter para reintentar el guardado...")
+                    except Exception:
+                        pass
+                else:
+                    ts_alt = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    ruta_excel = os.path.join(LOGS_DIR, f"Auditoria_Servicios_{ts_alt}.xlsx")
 
         return ruta_excel
     except Exception as e:

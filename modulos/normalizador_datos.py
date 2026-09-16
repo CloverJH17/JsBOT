@@ -48,7 +48,11 @@ def abrir_archivo_asistido(ruta_archivo: str) -> None:
         print(f"👉 Por favor abre y edita manualmente el archivo en:")
         print(f"   {os.path.abspath(ruta_archivo)}")
         print("=" * 80)
-        input("\nPresiona [Enter] cuando hayas terminado de corregir y guardar el archivo...")
+        if sys.stdin and sys.stdin.isatty():
+            try:
+                input("\nPresiona [Enter] cuando hayas terminado de corregir y guardar el archivo...")
+            except Exception:
+                pass
 
 try:
     import tkinter as tk
@@ -300,6 +304,27 @@ def limpiar_telefono(val) -> str:
     txt = limpiar_texto(val)
     return formatear_telefono_venezolano(txt, default=TELEFONO_DEFAULT)
 
+def obtener_huerfanos_de_documento(participantes: list) -> list:
+    """Retorna la lista de participantes que carecen de cédula propia, escolar y de tutor."""
+    if not participantes:
+        return []
+    return [
+        p for p in participantes 
+        if p.get('cedulado') == 'sin_documento' or (not p.get('cedula') and not p.get('cedula_escolar') and not p.get('cedula_padre'))
+    ]
+
+def asignar_tutor_a_huerfano(participante: dict, cedula_tutor: str) -> dict:
+    """Asigna la cédula del tutor a un menor y calcula su cédula escolar matemática."""
+    ced_limpia = limpiar_cedula_universal(cedula_tutor)
+    if ced_limpia:
+        # Remover prefijo V- o E- para almacenar en cedula_padre limpio
+        ced_digitos = re.sub(r'\D', '', ced_limpia)
+        participante['cedula_padre'] = ced_digitos
+        participante['cedulado'] = 'escolar' if participante.get('nacimiento') else 'no'
+        fn_iso = participante.get('nacimiento', '')
+        participante['cedula_escolar'] = generar_cedula_escolar(fn_iso, ced_digitos)
+    return participante
+
 def resolver_huerfanos_de_documento(participantes: list, modo_interactivo: bool = True) -> list:
     """
     Identifica y gestiona participantes sin documento de identidad propio ni de tutor ('sin_documento').
@@ -308,7 +333,7 @@ def resolver_huerfanos_de_documento(participantes: list, modo_interactivo: bool 
     """
     if not participantes:
         return []
-    huerfanos = [p for p in participantes if p.get('cedulado') == 'sin_documento' or (not p.get('cedula') and not p.get('cedula_escolar') and not p.get('cedula_padre'))]
+    huerfanos = obtener_huerfanos_de_documento(participantes)
     if not huerfanos:
         return participantes
 
@@ -996,7 +1021,19 @@ def auditar_integridad_lote(participantes: list, ruta_archivo: str = "") -> dict
         if not p.get('nacimiento'):
             sin_nacimiento += 1
 
-    requiere_atencion = (sin_doc > 0)
+    # Detección de duplicados
+    duplicados = []
+    vistos = set()
+    for p in participantes:
+        doc = p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre')
+        nom_comp = f"{p.get('nombre', '')} {p.get('apellido', '')}".strip().lower()
+        clave = (doc, nom_comp) if doc else ('sin_doc', nom_comp)
+        if clave in vistos:
+            duplicados.append(p)
+        else:
+            vistos.add(clave)
+
+    requiere_atencion = (sin_doc > 0 or len(duplicados) > 0)
     bloqueante_registro = (sin_doc == total and total > 0)
 
     return {
@@ -1006,6 +1043,8 @@ def auditar_integridad_lote(participantes: list, ruta_archivo: str = "") -> dict
         "con_escolar": con_escolar,
         "sin_genero": sin_genero,
         "sin_nacimiento": sin_nacimiento,
+        "duplicados": len(duplicados),
+        "lista_duplicados": duplicados,
         "requiere_atencion": requiere_atencion,
         "bloqueante_registro": bloqueante_registro,
         "archivo": os.path.basename(ruta_archivo) if ruta_archivo else ""
