@@ -26,8 +26,6 @@ from modulos.web_utils import (
     limpiar_overlays,
     esperar_desbloqueo_ajax,
     realizar_login_infoapp,
-    escribir_input_nativo_js,
-    scroll_y_obtener,
 )
 from modulos.interfaz_usuario import (
     prompt_reintentar_alumno,
@@ -1053,7 +1051,7 @@ class AdaptadorWebHibrido:
     def iniciar(self):
         cfg_browser = cm.obtener_browser_cfg()
         nav = cfg_browser["priority"][0] if cfg_browser["priority"] else "chromium"
-        self.pw, self.context = iniciar_contexto_playwright(
+        self.pw, self.context = obtener_contexto_playwright(
             user_data_dir=self.user_data_dir,
             headless=self.headless,
             navegador=nav

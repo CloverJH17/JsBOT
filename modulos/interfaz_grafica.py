@@ -2480,7 +2480,11 @@ class JsBotGUI(ctk.CTk):
         if not self.resultado_auditoria_actual:
             return
 
-        tab_actual = self.tabview_auditoria.get()
+        tabview = getattr(self, "tabview_auditoria", None)
+        if not tabview:
+            return
+
+        tab_actual = tabview.get()
         if "Actividades" in tab_actual or "Formaciones" in tab_actual:
             self._abrir_ventana_flotante_inspeccion("actividades")
         elif "Servicios" in tab_actual:

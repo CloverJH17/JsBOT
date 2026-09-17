@@ -8,8 +8,8 @@
     },
     "browser": {
         "priority": [
-            "chrome",
             "firefox",
+            "chrome",
             "edge"
         ],
         "start_maximized": true

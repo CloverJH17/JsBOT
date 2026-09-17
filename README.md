@@ -3,9 +3,10 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
-[![Automation](https://img.shields.io/badge/Engine-Selenium%20%2B%20HTTP%20Turbo-green.svg)](https://www.selenium.dev/)
-[![Tests](https://img.shields.io/badge/Tests-282%20passed-success.svg)](#calidad-y-resiliencia)
+[![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
+[![Tests](https://img.shields.io/badge/Tests-391%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
+[![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
 > **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección masiva de participantes, generación de actas formativas ODS/XLSX, auditoría operativa de alto rendimiento y telemetría atómica en la plataforma institucional InfoApp (Fundación Infocentro).
 
@@ -154,6 +155,22 @@ Get-ChildItem tests\test_*.py | ForEach-Object { python -m pytest $_.FullName -q
 - **Tests de Interfaz Gráfica:** Modales bloqueantes al frente (`grab_set()`), layouts responsivos y reactividad.
 - **Tests de Concurrencia y Resiliencia:** Bloqueo de instancias duplicadas y checkpoints ACID ante cortes eléctricos.
 - **Tests de Ingesta y Normalización:** Cobertura exhaustiva de clasificación SAIME/Escolar/Sin documento y saneamiento telefónico.
+
+---
+
+## 🧠 Arquitectura y Grafo de Conocimiento (Codebase Memory)
+
+JsBOT cuenta con un grafo de conocimiento y memoria estructural relacional indexado mediante [Codebase Memory MCP](https://github.com/DeusData/codebase-memory-mcp) que mapea de forma determinista todas las funciones, métodos, clases y flujos de ejecución del proyecto:
+
+* **Topología Indexada:** 1.148 nodos y 5.034 aristas relacionales (`CALLS`, `DEFINES`, `TESTS`, `IMPORTS`).
+* **Cero Código Muerto:** Arquitectura 100% cohesionada con desacoplamiento estricto entre presentación (GUI/CLI), lógica ETL (`normalizador_datos.py`), auditoría (`auditor_reportes.py`) y persistencia ACID (`gestor_sesion.py`).
+* **Visualización 3D Interactiva:** Mapa de constelación navegable en tiempo real a través del servidor web integrado en el puerto `9749`.
+
+```bash
+# Iniciar servidor y explorar el grafo 3D del proyecto
+codebase-memory-mcp
+# Navegar a: http://localhost:9749
+```
 
 ---
 

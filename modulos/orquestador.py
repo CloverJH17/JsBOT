@@ -27,9 +27,7 @@ if sys.platform.startswith('win'):
 
 # Asegurar que el directorio raíz esté en sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
+import modulos.entorno as entorno
 from modulos.version import ETIQUETA_VERSION
 from modulos.interfaz_usuario import (
     imprimir_banner,
@@ -444,6 +442,12 @@ def iniciar_sistema(args: list = None):
             modo = "gui"
 
     if modo == "gui":
+        if not entorno.verificar_display_linux():
+            print("\n⚠️  [AVISO] No se detectó servidor gráfico (DISPLAY/Wayland) en Linux.")
+            print("🔄 Iniciando automáticamente en modo consola interactiva (CLI)...\n")
+            time.sleep(1)
+            flujo_consola()
+            return
         try:
             from modulos.interfaz_grafica import AppGUI
             app = AppGUI()

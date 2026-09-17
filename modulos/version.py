@@ -21,7 +21,3 @@ __author__ = "Jair Alejandro Hernandez Gonzalez"
 NOMBRE_APP = "JsBOT (Robotic Process Automation)"
 ETIQUETA_VERSION = f"v{__version__}"
 
-
-def banner_texto(descripcion: str = "GESTION MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO") -> str:
-    """Compone la linea central del banner CLI con ancho fijo de 78 columnas."""
-    return f"JsBOT {ETIQUETA_VERSION} — {descripcion}"

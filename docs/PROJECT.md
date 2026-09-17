@@ -1,11 +1,12 @@
-# Project: JsBOT v4.4.0 Robustness & UI Architecture
+# Project: JsBOT v4.8.0 Robustness & UI Architecture
 
 ## Architecture
 - **GUI Engine**: CustomTkinter on top of Tkinter / Tcl.
-- **Threading Model**: Main thread strictly runs Tkinter event loop (`mainloop()`) and polling loop (`_iniciar_escucha_cola` every 35 ms via `.after()`). All heavy computations (Pandas, Selenium, OpenPyXL, ODS/report generation) and network/disk I/O run on background daemon threads and communicate exclusively through `cola_eventos = queue.Queue()`.
+- **Threading Model**: Main thread strictly runs Tkinter event loop (`mainloop()`) and polling loop (`_iniciar_escucha_cola` every 35 ms via `.after()`). All heavy computations (Pandas, Playwright, OpenPyXL, ODS/report generation) and network/disk I/O run on background daemon threads and communicate exclusively through `cola_eventos = queue.Queue()`.
 - **Modal Lifecycle**: Centralized tracking in `self.modales_activos: dict[str, ctk.CTkToplevel]`. Every modal registers a `"WM_DELETE_WINDOW"` protocol, releases grabs safely, and cleans up upon dismissal, view change, or session reset.
 - **View Navigation**: Canonical view registry and accent-insensitive normalization (`normalizar_clave_vista`). Frame switching operates on unique widget instances (`set(self.vistas.values())`) preventing self-ungriding bugs.
 - **Canaima GNU/Linux Shielding**: Early injection of `os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")` before graphics/Tk imports, plus headless/X11 display fallback detection (`verificar_display_linux()`).
+- **Codebase Memory Graph**: Relational AST knowledge graph (1.148 nodes, 5.034 edges) for instant structural navigation, call tracing, and zero dead-code validation.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source | Status |
@@ -33,7 +34,7 @@
 | 2 | M2: GUI Thread Decoupling & Queue Polling (R2) | Replace `after(0)` in load workers with `cola_eventos.put`, background thread for report export, non-blocking cache save | M1 | DONE | 10,000 events stress tested with 0 drops; background I/O < 24ms; Doherty startup < 2.5s, navigation < 100ms |
 | 3 | M3: View Navigation & Normalization (R3) | Canonical navigation aliases, accent normalization (`normalizar_clave_vista`), identity-based frame switching | M1 | DONE | Unicode NFKD accent normalization passed; self-ungriding eliminated; canonical aliases functioning |
 | 4 | M4: Canaima GNU/Linux Compatibility (R4) | Early `LIBGL_ALWAYS_SOFTWARE=1` injection, `DISPLAY` checking in `modulos/entorno.py` and `main.py` | None | DONE | Early injection verified in main.py, entorno.py, interfaz_grafica.py; display check verified |
-| 5 | M5: Acceptance & Full Suite Regression Verification | Run all 65 audit tests in `tests/test_auditoria_completa_ui_ux.py` + full test suite, verify no regressions | M1, M2, M3, M4 | DONE | 65/65 GUI audit tests passed (100%); 219/219 core unit tests passed (100%); 0 regressions; Forensic Audit CLEAN |
+| 5 | M5: Acceptance & Full Suite Regression Verification | Run all 65 audit tests in `tests/test_auditoria_completa_ui_ux.py` + full test suite, verify no regressions | M1, M2, M3, M4 | DONE | 391/391 comprehensive unit, stress, and GUI tests passed (100%); 0 regressions; Forensic Audit CLEAN |
 
 ## Interface Contracts
 ### Modal Registry ↔ `JsBotGUI`
