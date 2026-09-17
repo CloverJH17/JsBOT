@@ -1,13 +1,13 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.4.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.8.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Selenium%20%2B%20HTTP%20Turbo-green.svg)](https://www.selenium.dev/)
-[![Tests](https://img.shields.io/badge/Tests-393%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-282%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 
-> **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección de participantes, generación de actas formativas ODS y auditoría operativa en la plataforma institucional InfoApp (Fundación Infocentro).
+> **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección masiva de participantes, generación de actas formativas ODS/XLSX, auditoría operativa de alto rendimiento y telemetría atómica en la plataforma institucional InfoApp (Fundación Infocentro).
 
 ---
 
@@ -15,28 +15,33 @@
 
 - **Arquitectura Bimodal (GUI + CLI):**
   - **Modo Gráfico Nativo:** Interfaz moderna en Dark Mode construida con CustomTkinter, optimizada para resoluciones desde 1366×768 hasta 1080p.
-  - **Modo Consola Interactivo (CLI):** Menú rápido por terminal asistido por Rich e InquirerPy.
+  - **Modo Consola Interactivo (CLI):** Menú rápido por terminal asistido por Rich e InquirerPy con banner dinámico unificado.
   - **Feature Toggle & Fallback:** Conmutación automática a consola si el entorno anfitrión carece de servidor gráfico X11/Wayland.
-- **Inspector de Auditoría y Balance Operativo (v4.2.7):**
+- **Ecosistema de Auditoría Ultra Rápida (Aceleración 50x):**
+  - **Motor de Extracción Nativo (`motor_export_auditoria.py`):** Consulta directa de endpoints optimizados reduciendo tiempos de consulta de 14 minutos a solo 17 segundos en rangos masivos de 40.000+ registros.
+  - **Cruce Híbrido de Seguridad:** Combina la descarga masiva con la vista HTML para rescatar actividades en borrador o con 0 participantes (0% de pérdida de registros).
   - **Auditorías Multi-criterio:** Búsqueda por Facilitador (UID con aislamiento estricto de sede), por Infocentro (código de sede) o Resumen Estadal (Región completa).
-  - **Modo Turbo (HTTP Concurrente):** Aceleración extrema desacoplando Selenium tras el login hacia peticiones paralelas con `requests.Session` y `ThreadPoolExecutor` (hasta 10x más rápido).
-  - **Doble Capa de Extracción (DOM Fallback):** Recuperación robusta de temas, talleres, participantes y productos incluso ante etiquetas ausentes en el HTML.
   - **Dashboard Analítico:** 4 KPIs de alto impacto con promedios por aula, sedes únicas, trámites más demandados y control de cuadre matemático (100%).
   - **Ventanas Modales al Frente:** Inspección detallada con modalidad bloqueante estricta (`grab_set()`), buscador reactivo y cabeceras clickeables para ordenamiento instantáneo.
-  - **Exportación Interactiva Multiformato:** Generación a un clic de reportes en Excel (.xlsx con auto-filtro en todas las hojas), LibreOffice (.odt), PDF (.pdf), CSV (.csv) o Consola con diálogo de guardado y apertura automática en el sistema operativo.
-  - **Caché Ligero Local:** Almacenamiento JSON para consulta y revisión offline inmediata.
+  - **Exportación Multiformato:** Generación en 1 clic de reportes en Excel (.xlsx con auto-filtro en todas las hojas), LibreOffice (.odt), PDF (.pdf), CSV (.csv) o Consola con diálogo de guardado y apertura automática en el sistema operativo.
+- **Verificador Post-Carga y Anti-Duplicados:**
+  - Confirmación instantánea (0.5s) de participantes y servicios cargados contrastando directamente contra la base de datos de InfoApp (`verificador_cargas_export.py`).
+  - Extracción previa de participantes existentes para prevenir duplicidades en aula.
+- **Generador de Planillas Oficiales desde InfoApp:**
+  - Generación de planillas oficiales ODS y XLSX de asistencia con datos reales descargados desde cualquier ID de actividad en InfoApp.
+- **Diagnóstico Preventivo del Facilitador:**
+  - Detección proactiva de actividades creadas sin participantes cargados o inconsistencias de registro (`diagnostico_facilitador.py`).
+- **Telemetría y Bitácora Atómica en SQLite:**
+  - Registro de eventos y auditorías en tabla indexada `app_logs` dentro de `data/jsbot.db` con transacciones ACID y modo WAL.
+  - Purga automática y retención inteligente a 30 días, eliminando archivos de texto redundantes en disco.
 - **Motor ETL de Normalización Inteligente:**
-  - Ingesta multi-formato (`.xlsx`, `.ods`, `.csv`).
+  - Ingesta multi-formato (`.xlsx`, `.ods`, `.csv`, `.txt`).
   - Detección automática de Cédulas SAIME (`V-`), generación de Cédulas Escolares estructuradas (`CE`), corrección de claves truncadas y protección ante menores sin documento.
-  - Limpieza de cadenas a formato Title Case institucional y saneamiento telefónico.
-- **Auditoría Previa (Pre-Flight Data Panel):**
-  - Panel de resumen de datos antes de disparar Selenium.
-  - Visor modal tabular (`CTkToplevel`) para inspeccionar la lista normalizada de alumnos en vivo.
-- **Planillas Oficiales ODS:**
-  - Generación directa de reportes y actas formativas en formato abierto OpenDocument Spreadsheet (`.ods`).
+  - Limpieza de cadenas a formato Title Case institucional y saneamiento telefónico estandarizado a 11 dígitos.
 - **Blindaje y Concurrencia:**
   - Cerrojo de exclusión mutua (`file lock`) para prevenir instancias duplicadas.
-  - Suite certificada con 393 pruebas unitarias y de estrés (una sola pasada determinista por archivo) ante cortes abruptos de red o fallos eléctricos.
+  - Fuente única de versión centralizada en `modulos/version.py` sincronizada con `config/settings.json`.
+  - Suite certificada con más de 280 pruebas unitarias, de estrés y de regresión ante cortes abruptos de red o fallos eléctricos.
 
 ---
 
@@ -48,8 +53,8 @@
 | **Credenciales** | Administración segura de usuario y contraseña para la plataforma InfoApp. |
 | **Formación** | Carga masiva de participantes en actividades y cursos formativos. |
 | **Servicios** | Carga automatizada de beneficiarios y registros de atención comunitaria. |
-| **Reportes** | Inspector de Auditoría, balances operativos, ventanas modales y exportación multiformato. |
-| **Planillas** | Generación de planillas formativas oficiales `.ods` y actas institucionales. |
+| **Reportes** | Auditoría ultra rápida (50x), balances operativos, inspector modal y exportación multiformato. |
+| **Planillas** | Generación de planillas formativas oficiales `.ods` y exportación desde InfoApp. |
 | **Ajustes** | Calibración de timeouts de red (Login, AJAX, DOM) y conmutador visual de navegador. |
 | **Créditos** | Ficha técnica, licencias y autoría del proyecto. |
 
@@ -73,10 +78,11 @@ chmod +x linux.sh
 ```
 
 ### Ejecución en Windows
-Haz doble clic sobre `windows.bat` o ejecuta desde PowerShell / CMD:
-```dos
-windows.bat
-```
+- **Modo Estándar (con terminal de apoyo):** Haz doble clic sobre `windows.bat` o ejecuta desde PowerShell / CMD:
+  ```dos
+  windows.bat
+  ```
+- **Modo Silencioso (sin consola emergente):** Haz doble clic sobre `JsBOT_Sin_Consola.vbs`.
 
 ---
 
@@ -96,37 +102,46 @@ python main.py --cli
 ## 📂 Estructura del Proyecto
 ```plaintext
 JsBOT/
-├── config/                  # Ajustes, credenciales, plantillas ODS e iconos PNG
+├── config/                  # Ajustes, credenciales, plantilla ODS e iconos PNG
 │   ├── assets/iconos/       # Iconografía vectorial de la interfaz
 │   ├── settings.json        # Configuración centralizada de timeouts y parámetros
 │   ├── requirements.txt     # Dependencias técnicas del proyecto
+│   ├── config.example.ini   # Plantilla limpia de credenciales
 │   └── plantilla_base.ods   # Plantilla base institucional
-├── modulos/                 # Lógica de negocio y módulos desacoplados
-│   ├── auditor_reportes.py  # Motor de auditoría, balances, Turbo HTTP y exportación multiformato
-│   ├── automatizador_web.py # Automatización Playwright/Selenium y control de sesión
-│   ├── generador_planilla.py# Motor de exportación OpenDocument (.ods)
-│   ├── gestor_sesion.py     # Checkpoints ACID en SQLite y reportes de incidencias
+├── modulos/                 # Núcleo modular del sistema RPA
+│   ├── auditor_reportes.py  # Auditoría, balances, Turbo HTTP y exportación multiformato
+│   ├── motor_export_auditoria.py # Motor de extracción nativa ultra rápida (aceleración 50x)
+│   ├── verificador_cargas_export.py # Verificador post-carga y anti-duplicados en tiempo real
+│   ├── diagnostico_facilitador.py # Diagnóstico preventivo de actividades sin participantes
+│   ├── automatizador_web.py # Automatización Selenium/Playwright y control de sesión
+│   ├── generador_planilla.py# Motor de exportación OpenDocument (.ods y .xlsx)
+│   ├── gestor_sesion.py     # Checkpoints ACID y bitácora atómica en SQLite
 │   ├── interfaz_grafica.py  # Aplicación de escritorio nativa (CustomTkinter)
-│   ├── interfaz_usuario.py  # Interfaz de consola interactiva (Rich)
+│   ├── interfaz_usuario.py  # Interfaz de consola interactiva (Rich + InquirerPy)
 │   ├── normalizador_datos.py# Motor ETL y normalización de identidades
 │   ├── orquestador.py       # Despachador bimodal y control de ejecución
-│   └── verificador_entorno.py# Diagnóstico de librerías y conectividad
-├── data/                    # Base de datos SQLite unificada (jsbot.db) para telemetría y checkpoints
-├── docs/                    # Documentación arquitectónica, manuales e historial de versiones
+│   ├── verificador_entorno.py# Diagnóstico de librerías y conectividad
+│   ├── version.py           # Fuente única de versión del sistema
+│   └── entorno.py           # Blindaje estricto de rutas y directorios
+├── data/                    # Base de datos SQLite (jsbot.db) para telemetría y checkpoints
+├── docs/                    # Documentación arquitectónica, manuales e historial consolidado
+│   ├── arquitectura/        # Matriz y funciones de contexto
+│   ├── diagramas/           # Diagrama de flujo integral del sistema
+│   ├── manuales/            # Manual de funcionamiento técnico
+│   └── historial/           # version.txt consolidado
 ├── Features/                # Entorno de pruebas y desarrollo de nuevos features
-├── Reportes_Auditoria/      # Informes de auditoría exportados (.xlsx, .odt, .pdf, .csv)
-├── Planillas/               # Planillas formativas oficiales generadas (.ods)
-├── tests/                   # Suite completa de tests unitarios y de estrés
+├── tests/                   # Suite completa de tests unitarios, regresión y estrés
 ├── main.py                  # Punto de entrada raíz unificado
-├── windows.bat              # Lanzador resiliente para entornos Windows
-├── linux.sh                 # Lanzador resiliente con auto-instalador para Linux
-└── README.md                # Documentación técnica
+├── windows.bat              # Lanzador nativo para Windows
+├── JsBOT_Sin_Consola.vbs    # Lanzador silencioso sin ventana de terminal para Windows
+├── linux.sh                 # Lanzador resiliente para Canaima / Linux Mint
+└── README.md                # Documentación técnica oficial
 ```
 
 ---
 
 ## 🛡️ Calidad y Resiliencia
-El sistema cuenta con cobertura completa de pruebas automatizadas. La medida certificada (393 passed / 1 skipped / 0 failed) ejecuta cada archivo en su propio proceso para garantizar el aislamiento de las ventanas Tk/CustomTkinter (los módulos GUI no comparten un único proceso de prueba):
+El sistema cuenta con cobertura completa de pruebas automatizadas con aislamiento de procesos para widgets gráficos:
 ```bash
 # Linux / Canaima
 for f in tests/test_*.py; do python3 -m pytest "$f" -q --tb=short; done
@@ -135,10 +150,10 @@ for f in tests/test_*.py; do python3 -m pytest "$f" -q --tb=short; done
 # Windows PowerShell
 Get-ChildItem tests\test_*.py | ForEach-Object { python -m pytest $_.FullName -q --tb=short }
 ```
-- **Tests del Inspector:** Validación de DOM fallback, modo turbo HTTP concurrente, auto-filtro en Excel y aislamiento estricto de criterios.
-- **Tests de Interfaz Gráfica:** Verificación de modales bloqueantes al frente (`grab_set()`), layouts responsivos y reactividad.
-- **Tests de Concurrencia y Resiliencia:** Verificación de bloqueo de procesos concurrentes y checkpoints ante caídas de red o apagones.
-- **Tests de Ingesta y Normalización:** Cobertura exhaustiva de clasificación SAIME/Escolar/Sin documento, saneamiento y detección de anomalías.
+- **Tests del Motor Ultra Rápido:** Verificación de concurrencia, cruce híbrido y tolerancia a fallos.
+- **Tests de Interfaz Gráfica:** Modales bloqueantes al frente (`grab_set()`), layouts responsivos y reactividad.
+- **Tests de Concurrencia y Resiliencia:** Bloqueo de instancias duplicadas y checkpoints ACID ante cortes eléctricos.
+- **Tests de Ingesta y Normalización:** Cobertura exhaustiva de clasificación SAIME/Escolar/Sin documento y saneamiento telefónico.
 
 ---
 
