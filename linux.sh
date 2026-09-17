@@ -2,7 +2,7 @@
 cd "$(dirname "$0")"
 
 echo "========================================================"
-echo "  JsBOT v4.1.0 — Entorno Canaima GNU/Linux (PyPI Fast)"
+echo "  JsBOT v4.3.0 — Entorno Canaima GNU/Linux (PyPI Fast)"
 echo "========================================================"
 
 # 1. Asegurar binarios críticos del sistema operativo

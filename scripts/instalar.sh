@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 echo "========================================================"
-echo "  JsBOT v4.1.0 — Descarga e Instalación Automatizada"
+echo "  JsBOT v4.3.0 — Descarga e Instalación Automatizada"
 echo "========================================================"
 DESTINO="$HOME/JsBOT"
 if [ -d "$DESTINO" ]; then

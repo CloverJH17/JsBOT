@@ -1,9 +1,0 @@
-================================================================================
-REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v3.1.0
-Fecha Inicio : 2026-08-24 23:33:32
-Servicio     : Gestión en el Sistema de Protección Social Patria
-Fecha Reg.   : 2026-08-24
-Operador     : jairhernandez
-================================================================================
-
-[23:34:05] [EXITOSO ] Doc: 37128898           | Alessa Antonella Sequera Camacho | Servicio registrado y verificado en tabla (ID: 663859)

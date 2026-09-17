@@ -47,9 +47,9 @@ except ImportError:
     Choice = None
 
 def imprimir_banner():
-    """Muestra el banner principal oficial y limpio de JsBOT v4.1.0."""
+    """Muestra el banner principal oficial y limpio de JsBOT v4.3.0."""
     print("╔══════════════════════════════════════════════════════════════════════════╗")
-    print("║   JsBOT v4.1.0 — GESTIÓN MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO    ║")
+    print("║   JsBOT v4.3.0 — GESTIÓN MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO    ║")
     print("╚══════════════════════════════════════════════════════════════════════════╝")
 
 def prompt_menu_principal() -> str:

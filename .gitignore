@@ -1,18 +1,38 @@
+# Bytecode y caches de ejecución
 __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+
+# Trazas y entornos de ejecución web
 sesion_selenium/
+logs/
 *.lock
 *.log
-pruebas/
 *.tmp
-.pytest_cache/
+
+# Credenciales y archivos sensibles
+config/config.ini
+credenciales.ini
+*.key
+*.pem
+
+# Bases de datos locales
+data/*.db
+*.db
+*.sqlite3
+
+# Salida de reportes, planillas y respaldos
+Reportes_Auditoria/
+Planillas/
+backups/
+*.csv
+
+# Entornos de desarrollo e IDEs
 .vscode/
 .idea/
-backups/
-Reportes_Auditoria/
-logs/
-
+.agents/
+pruebas/

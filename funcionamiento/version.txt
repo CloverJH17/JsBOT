@@ -1,9 +1,33 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 13 de Septiembre de 2026
+Fecha Última   : 16 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.3.0] — 16 de Septiembre de 2026 (Blindaje de Modales, Concurrencia Asíncrona, Navegación Canónica y Resiliencia UI/UX)
+--------------------------------------------------------------------------------
+• GESTIÓN CENTRALIZADA DEL CICLO DE VIDA DE MODALES (M1):
+  - Implementación del registro central `self.modales_activos: dict[str, ctk.CTkToplevel]` en `modulos/interfaz_grafica.py`.
+  - Protocolo `WM_DELETE_WINDOW` estandarizado en las 8 ventanas modales del sistema (resolución de huérfanos, confirmación de carga, inspector de auditoría, previsualización de datos, credenciales, etc.).
+  - Liberación segura y balanceada de capturas de foco (`grab_set()` / `grab_release()`) para erradicar bloqueos de interfaz en Windows y entornos X11.
+  - Cierre y limpieza automática de modales activos al conmutar entre vistas, reiniciar sesión o cerrar la ventana principal.
+• DESACOPLAMIENTO ASÍNCRONO DE HILOS Y TELEMETRÍA POR COLA (M2):
+  - Erradicación de llamadas directas `self.after(0)` desde hilos de trabajo pesados; unificación de telemetría y eventos hacia el hilo principal mediante `cola_eventos = queue.Queue()`.
+  - Exportación de reportes de auditoría y planillas ODS delegada a hilos secundarios con notificación asíncrona, garantizando respuesta táctil inmediata (< 24 ms de latencia I/O).
+  - Persistencia de configuraciones e inspector de auditoría no bloqueante para evitar congelamientos de la interfaz gráfica.
+• ENRUTAMIENTO Y DISPATCHER CANÓNICO DE VISTAS (M3):
+  - Implementación de normalización Unicode NFKD (`normalizar_clave_vista`) para navegación insensible a tildes y caracteres especiales ("Diagnóstico", "Créditos").
+  - Unificación de alias canónicos de navegación (`cambiar_vista`, `_cambiar_vista`, `mostrar_vista`, `cambiar_seccion`).
+  - Corrección del fallo de auto-ocultamiento (self-ungriding) en la vista de Formación mediante iteración estricta por identidad de widgets (`set(self.vistas.values())`).
+  - Corrección de alias tipográficos en la reanudación de sesión por corte eléctrico (`_reanudar_flujo_desde_estado`).
+• COMPATIBILIDAD CANAIMA GNU/LINUX (M4):
+  - Inyección temprana y preventiva de `LIBGL_ALWAYS_SOFTWARE=1` antes de la carga de bibliotecas gráficas en `main.py`, `modulos/entorno.py` y `modulos/interfaz_grafica.py`.
+  - Verificación nativa de servidor de visualización (`DISPLAY`/`WAYLAND_DISPLAY`) con degradación suave a consola CLI interactiva si se detecta un entorno puramente headless.
+• SANEAMIENTO Y SEGURIDAD DEL PROYECTO (M5):
+  - Aislamiento estricto en `.gitignore` de credenciales locales (`config/config.ini`), bases de datos SQLite (`data/*.db`), carpetas de salida (`Planillas/`, `Reportes_Auditoria/`), trazas (`logs/`) y temporales (`.agents/`).
+  - Cobertura completa: 65/65 pruebas de auditoría UI/UX (`tests/test_auditoria_completa_ui_ux.py`) y 219 pruebas unitarias aprobadas con 0 regresiones.
 
 --------------------------------------------------------------------------------
 [v4.2.8] — 13 de Septiembre de 2026 (Validación Estricta de Documentos, Eliminación de CE Apócrifas y Alerta de Datos Críticos)

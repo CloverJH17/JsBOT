@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-PUNTO DE ENTRADA MAESTRO — JsBOT v4.1.0
+PUNTO DE ENTRADA MAESTRO — JsBOT v4.3.0
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — Versión 4.1.0
+Sistema   : JsBOT (Robotic Process Automation) — Versión 4.3.0
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
@@ -15,8 +15,11 @@ Punto de acceso raíz con soporte bimodal:
 ===============================================================================
 """
 
-import sys
 import os
+import sys
+
+# Compatibilidad con Canaima GNU/Linux: Forzar aceleración por software OpenGL
+os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
 
 # Asegurar que la raíz del proyecto esté en el path de módulos
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

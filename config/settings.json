@@ -17,7 +17,11 @@
         "element_wait_seconds": 12
     },
     "browser": {
-        "priority": ["firefox", "chrome", "edge"],
+        "priority": [
+            "firefox",
+            "chrome",
+            "edge"
+        ],
         "start_maximized": true
     },
     "validation": {

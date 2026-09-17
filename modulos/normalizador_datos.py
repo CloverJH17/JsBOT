@@ -81,7 +81,7 @@ FORMATOS_VALIDOS = ('.xlsx', '.xls', '.ods', '.csv', '.txt')
 TELEFONO_DEFAULT = cm.telefono_por_defecto()
 
 BASE_DIR = str(entorno.RAIZ_PROYECTO)
-CSV_BACKUP_PATH = os.path.join(BASE_DIR, "estudiantes.csv")
+CSV_BACKUP_PATH = os.path.join(BASE_DIR, "backups", "estudiantes.csv")
 LOGS_DIR = str(entorno.CARPETA_LOGS)
 
 PARTICULAS_MENORES = {'de', 'del', 'la', 'las', 'los', 'el', 'al', 'y', 'e', 'en', 'o'}
@@ -1102,7 +1102,8 @@ def ejecutar_modulo_etl(es_solo_planilla: bool = False) -> list:
     imprimir_banner()
     mostrar_tabla_participantes(participantes)
 
-    # Guardar copia de seguridad normalizada en la raíz como estudiantes.csv
+    # Guardar copia de seguridad normalizada en backups/ como estudiantes.csv
+    os.makedirs(os.path.dirname(CSV_BACKUP_PATH), exist_ok=True)
     while True:
         try:
             pd.DataFrame(participantes).to_csv(CSV_BACKUP_PATH, index=False, encoding='utf-8-sig')

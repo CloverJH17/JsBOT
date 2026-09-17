@@ -1,5 +1,5 @@
 ===============================================================================
-                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.2.7
+                    MANUAL DE FUNCIONAMIENTO TÉCNICO — JsBOT v4.3.0
 ===============================================================================
 
 1. normalizador_datos.py (Motor ETL y Clasificación Tripartita de Documentos):

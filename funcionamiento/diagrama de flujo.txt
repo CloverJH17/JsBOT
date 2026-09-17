@@ -1,5 +1,5 @@
 ========================================================================================
-                     DIAGRAMA DE FLUJO INTEGRAL — JsBOT v4.2.7
+                     DIAGRAMA DE FLUJO INTEGRAL — JsBOT v4.3.0
 ========================================================================================
 
                                 [ INICIO: main.py ]
@@ -16,7 +16,7 @@
                     ▼                                       ▼
   ╔═══════════════════════════════════╗   ╔═══════════════════════════════════╗
   ║    RAMA A: CARGA MASIVA RPA       ║   ║    RAMA B: INSPECTOR AUDITORÍA    ║
-  ║     (Formación y Servicios)       ║   ║    (Balance Operativo v4.2.7)     ║
+  ║     (Formación y Servicios)       ║   ║    (Balance Operativo v4.3.0)     ║
   ╚═════════════════╤═════════════════╝   ╚═════════════════╤═════════════════╝
                     │                                       │
                     ▼                                       ▼

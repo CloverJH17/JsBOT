@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: INTERFAZ GRÁFICA NATIVA (interfaz_grafica.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.2.0
+Sistema   : JsBOT (Robotic Process Automation) — v4.3.0
 Tecnología: Python + CustomTkinter (Dark Mode con acentos #3B8ED0 y #22c55e)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
@@ -13,6 +13,11 @@ Ubicación : San Felipe, Yaracuy, Venezuela
 
 import os
 import sys
+
+# Compatibilidad con Canaima GNU/Linux: Forzar renderizado OpenGL por software
+# antes de cualquier importación de librerías gráficas (Tkinter, CustomTkinter)
+os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")
+
 import json
 import time
 import shutil
@@ -21,8 +26,10 @@ import threading
 import queue
 import webbrowser
 import configparser
+import unicodedata
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, Callable, Union
 import tkinter as tk
 from tkinter import filedialog
 import customtkinter as ctk
@@ -53,6 +60,35 @@ def abrir_archivo_o_directorio_sistema(ruta: str) -> bool:
         return True
     except Exception:
         return False
+
+def normalizar_clave_vista(clave: str) -> str:
+    """Normaliza y mapea canónicamente los identificadores de vistas (insensible a mayúsculas y diacríticos)."""
+    if not clave:
+        return "Diagnostico"
+    s = str(clave).strip()
+    s_norm = "".join(
+        c for c in unicodedata.normalize("NFKD", s)
+        if not unicodedata.combining(c)
+    ).lower()
+
+    mapping = {
+        "diagnostico": "Diagnostico",
+        "dashboard": "Dashboard",
+        "credenciales": "Credenciales",
+        "cuenta": "Credenciales",
+        "formacion": "Formacion",
+        "servicios": "Servicios",
+        "planillas": "Planillas",
+        "ods": "Planillas",
+        "reportes": "Reportes",
+        "inspector": "Reportes",
+        "auditoria": "Reportes",
+        "auditor": "Auditor",
+        "analisis": "Analisis",
+        "creditos": "Creditos",
+        "ajustes": "Ajustes",
+    }
+    return mapping.get(s_norm, s)
 
 # Importaciones de los módulos funcionales
 try:
@@ -105,6 +141,39 @@ ctk.set_default_color_theme("dark-blue")
 RUTA_ICONOS = str(Path(__file__).resolve().parent.parent / "config" / "assets" / "iconos")
 if not os.path.exists(RUTA_ICONOS):
     RUTA_ICONOS = os.path.join(BASE_DIR, "pruebas", "assets", "iconos")
+
+# Pre-carga en memoria del diagnóstico del entorno para acelerar arranque (Ley de Doherty < 2.5s)
+_CACHE_DIAGNOSTICO_INICIAL = {}
+
+def _obtener_diagnostico_entorno(forzar: bool = False) -> dict:
+    global _CACHE_DIAGNOSTICO_INICIAL
+    if forzar or not _CACHE_DIAGNOSTICO_INICIAL:
+        so_nombre = detectar_sistema_operativo() if MODULOS_DISPONIBLES else "Windows"
+        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        py_ok = sys.version_info >= (3, 10)
+        nav_desc = detectar_navegadores() if MODULOS_DISPONIBLES else "Chrome / Edge detectado"
+        suite_ok, suite_ruta = detectar_suite_ofimatica() if MODULOS_DISPONIBLES else (True, "LibreOffice")
+        archivos_diag = verificar_integridad_archivos() if MODULOS_DISPONIBLES else {
+            "settings": (True, "config/settings.json"),
+            "plantilla": (True, "config/plantilla_base.ods")
+        }
+        _CACHE_DIAGNOSTICO_INICIAL = {
+            "so_nombre": so_nombre,
+            "py_ver": py_ver,
+            "py_ok": py_ok,
+            "nav_desc": nav_desc,
+            "suite_ok": suite_ok,
+            "suite_ruta": suite_ruta,
+            "archivos_diag": archivos_diag,
+            "archivos_ok": all(v[0] for v in archivos_diag.values()),
+        }
+    return _CACHE_DIAGNOSTICO_INICIAL
+
+if MODULOS_DISPONIBLES:
+    try:
+        _obtener_diagnostico_entorno(forzar=False)
+    except Exception:
+        pass
 
 
 class JsBotGUI(ctk.CTk):
@@ -198,6 +267,9 @@ class JsBotGUI(ctk.CTk):
         # Referencias a labels dinámicos de los sliders
         self.labels_sliders = {}
 
+        # Registro centralizado de modales activos (CTkToplevel) para gestión robusta de ciclo de vida
+        self.modales_activos: dict[str, ctk.CTkToplevel] = {}
+
         # Cargar valores iniciales desde config/settings.json si existe
         self._cargar_config_inicial()
 
@@ -207,6 +279,12 @@ class JsBotGUI(ctk.CTk):
         # 3. Construcción visual
         self._crear_barra_lateral()
         self._crear_contenedor_principal()
+
+        # Configurar protocolo seguro de cierre en ventana principal
+        try:
+            self.protocol("WM_DELETE_WINDOW", self._al_cerrar_ventana_principal)
+        except Exception:
+            pass
 
         # Cola segura de eventos entre hilos secundarios y la interfaz
         self.cola_eventos = queue.Queue()
@@ -223,6 +301,134 @@ class JsBotGUI(ctk.CTk):
         if MODULOS_DISPONIBLES:
             self.after(300, self.comprobar_sesion_interrumpida_gui)
 
+    # =========================================================================
+    # GESTIÓN CENTRALIZADA DEL CICLO DE VIDA DE MODALES (CTkToplevel)
+    # =========================================================================
+    def registrar_modal(
+        self,
+        nombre: str,
+        modal: ctk.CTkToplevel,
+        grab: bool = True,
+        al_cerrar: Optional[Callable] = None
+    ) -> ctk.CTkToplevel:
+        """Registra un modal activo en self.modales_activos con protocolo seguro de cierre y control de grab."""
+        if not hasattr(self, "modales_activos"):
+            self.modales_activos = {}
+
+        if nombre in self.modales_activos:
+            antiguo = self.modales_activos.get(nombre)
+            if antiguo is not None and antiguo is not modal:
+                try:
+                    if antiguo.winfo_exists():
+                        self.cerrar_modal(antiguo)
+                except Exception:
+                    pass
+
+        self.modales_activos[nombre] = modal
+
+        if al_cerrar is not None:
+            modal._cb_al_cerrar = al_cerrar
+
+        def _on_wm_delete():
+            self.cerrar_modal(modal)
+
+        try:
+            modal.protocol("WM_DELETE_WINDOW", _on_wm_delete)
+        except Exception:
+            pass
+
+        if grab:
+            try:
+                modal.grab_set()
+            except Exception:
+                pass
+
+        return modal
+
+    def cerrar_modal(self, nombre_o_instancia: Union[str, ctk.CTkToplevel]) -> None:
+        """Cierra de forma segura un modal activo: libera grab, invoca al_cerrar y destruye el widget."""
+        if not hasattr(self, "modales_activos"):
+            self.modales_activos = {}
+            return
+
+        modal = None
+        clave_encontrada = None
+
+        if isinstance(nombre_o_instancia, str):
+            clave_encontrada = nombre_o_instancia
+            modal = self.modales_activos.get(nombre_o_instancia)
+        else:
+            modal = nombre_o_instancia
+            for k, m in list(self.modales_activos.items()):
+                if m is modal:
+                    clave_encontrada = k
+                    break
+
+        if clave_encontrada and clave_encontrada in self.modales_activos:
+            self.modales_activos.pop(clave_encontrada, None)
+
+        if modal is None:
+            return
+
+        # 1. Liberar grab de forma segura
+        try:
+            modal.grab_release()
+        except Exception:
+            pass
+
+        # 2. Invocar callback de cierre si fue registrado (previniendo recursión)
+        cb = getattr(modal, "_cb_al_cerrar", None)
+        try:
+            delattr(modal, "_cb_al_cerrar")
+        except Exception:
+            pass
+        if callable(cb):
+            try:
+                cb()
+            except Exception:
+                pass
+
+        # 3. Destruir el widget de ventana
+        try:
+            if modal.winfo_exists():
+                modal.destroy()
+        except Exception:
+            pass
+
+    def cerrar_modales_activos(self, excluir: Optional[Union[str, ctk.CTkToplevel]] = None) -> None:
+        """Cierra todas las ventanas modales secundarias registradas, excepto la indicada."""
+        if not hasattr(self, "modales_activos"):
+            self.modales_activos = {}
+            return
+
+        modal_excluir = None
+        clave_excluir = None
+        if isinstance(excluir, str):
+            clave_excluir = excluir
+            modal_excluir = self.modales_activos.get(excluir)
+        elif excluir is not None:
+            modal_excluir = excluir
+            for k, m in list(self.modales_activos.items()):
+                if m is modal_excluir:
+                    clave_excluir = k
+                    break
+
+        for k, modal in list(self.modales_activos.items()):
+            if k == clave_excluir or modal is modal_excluir:
+                continue
+            self.cerrar_modal(modal)
+
+    def _al_cerrar_ventana_principal(self):
+        """Cierre ordenado de la ventana principal y de todos los modales secundarios activos."""
+        try:
+            self.cerrar_modales_activos()
+        except Exception:
+            pass
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
     def _iniciar_escucha_cola(self):
         """Procesa de forma continua y segura los eventos emitidos por hilos secundarios (Cero estrés de CPU)."""
         try:
@@ -230,7 +436,7 @@ class JsBotGUI(ctk.CTk):
                 item = self.cola_eventos.get_nowait()
                 tipo, datos = item
                 if tipo == "log":
-                    self._agregar_log(datos)
+                    self.agregar_log_telemetria(datos)
                 elif tipo == "progreso":
                     self._actualizar_progreso_ui(datos)
                 elif tipo == "fin_formacion":
@@ -243,6 +449,17 @@ class JsBotGUI(ctk.CTk):
                     self._agregar_log_auditoria(datos)
                 elif tipo == "progreso_auditoria":
                     self._actualizar_progreso_auditoria(datos)
+                elif tipo == "exportacion_ok":
+                    ruta_final = datos
+                    self.ruta_ultimo_reporte_auditoria = ruta_final
+                    if hasattr(self, "btn_abrir_reporte_auditoria"):
+                        self.btn_abrir_reporte_auditoria.configure(state="normal", fg_color="#1f538d", hover_color="#14375e")
+                    self._agregar_log_auditoria(f"💾 Reporte exportado exitosamente en: {ruta_final}")
+                    self._mostrar_toast(f"Reporte exportado: {os.path.basename(ruta_final)}")
+                    abrir_archivo_o_directorio_sistema(ruta_final)
+                elif tipo == "exportacion_error":
+                    self._agregar_log_auditoria(f"❌ Error al exportar reporte: {datos}")
+                    self._mostrar_modal_mensaje("Error de Exportación", f"No se pudo generar el reporte:\n{datos}", tipo="error")
         except queue.Empty:
             pass
         except Exception:
@@ -256,7 +473,6 @@ class JsBotGUI(ctk.CTk):
 
     def _centrar_ventana(self, ancho: int, alto: int):
         """Calcula las coordenadas para centrar la ventana en la pantalla del usuario."""
-        self.update_idletasks()
         pantalla_ancho = self.winfo_screenwidth()
         pantalla_alto = self.winfo_screenheight()
         pos_x = max(0, int((pantalla_ancho - ancho) / 2))
@@ -289,10 +505,7 @@ class JsBotGUI(ctk.CTk):
         modal.title("Sesión Previa Detectada")
         modal.geometry("460x230")
         modal.resizable(False, False)
-        try:
-            modal.grab_set()
-        except Exception:
-            pass
+        self.registrar_modal("modal_recuperacion", modal, grab=True)
 
         id_ref = estado.get('id_actividad') or estado.get('id_servicio') or 'N/A'
         tipo_lbl = "Formación" if tipo == "formacion" else "Servicios"
@@ -315,7 +528,7 @@ class JsBotGUI(ctk.CTk):
             text="Retomar Carga",
             fg_color="#2ecc71",
             hover_color="#27ae60",
-            command=lambda: [modal.destroy(), self._reanudar_flujo_desde_estado(estado, tipo=tipo)]
+            command=lambda: [self.cerrar_modal(modal), self._reanudar_flujo_desde_estado(estado, tipo=tipo)]
         )
         btn_retomar.pack(side="left", padx=10)
 
@@ -325,7 +538,7 @@ class JsBotGUI(ctk.CTk):
             else:
                 if "limpiar_estado_sesion_servicios" in globals():
                     limpiar_estado_sesion_servicios()
-            modal.destroy()
+            self.cerrar_modal(modal)
 
         btn_descartar = ctk.CTkButton(
             frame_btns,
@@ -348,7 +561,7 @@ class JsBotGUI(ctk.CTk):
                 if url and hasattr(self, "entry_url_servicios"):
                     self.entry_url_servicios.delete(0, tk.END)
                     self.entry_url_servicios.insert(0, url)
-                self._cambiar_vista("Servicios")
+                self._cambiar_seccion("Servicios")
                 total = len(self.participantes_cargados)
                 if hasattr(self, "lbl_prevuelo_servicios_total"):
                     self.lbl_prevuelo_servicios_total.configure(text=f"Total: {total} usuarios (Reanudando en #{idx + 1})")
@@ -364,7 +577,7 @@ class JsBotGUI(ctk.CTk):
                 if url and hasattr(self, "entry_url_formacion"):
                     self.entry_url_formacion.delete(0, tk.END)
                     self.entry_url_formacion.insert(0, url)
-                self._cambiar_vista("Formacion")
+                self._cambiar_seccion("Formacion")
                 total = len(self.participantes_cargados)
                 if hasattr(self, "lbl_prevuelo_formacion_total"):
                     self.lbl_prevuelo_formacion_total.configure(text=f"Total: {total} participantes (Reanudando en #{idx + 1})")
@@ -380,10 +593,7 @@ class JsBotGUI(ctk.CTk):
         modal.title("Resolución de Menores sin Cédula ni Tutor")
         modal.geometry("540x440")
         modal.resizable(False, False)
-        try:
-            modal.grab_set()
-        except Exception:
-            pass
+        self.registrar_modal("modal_resolucion_huerfanos", modal, grab=True)
 
         lbl_tit = ctk.CTkLabel(
             modal,
@@ -446,18 +656,18 @@ class JsBotGUI(ctk.CTk):
                 asignar_tutor_a_huerfano(h, ced_limpia)
 
             self._agregar_log(f"[TUTOR] Asignada C.I. {ced_limpia} a {len(huerfanos)} menores huérfanos.")
-            modal.destroy()
+            self.cerrar_modal(modal)
             self._actualizar_prevuelo_tras_resolucion(seccion=seccion)
 
         def _conservar_cortesia():
             self._agregar_log(f"[AVISO] {len(huerfanos)} menores conservados como carga de cortesía (sin tutor).")
-            modal.destroy()
+            self.cerrar_modal(modal)
 
         def _omitir():
             self.participantes_cargados = [p for p in self.participantes_cargados if p not in huerfanos]
             self.datos_normalizados_actuales = self.participantes_cargados
             self._agregar_log(f"[AVISO] {len(huerfanos)} menores sin tutor omitidos de la lista.")
-            modal.destroy()
+            self.cerrar_modal(modal)
             self._actualizar_prevuelo_tras_resolucion(seccion=seccion)
 
         btn_asignar = ctk.CTkButton(
@@ -700,43 +910,55 @@ class JsBotGUI(ctk.CTk):
 
     def _cambiar_seccion(self, seccion: str):
         """Intercambia vistas en el panel central y actualiza el botón activo del sidebar."""
-        mapping = {
-            "diagnostico": "Diagnostico",
-            "credenciales": "Credenciales",
-            "cuenta": "Credenciales",
-            "formacion": "Formacion",
-            "servicios": "Servicios",
-            "planillas": "Planillas",
-            "ods": "Planillas",
-            "reportes": "Reportes",
-            "inspector": "Reportes",
-            "auditoria": "Reportes",
-            "creditos": "Creditos",
-            "ajustes": "Ajustes"
-        }
-        seccion_clave = mapping.get(str(seccion).lower(), seccion)
+        seccion_clave = normalizar_clave_vista(str(seccion))
 
         if self.seccion_actual == seccion_clave:
             return
 
         self.seccion_actual = seccion_clave
 
+        # Cerrar modales secundarios activos al navegar entre vistas
+        self.cerrar_modales_activos()
+
+        # Determinar clave canónica para iluminar el botón en self.nav_buttons
+        alias_botones = {
+            "Auditor": "Reportes",
+            "Analisis": "Reportes",
+            "Dashboard": "Diagnostico",
+            "Cuenta": "Credenciales",
+            "ODS": "Planillas",
+        }
+        boton_objetivo = alias_botones.get(seccion_clave, seccion_clave)
+        boton_norm = normalizar_clave_vista(boton_objetivo)
+
         for clave, btn in self.nav_buttons.items():
-            if clave == seccion_clave:
+            if normalizar_clave_vista(clave) == boton_norm:
                 btn.configure(fg_color="#1f538d", hover_color="#14375e", font=ctk.CTkFont(size=12, weight="bold"))
             else:
                 btn.configure(fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=12, weight="normal"))
 
-        for nombre, vista in self.vistas.items():
-            if nombre == seccion_clave:
-                vista.grid(row=0, column=0, sticky="nsew")
-            else:
-                vista.grid_forget()
+        # Conmutar marcos con detección por identidad para evitar self-ungriding
+        vistas_unicas = set(self.vistas.values())
+        vista_destino = self.vistas.get(seccion_clave)
+        if vista_destino is not None:
+            for v in vistas_unicas:
+                if v is vista_destino:
+                    v.grid(row=0, column=0, sticky="nsew")
+                else:
+                    v.grid_forget()
 
         self._agregar_log(f"[NAVEGACIÓN] Sección activa: {seccion_clave}")
 
         if seccion_clave in ("Formacion", "Servicios") and MODULOS_DISPONIBLES:
             self.after(60, self.comprobar_sesion_interrumpida_gui)
+
+    # Alias canónicos de navegación requeridos por arquitectura e interoperabilidad
+    cambiar_vista = _cambiar_seccion
+    _cambiar_vista = _cambiar_seccion
+    mostrar_vista = _cambiar_seccion
+    _mostrar_vista = _cambiar_seccion
+    cambiar_seccion = _cambiar_seccion
+    mostrar_seccion = _cambiar_seccion
 
     # =========================================================================
     # 2. CONTENEDOR PRINCIPAL Y VISTAS
@@ -756,14 +978,24 @@ class JsBotGUI(ctk.CTk):
         # Diccionario de vistas
         self.vistas = {}
         self.vistas["Diagnostico"] = self._crear_vista_diagnostico(self.vistas_container)
+        self.vistas["Dashboard"] = self.vistas["Diagnostico"]
         self.frame_credenciales = self._crear_vista_credenciales(self.vistas_container)
         self.vistas["Credenciales"] = self.frame_credenciales
+        self.vistas["Cuenta"] = self.frame_credenciales
         self.vistas["Formacion"] = self._crear_vista_formacion(self.vistas_container)
         self.vistas["Formación"] = self.vistas["Formacion"]
         self.vistas["Servicios"] = self._crear_vista_servicios(self.vistas_container)
         self.vistas["Planillas"] = self._crear_vista_reportes(self.vistas_container)
+        self.vistas["ODS"] = self.vistas["Planillas"]
         self.vistas["Reportes"] = self.frame_reportes = self._crear_vista_inspector(self.vistas_container)
+        self.vistas["Auditor"] = self.vistas["Reportes"]
+        self.vistas["Analisis"] = self.vistas["Reportes"]
+        self.vistas["Análisis"] = self.vistas["Reportes"]
+        self.vistas["Auditoria"] = self.vistas["Reportes"]
+        self.vistas["Auditoría"] = self.vistas["Reportes"]
+        self.vistas["Inspector"] = self.vistas["Reportes"]
         self.vistas["Creditos"] = self._crear_vista_creditos(self.vistas_container)
+        self.vistas["Créditos"] = self.vistas["Creditos"]
         self.vistas["Ajustes"] = self._crear_vista_ajustes(self.vistas_container)
 
         # Vista predeterminada: Diagnóstico
@@ -824,20 +1056,19 @@ class JsBotGUI(ctk.CTk):
         self._construir_cuadricula_diagnostico()
         return frame
 
-    def _construir_cuadricula_diagnostico(self):
+    def _construir_cuadricula_diagnostico(self, forzar: bool = False):
         for widget in self.diag_grid.winfo_children():
             widget.destroy()
 
-        so_nombre = detectar_sistema_operativo() if MODULOS_DISPONIBLES else "Windows"
-        py_ver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-        py_ok = sys.version_info >= (3, 10)
-        nav_desc = detectar_navegadores() if MODULOS_DISPONIBLES else "Chrome / Edge detectado"
-        suite_ok, suite_ruta = detectar_suite_ofimatica() if MODULOS_DISPONIBLES else (True, "LibreOffice")
-        archivos_diag = verificar_integridad_archivos() if MODULOS_DISPONIBLES else {
-            "settings": (True, "config/settings.json"),
-            "plantilla": (True, "config/plantilla_base.ods")
-        }
-        archivos_ok = all(v[0] for v in archivos_diag.values())
+        diag = _obtener_diagnostico_entorno(forzar=forzar)
+        so_nombre = diag.get("so_nombre", "Windows")
+        py_ver = diag.get("py_ver", "3.10.0")
+        py_ok = diag.get("py_ok", True)
+        nav_desc = diag.get("nav_desc", "Detectado")
+        suite_ok = diag.get("suite_ok", True)
+        suite_ruta = diag.get("suite_ruta", "LibreOffice")
+        archivos_diag = diag.get("archivos_diag", {})
+        archivos_ok = diag.get("archivos_ok", True)
 
         # Tarjeta 1: Python
         self._crear_tarjeta_grid(
@@ -963,12 +1194,13 @@ class JsBotGUI(ctk.CTk):
 
         def _tarea():
             time.sleep(0.35)
+            _obtener_diagnostico_entorno(forzar=True)
             self.after(0, self._terminar_refresco_diagnostico)
 
         threading.Thread(target=_tarea, daemon=True).start()
 
     def _terminar_refresco_diagnostico(self):
-        self._construir_cuadricula_diagnostico()
+        self._construir_cuadricula_diagnostico(forzar=False)
         self.btn_recomprobar.configure(text="Re-comprobar Entorno", state="normal")
         self._agregar_log("[OK] Diagnóstico actualizado: 6/6 módulos verificados.")
 
@@ -1650,7 +1882,11 @@ class JsBotGUI(ctk.CTk):
         btn_plantilla.grid(row=0, column=1, padx=(8, 0), sticky="ew")
 
         # Estado del archivo de respaldo
-        csv_path = os.path.join(BASE_DIR, "estudiantes.csv")
+        csv_path = os.path.join(BASE_DIR, "backups", "estudiantes.csv")
+        if not os.path.exists(csv_path):
+            csv_fallback = os.path.join(BASE_DIR, "estudiantes.csv")
+            if os.path.exists(csv_fallback):
+                csv_path = csv_fallback
         csv_existe = os.path.exists(csv_path)
 
         csv_card = ctk.CTkFrame(frame, fg_color="#14141E", corner_radius=8)
@@ -2087,7 +2323,6 @@ class JsBotGUI(ctk.CTk):
         modal.resizable(False, False)
         modal.configure(fg_color="#1E1E28")
         modal.transient(self)
-        modal.grab_set()
 
         try:
             x = self.winfo_x() + max(0, (self.winfo_width() - 440) // 2)
@@ -2095,6 +2330,26 @@ class JsBotGUI(ctk.CTk):
             modal.geometry(f"+{x}+{y}")
         except Exception:
             pass
+
+        def al_cerrar_cancelar():
+            conf_check = configparser.ConfigParser()
+            tiene_cred = False
+            if os.path.exists(CONFIG_FILE):
+                try:
+                    conf_check.read(CONFIG_FILE, encoding="utf-8")
+                    if conf_check.has_section("AUDITORIA"):
+                        u = conf_check.get("AUDITORIA", "usuario", fallback="").strip()
+                        c = conf_check.get("AUDITORIA", "clave", fallback="").strip()
+                        if u and c:
+                            tiene_cred = True
+                except Exception:
+                    pass
+            if not tiene_cred:
+                self.var_rol_auditor.set(False)
+                self.switch_rol_auditor.configure(text="Rol Auditor / Jefatura")
+            self.cerrar_modal(modal)
+
+        self.registrar_modal("modal_credenciales_auditor", modal, grab=True, al_cerrar=al_cerrar_cancelar)
 
         header = ctk.CTkFrame(modal, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=(16, 8))
@@ -2138,26 +2393,6 @@ class JsBotGUI(ctk.CTk):
         btn_row = ctk.CTkFrame(modal, fg_color="transparent")
         btn_row.pack(fill="x", padx=20, pady=(10, 14))
 
-        def al_cerrar_cancelar():
-            conf_check = configparser.ConfigParser()
-            tiene_cred = False
-            if os.path.exists(CONFIG_FILE):
-                try:
-                    conf_check.read(CONFIG_FILE, encoding="utf-8")
-                    if conf_check.has_section("AUDITORIA"):
-                        u = conf_check.get("AUDITORIA", "usuario", fallback="").strip()
-                        c = conf_check.get("AUDITORIA", "clave", fallback="").strip()
-                        if u and c:
-                            tiene_cred = True
-                except Exception:
-                    pass
-            if not tiene_cred:
-                self.var_rol_auditor.set(False)
-                self.switch_rol_auditor.configure(text="Rol Auditor / Jefatura")
-            modal.destroy()
-
-        modal.protocol("WM_DELETE_WINDOW", al_cerrar_cancelar)
-
         def guardar_credenciales_auditor():
             usr = entry_user.get().strip()
             pwd = entry_pass.get().strip()
@@ -2179,7 +2414,12 @@ class JsBotGUI(ctk.CTk):
                 self.var_rol_auditor.set(True)
                 self.switch_rol_auditor.configure(text=f"Rol Auditor (Activo: {usr})")
                 self.agregar_log_telemetria(f"[ROL AUDITOR] Credenciales de auditor guardadas y activas para: {usr}")
-                modal.destroy()
+                # Limpiar callback de cancelación para que no se ejecute al guardar con éxito
+                try:
+                    delattr(modal, "_cb_al_cerrar")
+                except Exception:
+                    pass
+                self.cerrar_modal(modal)
             except Exception as err:
                 self._mostrar_modal_mensaje("Error al Guardar", f"No se pudieron guardar las credenciales: {err}", tipo="error")
 
@@ -2225,6 +2465,17 @@ class JsBotGUI(ctk.CTk):
 
     def _abrir_ventana_flotante_inspeccion(self, tipo: str = "facilitadores"):
         """Despliega una ventana modal maximizable (1100x650) con buscador reactivo y cabeceras ordenables."""
+        # Evitar ventanas flotantes duplicadas: si ya existe y sigue abierta, enfocar y elevar
+        modal_existente = self.modales_activos.get("ventana_inspeccion")
+        if modal_existente is not None:
+            try:
+                if modal_existente.winfo_exists():
+                    modal_existente.lift()
+                    modal_existente.focus_force()
+                    return modal_existente
+            except Exception:
+                pass
+
         modal = ctk.CTkToplevel(self)
         modal.geometry("1100x650")
         modal.minsize(850, 480)
@@ -2245,20 +2496,17 @@ class JsBotGUI(ctk.CTk):
         except Exception:
             pass
 
-        # Asegurar ejecución DELANTE de la ventana principal y comportamiento MODAL BLOQUEANTE
+        self.registrar_modal("ventana_inspeccion", modal, grab=True)
+
+        # Asegurar ejecución DELANTE de la ventana principal y comportamiento modal
         modal.transient(self)
         modal.lift()
         modal.attributes("-topmost", True)
         modal.after(150, lambda: modal.attributes("-topmost", False))
         modal.focus_force()
-        modal.grab_set()
 
         def _cerrar_modal():
-            try:
-                modal.grab_release()
-            except Exception:
-                pass
-            modal.destroy()
+            self.cerrar_modal(modal)
 
         modal.protocol("WM_DELETE_WINDOW", _cerrar_modal)
 
@@ -2581,7 +2829,7 @@ class JsBotGUI(ctk.CTk):
             self.cola_eventos.put(("log_auditoria", msg))
 
         try:
-            self.cola_eventos.put(("log_auditoria", "Iniciando motor de auditoría oficial v4.2.5..."))
+            self.cola_eventos.put(("log_auditoria", "Iniciando motor de auditoría oficial v4.3.0..."))
             resultado = ar.ejecutar_auditoria(
                 uid=params.get("uid"),
                 info_id=params.get("info_id"),
@@ -2597,6 +2845,11 @@ class JsBotGUI(ctk.CTk):
                 callback_log=callback_progreso,
                 progreso_callback=callback_progreso
             )
+            # Persistir caché de forma desacoplada en el worker sin bloquear el bucle de eventos Tkinter
+            try:
+                ar.guardar_cache_inspector(resultado)
+            except Exception:
+                pass
             self.cola_eventos.put(("fin_auditoria", resultado))
         except Exception as e:
             self.cola_eventos.put(("fin_auditoria", {"exito": False, "error": str(e)}))
@@ -2653,11 +2906,6 @@ class JsBotGUI(ctk.CTk):
             if hasattr(self, "btn_exportar_reporte_dialogo"):
                 self.btn_exportar_reporte_dialogo.configure(state="disabled")
             self._mostrar_toast(msg_aviso)
-
-            try:
-                ar.guardar_cache_inspector(resultado)
-            except Exception:
-                pass
             return
 
         self.lbl_kpi_actividades.configure(text=str(tot_act))
@@ -2734,12 +2982,6 @@ class JsBotGUI(ctk.CTk):
         except Exception:
             pass
 
-        # Guardar en caché ligero local
-        try:
-            ar.guardar_cache_inspector(resultado)
-        except Exception:
-            pass
-
     def _actualizar_progreso_auditoria(self, pct):
         """Callback para sincronizar avance porcentual si se activa barra."""
         pass
@@ -2757,12 +2999,14 @@ class JsBotGUI(ctk.CTk):
         pass
 
     def _abrir_ultimo_reporte_auditoria(self):
-        """Abre el último archivo exportado (.xlsx o .csv)."""
+        """Abre directamente el último reporte exportado si existe en el sistema de archivos."""
         if self.ruta_ultimo_reporte_auditoria and os.path.exists(self.ruta_ultimo_reporte_auditoria):
             abrir_archivo_o_directorio_sistema(self.ruta_ultimo_reporte_auditoria)
             self._agregar_log_auditoria(f"[SISTEMA] Abriendo reporte: {self.ruta_ultimo_reporte_auditoria}")
         else:
             self._mostrar_modal_mensaje("Reporte no disponible", "No hay un archivo de reporte generado recientemente.", tipo="aviso")
+
+    _abrir_reporte_auditoria_actual = _abrir_ultimo_reporte_auditoria
 
     def _accion_exportar_reporte_dialogo(self):
         """Despliega el diálogo interactivo para guardar el reporte en el formato seleccionado o mostrarlo en telemetría."""
@@ -2812,16 +3056,16 @@ class JsBotGUI(ctk.CTk):
         if not ruta_elegida:
             return
 
-        try:
-            ruta_final = ar.exportar_reporte_auditoria(res, formato=formato_clave, ruta_destino=ruta_elegida)
-            self.ruta_ultimo_reporte_auditoria = ruta_final
-            self.btn_abrir_reporte_auditoria.configure(state="normal", fg_color="#1f538d", hover_color="#14375e")
-            self._agregar_log_auditoria(f"💾 Reporte exportado exitosamente en: {ruta_final}")
-            self._mostrar_toast(f"Reporte exportado: {os.path.basename(ruta_final)}")
-            abrir_archivo_o_directorio_sistema(ruta_final)
-        except Exception as e:
-            self._agregar_log_auditoria(f"❌ Error al exportar reporte: {e}")
-            self._mostrar_modal_mensaje("Error de Exportación", f"No se pudo generar el reporte:\n{e}", tipo="error")
+        self._agregar_log_auditoria(f"⏳ Iniciando exportación en segundo plano ({formato_str})...")
+
+        def _trabajo_exportacion():
+            try:
+                ruta_final = ar.exportar_reporte_auditoria(res, formato=formato_clave, ruta_destino=ruta_elegida)
+                self.cola_eventos.put(("exportacion_ok", ruta_final))
+            except Exception as e:
+                self.cola_eventos.put(("exportacion_error", str(e)))
+
+        threading.Thread(target=_trabajo_exportacion, daemon=True).start()
 
     def _abrir_directorio_reportes_auditoria(self):
         """Abre el explorador de archivos en la carpeta Reportes_Auditoria/."""
@@ -2870,7 +3114,15 @@ class JsBotGUI(ctk.CTk):
         modal.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
         modal.resizable(False, False)
         modal.transient(self)
-        modal.grab_set()
+
+        def _al_cancelar_modal():
+            if callback_no:
+                try:
+                    callback_no()
+                except Exception:
+                    pass
+
+        self.registrar_modal("modal_confirmacion", modal, grab=True, al_cerrar=_al_cancelar_modal)
 
         f_top = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
         f_top.pack(fill="x")
@@ -2885,19 +3137,18 @@ class JsBotGUI(ctk.CTk):
 
         def al_confirmar():
             try:
-                modal.destroy()
+                delattr(modal, "_cb_al_cerrar")
             except Exception:
                 pass
+            self.cerrar_modal(modal)
             if callback_si:
-                callback_si()
+                try:
+                    callback_si()
+                except Exception:
+                    pass
 
         def al_cancelar():
-            try:
-                modal.destroy()
-            except Exception:
-                pass
-            if callback_no:
-                callback_no()
+            self.cerrar_modal(modal)
 
         ctk.CTkButton(f_btns, text="Cancelar", width=90, fg_color="#4A4A5A", hover_color="#5A5A6A", command=al_cancelar).pack(side="right", padx=(6, 16), pady=8)
         ctk.CTkButton(f_btns, text="Confirmar", width=100, fg_color="#27AE60", hover_color="#219653", command=al_confirmar).pack(side="right", padx=6, pady=8)
@@ -2912,6 +3163,8 @@ class JsBotGUI(ctk.CTk):
                 toast.attributes("-topmost", True)
             except Exception:
                 pass
+
+            self.registrar_modal("toast", toast, grab=False)
 
             frame = ctk.CTkFrame(toast, fg_color="#1E1E28", border_width=1, border_color="#F39C12", corner_radius=8)
             frame.pack(fill="both", expand=True, padx=2, pady=2)
@@ -2936,11 +3189,7 @@ class JsBotGUI(ctk.CTk):
             toast.deiconify()
 
             def cerrar_toast():
-                try:
-                    if toast.winfo_exists():
-                        toast.destroy()
-                except Exception:
-                    pass
+                self.cerrar_modal(toast)
 
             self.after(duracion_ms, cerrar_toast)
         except Exception:
@@ -2970,7 +3219,7 @@ class JsBotGUI(ctk.CTk):
 
         lbl_version = ctk.CTkLabel(
             head_box,
-            text="Versión 4.1.0 Oficial — Núcleo de Automatización v4.1.0",
+            text="Versión 4.3.0 Oficial — Núcleo de Automatización v4.3.0",
             font=ctk.CTkFont(size=11),
             text_color="#3B8ED0"
         )
@@ -3339,7 +3588,7 @@ class JsBotGUI(ctk.CTk):
         }
 
         if MODULOS_DISPONIBLES:
-            cm.guardar_settings(nuevos_settings)
+            threading.Thread(target=cm.guardar_settings, args=(nuevos_settings,), daemon=True).start()
 
         self._ocultar_banner_advertencia_inmediato()
         self._agregar_log(f"[AJUSTES] Parámetros guardados y persistidos en config/settings.json: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s, Navegador={self.defaults_ajustes['browser']}.")
@@ -3372,7 +3621,7 @@ class JsBotGUI(ctk.CTk):
         self.defaults_ajustes["phone"] = "0412-0000000"
 
         if MODULOS_DISPONIBLES:
-            cm.guardar_settings(cm.DEFAULTS)
+            threading.Thread(target=cm.guardar_settings, args=(cm.DEFAULTS,), daemon=True).start()
 
         self._ocultar_banner_advertencia_inmediato()
         self._agregar_log("[AJUSTES] Valores restaurados por defecto y persistidos en config/settings.json.")
@@ -3492,7 +3741,7 @@ class JsBotGUI(ctk.CTk):
             modal.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
             modal.resizable(False, False)
             modal.transient(self)
-            modal.grab_set()
+            self.registrar_modal("modal_mensaje", modal, grab=True)
             modal.focus_set()
 
             colores = {
@@ -3535,7 +3784,7 @@ class JsBotGUI(ctk.CTk):
                 font=ctk.CTkFont(size=11, weight="bold"),
                 fg_color="#1f538d",
                 hover_color="#14375e",
-                command=modal.destroy
+                command=lambda: self.cerrar_modal(modal)
             )
             btn_ok.pack(side="bottom", pady=(0, 14))
         except Exception:
@@ -3573,6 +3822,7 @@ class JsBotGUI(ctk.CTk):
 
     def _descartar_archivo_formacion(self):
         """Deselecciona el archivo de formación, oculta la tarjeta de pre-vuelo y limpia datos."""
+        self.cerrar_modales_activos()
         self.archivo_actual_ruta = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
@@ -3613,6 +3863,7 @@ class JsBotGUI(ctk.CTk):
 
     def _descartar_archivo_servicios(self):
         """Deselecciona el archivo de servicios, oculta la tarjeta de pre-vuelo y limpia datos."""
+        self.cerrar_modales_activos()
         self.archivo_actual_ruta = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
@@ -3773,7 +4024,7 @@ class JsBotGUI(ctk.CTk):
         modal.geometry(f"{ancho_modal}x{alto_modal}+{pos_x}+{pos_y}")
         modal.minsize(800, 450)
         modal.transient(self)
-        modal.grab_set()
+        self.registrar_modal("tabla_previsualizacion", modal, grab=True)
         modal.focus_set()
 
         modal.grid_columnconfigure(0, weight=1)
@@ -3927,7 +4178,7 @@ class JsBotGUI(ctk.CTk):
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#1f538d",
             hover_color="#14375e",
-            command=modal.destroy
+            command=lambda: self.cerrar_modal(modal)
         )
         btn_cerrar.pack(side="right")
 
@@ -4023,7 +4274,7 @@ class JsBotGUI(ctk.CTk):
 
         with open(archivo_log, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA v4.1.0 (GUI)\n")
+            f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA v4.3.0 (GUI)\n")
             f.write(f"Actividad ID : {id_actividad}\n")
             f.write(f"URL          : {url}\n")
             f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -4123,7 +4374,7 @@ class JsBotGUI(ctk.CTk):
 
         with open(archivo_log, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v4.1.0 (GUI)\n")
+            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v4.3.0 (GUI)\n")
             f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Servicio     : {tipo_srv}\n")
             f.write(f"Servicio ID  : {id_servicio}\n")
@@ -4162,14 +4413,14 @@ class JsBotGUI(ctk.CTk):
         indice_inicio = getattr(self, "indice_inicio_recuperacion_formacion", 0) or 0
         self.indice_inicio_recuperacion_formacion = 0
 
-        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Carga Automatizada real iniciado para {total - indice_inicio} participantes (Total lote: {total}).")
-        self.after(0, self.agregar_log_telemetria, f"[ACTIVIDAD] ID Actividad: {id_act} | URL: {config.get('url')}")
+        self.cola_eventos.put(("log", f"[INICIO] Proceso de Carga Automatizada real iniciado para {total - indice_inicio} participantes (Total lote: {total})."))
+        self.cola_eventos.put(("log", f"[ACTIVIDAD] ID Actividad: {id_act} | URL: {config.get('url')}"))
 
         if MODULOS_DISPONIBLES:
             guardar_estado_sesion(config, participantes, indice_inicio)
 
         def cb_log(msg):
-            self.after(0, self.agregar_log_telemetria, msg)
+            self.cola_eventos.put(("log", msg))
 
         def cb_progreso(actual, total_p, desc=""):
             pct = actual / total_p if total_p > 0 else 0.0
@@ -4190,22 +4441,22 @@ class JsBotGUI(ctk.CTk):
 
             if len(cargados_exitosos) >= total:
                 finalizar_log_exito(config)
-                self.after(0, self.agregar_log_telemetria, f"[OK] Carga completada exitosamente: {len(cargados_exitosos)}/{total} inyectados en {tiempo_seg:.1f}s.")
+                self.cola_eventos.put(("log", f"[OK] Carga completada exitosamente: {len(cargados_exitosos)}/{total} inyectados en {tiempo_seg:.1f}s."))
             else:
                 finalizar_log_incompleto(config, f"Parcial: {len(cargados_exitosos)}/{total} procesados")
-                self.after(0, self.agregar_log_telemetria, f"[AVISO] Carga parcial: {len(cargados_exitosos)}/{total} procesados ({len(fallidos)} incidencias).")
+                self.cola_eventos.put(("log", f"[AVISO] Carga parcial: {len(cargados_exitosos)}/{total} procesados ({len(fallidos)} incidencias)."))
 
             # Reporte Excel de Auditoría
             try:
                 ruta_excel = generar_reporte_auditoria_excel(config, cargados_exitosos, fallidos)
                 if ruta_excel:
-                    self.after(0, self.agregar_log_telemetria, f"[AUDITORÍA] Reporte Excel generado: logs/{os.path.basename(ruta_excel)}")
+                    self.cola_eventos.put(("log", f"[AUDITORÍA] Reporte Excel generado: logs/{os.path.basename(ruta_excel)}"))
             except Exception as e_excel:
-                self.after(0, self.agregar_log_telemetria, f"[AVISO] Error al generar reporte Excel: {e_excel}")
+                self.cola_eventos.put(("log", f"[AVISO] Error al generar reporte Excel: {e_excel}"))
 
             # Generar planilla ODS si la opción está activa
             if config.get("generar_ods", True):
-                self.after(0, self.agregar_log_telemetria, "[PLANILLA] Generando Planilla Oficial .ODS...")
+                self.cola_eventos.put(("log", "[PLANILLA] Generando Planilla Oficial .ODS..."))
                 planillas_dir = os.path.join(BASE_DIR, "Planillas")
                 os.makedirs(planillas_dir, exist_ok=True)
                 ts = config.get("timestamp_str", datetime.now().strftime("%Y%m%d_%H%M"))
@@ -4213,12 +4464,12 @@ class JsBotGUI(ctk.CTk):
                 lista_ods = cargados_exitosos if cargados_exitosos else participantes
                 try:
                     res_ods = generar_planilla_oficial(lista_ods, id_act, config.get("url", ""), ruta_salida=ruta_ods)
-                    self.after(0, self.agregar_log_telemetria, f"[OK] Planilla oficial .ODS guardada en: Planillas/{os.path.basename(res_ods or ruta_ods)}")
+                    self.cola_eventos.put(("log", f"[OK] Planilla oficial .ODS guardada en: Planillas/{os.path.basename(res_ods or ruta_ods)}"))
                 except Exception as e_ods:
-                    self.after(0, self.agregar_log_telemetria, f"[ERROR] No se pudo generar la planilla .ODS: {e_ods}")
+                    self.cola_eventos.put(("log", f"[ERROR] No se pudo generar la planilla .ODS: {e_ods}"))
 
         except Exception as e:
-            self.after(0, self.agregar_log_telemetria, f"[CRITICO] Error no controlado durante la carga: {e}")
+            self.cola_eventos.put(("log", f"[CRITICO] Error no controlado durante la carga: {e}"))
             if MODULOS_DISPONIBLES:
                 finalizar_log_incompleto(config, str(e))
         finally:
@@ -4231,14 +4482,14 @@ class JsBotGUI(ctk.CTk):
         indice_inicio = getattr(self, "indice_inicio_recuperacion_servicios", 0) or 0
         self.indice_inicio_recuperacion_servicios = 0
 
-        self.after(0, self.agregar_log_telemetria, f"[INICIO] Proceso de Servicios Comunitarios real iniciado para {total - indice_inicio} usuarios (Total lote: {total}).")
-        self.after(0, self.agregar_log_telemetria, f"[SERVICIO] ID: {id_srv} | Tipo: {tipo_srv}")
+        self.cola_eventos.put(("log", f"[INICIO] Proceso de Servicios Comunitarios real iniciado para {total - indice_inicio} usuarios (Total lote: {total})."))
+        self.cola_eventos.put(("log", f"[SERVICIO] ID: {id_srv} | Tipo: {tipo_srv}"))
 
         if MODULOS_DISPONIBLES:
             guardar_estado_sesion_servicios(config_bot, config_servicio, usuarios, indice_inicio)
 
         def cb_log(msg):
-            self.after(0, self.agregar_log_telemetria, msg)
+            self.cola_eventos.put(("log", msg))
 
         def cb_progreso(actual, total_p, desc=""):
             pct = actual / total_p if total_p > 0 else 0.0
@@ -4261,19 +4512,19 @@ class JsBotGUI(ctk.CTk):
 
             if len(cargados_exitosos) >= total:
                 limpiar_estado_sesion_servicios()
-                self.after(0, self.agregar_log_telemetria, f"[OK] Servicios registrados con éxito: {len(cargados_exitosos)}/{total} en {tiempo_seg:.1f}s.")
+                self.cola_eventos.put(("log", f"[OK] Servicios registrados con éxito: {len(cargados_exitosos)}/{total} en {tiempo_seg:.1f}s."))
             else:
-                self.after(0, self.agregar_log_telemetria, f"[AVISO] Registro parcial de servicios: {len(cargados_exitosos)}/{total} ({len(fallidos)} incidencias).")
+                self.cola_eventos.put(("log", f"[AVISO] Registro parcial de servicios: {len(cargados_exitosos)}/{total} ({len(fallidos)} incidencias)."))
 
             try:
                 ruta_excel = generar_reporte_auditoria_servicios(config_bot, config_servicio, cargados_exitosos, fallidos)
                 if ruta_excel:
-                    self.after(0, self.agregar_log_telemetria, f"[AUDITORÍA] Reporte Excel de servicios generado: logs/{os.path.basename(ruta_excel)}")
+                    self.cola_eventos.put(("log", f"[AUDITORÍA] Reporte Excel de servicios generado: logs/{os.path.basename(ruta_excel)}"))
             except Exception as e_excel:
-                self.after(0, self.agregar_log_telemetria, f"[AVISO] Error al generar reporte Excel: {e_excel}")
+                self.cola_eventos.put(("log", f"[AVISO] Error al generar reporte Excel: {e_excel}"))
 
         except Exception as e:
-            self.after(0, self.agregar_log_telemetria, f"[CRITICO] Error no controlado durante servicios: {e}")
+            self.cola_eventos.put(("log", f"[CRITICO] Error no controlado durante servicios: {e}"))
         finally:
             self.cola_eventos.put(("fin_servicios", len(cargados_exitosos)))
 

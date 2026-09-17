@@ -1,25 +1,23 @@
 ===============================================================================
-           ÁRBOL DE COMPONENTES Y MATRIZ DEL SISTEMA — JsBOT v4.2.7
+           ÁRBOL DE COMPONENTES Y MATRIZ DEL SISTEMA — JsBOT v4.3.0
 ===============================================================================
 Sistema   : JsBOT (Robotic Process Automation & Analytics)
-Versión   : 4.2.7 (Inspector de Auditoría, Modo Turbo HTTP, Modales al Frente & Auto-Filtro)
+Versión   : 4.3.0 (Blindaje de Modales, Concurrencia Asíncrona, Navegación Canónica y Resiliencia UI/UX)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
 ===============================================================================
 
 JsBOT/
 ├── main.py                         # Punto de entrada maestro bimodal (GUI CustomTkinter / CLI Rich)
-├── linux.sh                        # Lanzador nativo Canaima/Debian GNU/Linux (PyPI Fast, PEP 668 bypass)
-├── windows.bat                     # Lanzador nativo Microsoft Windows con verificación de entorno
-├── instalar.sh                     # Script de clonación/actualización automatizada desde Git
-├── requirements.txt                # Dependencias técnicas optimizadas (v4.2.7)
-├── estudiantes.csv                 # Respaldo temporal de la última normalización de datos
+├── linux.sh                        # 🚀 Lanzador oficial Canaima/Debian GNU/Linux (PyPI Fast)
+├── windows.bat                     # 🚀 Lanzador oficial Microsoft Windows con verificación de entorno
+├── requirements.txt                # Dependencias técnicas optimizadas (v4.3.0)
 ├── README.md                       # Documentación general, arquitectura y guía rápida del sistema
-├── REGLAS_IA.md                    # Lineamientos de ingeniería y arquitectura del proyecto
+├── .gitignore                      # Blindaje estricto de seguridad y exclusiones Git
 │
 ├── config/                         # 📂 CONFIGURACIONES, ASSETS Y PLANTILLA BASE
-│   ├── config.ini                  # Credenciales de acceso a InfoApp ([LOGIN] y [AUDITORIA])
-│   ├── settings.json               # Configuración global v4.2.7 (interfaz, timeouts, URLs, navegador)
+│   ├── config.example.ini          # Plantilla limpia de credenciales de acceso a InfoApp
+│   ├── settings.json               # Configuración global v4.3.0 (interfaz, timeouts, URLs, navegador)
 │   ├── config_servicios.json       # Parámetros y tipologías para carga masiva de Servicios
 │   ├── datos_actividad.json        # Metadatos institucionales persistentes (facilitador, infocentro)
 │   ├── plantilla_base.ods          # Plantilla oficial en blanco con membretes y estilos ODS
@@ -68,8 +66,15 @@ JsBOT/
 │   ├── test_validacion_ods.py      # Validación de esquema y datos de salida en hojas ODS
 │   └── test_verificador_entorno.py # Pruebas del diagnóstico pre-vuelo de suites ofimáticas
 │
+├── scripts/                        # 📂 SCRIPTS DE DESPLIEGUE Y AUTOMATIZACIÓN
+│   └── instalar.sh                 # Script de clonación/actualización automatizada desde Git
+│
+├── docs/                           # 📂 LINEAMIENTOS Y ARQUITECTURA TÉCNICA
+│   ├── PROJECT.md                  # Bitácora de arquitectura, hitos y auditoría de UI
+│   └── REGLAS_IA.md                # Lineamientos estrictos de preservación y estilo para IAs
+│
 └── funcionamiento/                 # 📂 MANUALES Y DOCUMENTACIÓN TÉCNICA OPERATIVA
-    ├── version.txt                 # Historial consolidado de versiones y registro de cambios
-    ├── funcionamiento.txt          # Manual de funcionamiento técnico operativo v4.2.7
+    ├── version.txt                 # Historial consolidado de versiones y registro de cambios (v4.3.0)
+    ├── funcionamiento.txt          # Manual de funcionamiento técnico operativo v4.3.0
     ├── diagrama de flujo.txt       # Diagrama de flujo integral del sistema (Carga RPA + Inspector)
-    └── matriz.txt                  # Árbol y matriz de componentes del sistema v4.2.7
+    └── matriz.txt                  # Árbol y matriz de componentes del sistema v4.3.0

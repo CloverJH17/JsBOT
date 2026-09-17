@@ -1,10 +1,10 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.2.7)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.3.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Selenium%20%2B%20HTTP%20Turbo-green.svg)](https://www.selenium.dev/)
-[![Tests](https://img.shields.io/badge/Tests-276%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-284%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 
 > **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección de participantes, generación de actas formativas ODS y auditoría operativa en la plataforma institucional InfoApp (Fundación Infocentro).
