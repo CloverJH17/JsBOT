@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: INTERFAZ GRÁFICA NATIVA (interfaz_grafica.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.3.0
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Tecnología: Python + CustomTkinter (Dark Mode con acentos #3B8ED0 y #22c55e)
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Yaracuy, Venezuela
@@ -35,6 +35,7 @@ from tkinter import filedialog
 import customtkinter as ctk
 from PIL import Image
 import modulos.entorno as entorno
+from modulos.version import __version__, ETIQUETA_VERSION, NOMBRE_APP
 
 # Asegurar acceso a la raíz del proyecto
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -181,7 +182,7 @@ class JsBotGUI(ctk.CTk):
         super().__init__()
 
         # 1. Configuración de Ventana Principal (Calibrada para 1366x768)
-        self.title("JsBOT (RPA) — Versión 4.3.0")
+        self.title(f"{NOMBRE_APP} — Versión {__version__}")
         self.geometry("1020x670")
         self.minsize(980, 620)
 
@@ -291,7 +292,7 @@ class JsBotGUI(ctk.CTk):
         self._iniciar_escucha_cola()
 
         # Log inicial de bienvenida
-        self._agregar_log("[OK] Entorno gráfico JsBOT v4.3.0 inicializado (Resolución 1020x670).")
+        self._agregar_log(f"[OK] Entorno gráfico JsBOT {ETIQUETA_VERSION} inicializado (Resolución 1020x670).")
         if MODULOS_DISPONIBLES:
             self._agregar_log("[OK] Módulos de verificación y normalización vinculados en modo lectura.")
         else:
@@ -802,7 +803,7 @@ class JsBotGUI(ctk.CTk):
 
         self.sub_label = ctk.CTkLabel(
             self.sidebar_frame,
-            text="Versión 4.2.0",
+            text=f"Versión {__version__}",
             font=ctk.CTkFont(size=11),
             text_color="#8E8E93"
         )
@@ -2829,7 +2830,7 @@ class JsBotGUI(ctk.CTk):
             self.cola_eventos.put(("log_auditoria", msg))
 
         try:
-            self.cola_eventos.put(("log_auditoria", "Iniciando motor de auditoría oficial v4.3.0..."))
+            self.cola_eventos.put(("log_auditoria", f"Iniciando motor de auditoría oficial {ETIQUETA_VERSION}..."))
             resultado = ar.ejecutar_auditoria(
                 uid=params.get("uid"),
                 info_id=params.get("info_id"),
@@ -3219,7 +3220,7 @@ class JsBotGUI(ctk.CTk):
 
         lbl_version = ctk.CTkLabel(
             head_box,
-            text="Versión 4.3.0 Oficial — Núcleo de Automatización v4.3.0",
+            text=f"Versión {__version__} Oficial — Núcleo de Automatización {ETIQUETA_VERSION}",
             font=ctk.CTkFont(size=11),
             text_color="#3B8ED0"
         )
@@ -4274,7 +4275,7 @@ class JsBotGUI(ctk.CTk):
 
         with open(archivo_log, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA v4.3.0 (GUI)\n")
+            f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA {ETIQUETA_VERSION} (GUI)\n")
             f.write(f"Actividad ID : {id_actividad}\n")
             f.write(f"URL          : {url}\n")
             f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -4374,7 +4375,7 @@ class JsBotGUI(ctk.CTk):
 
         with open(archivo_log, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v4.3.0 (GUI)\n")
+            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT {ETIQUETA_VERSION} (GUI)\n")
             f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Servicio     : {tipo_srv}\n")
             f.write(f"Servicio ID  : {id_servicio}\n")

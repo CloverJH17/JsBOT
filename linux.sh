@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
 
+# Lectura dinámica de la versión desde la fuente única modulos/version.py
+JSBOT_VER=$(python3 -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2>/dev/null)
+[ -z "$JSBOT_VER" ] && JSBOT_VER="4.4.0"
+
 echo "========================================================"
-echo "  JsBOT v4.3.0 — Entorno Canaima GNU/Linux (PyPI Fast)"
+echo "  JsBOT v${JSBOT_VER} — Entorno Canaima GNU/Linux (PyPI Fast)"
 echo "========================================================"
 
 # 1. Asegurar binarios críticos del sistema operativo

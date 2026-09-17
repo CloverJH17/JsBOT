@@ -6,6 +6,25 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.4.0] — 16 de Septiembre de 2026 (Versión Centralizada, Saneamiento Estado de Fábrica y Lanzadores Dinámicos)
+--------------------------------------------------------------------------------
+• FUENTE ÚNICA DE VERSIÓN (V1):
+  - Creación de `modulos/version.py` como única ubicación del número de versión (`__version__`, `ETIQUETA_VERSION`, `NOMBRE_APP`), sin dependencias externas ni coste de arranque.
+  - `modulos/__init__.py` re-exporta la constante; erradicación de todos los literales de versión incrustados en UI (título de ventana, subtítulo de barra lateral —corregido el valor obsoleto 4.2.0—, créditos, logs de arranque y cabeceras de reportes de auditoría) y CLI (banner de 78 columnas ahora compuesto dinámicamente).
+  - Encabezados de docstring de los 12 módulos normalizados para referenciar `modulos/version.py`, eliminando versiones históricas obsoletas (v3.5.2, v3.6.1, v4.2.3, v4.3.0).
+  - espejo sincronizado en `config/settings.json` (`app.version: 4.4.0`, corregida desde la obsoleta 4.1.0).
+• GUARDAS DE CONSISTENCIA EN TESTS (V2):
+  - `tests/test_refactor_calidad.py`: el banner se valida ahora capturando stdout real (alineación estricta de 3 líneas) y una prueba anti-drift exige coherencia triple: banner == `modulos/version.py` == `settings.json`. Un desfase de versión en cualquier capa rompe la suite.
+• LANZADORES CON VERSIÓN DINÁMICA (V3):
+  - `windows.bat` y `linux.sh` consultan `modulos/version.py` en tiempo de arranque (con fallback estático si Python no responde); un nuevo release ya no requiere retocar los lanzadores.
+• SANEAMIENTO ESTADO DE FÁBRICA (V4):
+  - Purga completa de artefactos generados en disco: `logs/`, `data/jsbot.db`, `backups/estudiantes.csv`, `Planillas/`, `Reportes_Auditoria/`, `__pycache__/`, `.pytest_cache/`, `pruebas/` (scripts manuales legacy reemplazados por `tests/`) y `.agents/`.
+  - Verificada la recreación automática de todas las carpetas de ejecución vía `modulos/entorno.py` (`mkdir(parents=True, exist_ok=True)`); conservado `config/config.ini` (credenciales locales del operador).
+• VERIFICACIÓN:
+  - Medida certificada oficial por archivo con proceso aislado (393 passed, 1 skipped, 0 failed en 20 archivos), `py_compile` estático en la totalidad de `modulos/*.py` y `main.py`, y smoke test de lectura dinámica de versión en consola Windows.
+  - Hallazgo documentado en README: las suites GUI de Tk/CustomTkinter NO deben compartir un único proceso de prueba (los múltiples `Tk()` destruidos dejan imágenes `pyimage*` huérfanas que invalidan los setups posteriores). Esta limitación es preexistente (reproducida en la línea base v4.3.0) y queda atenuada con el patrón de ejecución por archivo.
+
+--------------------------------------------------------------------------------
 [v4.3.0] — 16 de Septiembre de 2026 (Blindaje de Modales, Concurrencia Asíncrona, Navegación Canónica y Resiliencia UI/UX)
 --------------------------------------------------------------------------------
 • GESTIÓN CENTRALIZADA DEL CICLO DE VIDA DE MODALES (M1):

@@ -1,4 +1,4 @@
-# Project: JsBOT v4.3.0 Robustness & UI Architecture
+# Project: JsBOT v4.4.0 Robustness & UI Architecture
 
 ## Architecture
 - **GUI Engine**: CustomTkinter on top of Tkinter / Tcl.

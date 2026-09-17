@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: AUTOMATIZADOR WEB SELENIUM CONSOLIDADO (automatizador_web.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v3.5.2
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================

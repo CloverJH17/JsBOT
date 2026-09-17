@@ -1,11 +1,11 @@
 @echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul
-title JsBOT v4.3.0 — Verificador de Entorno
+title JsBOT RPA — Verificador de Entorno
 cd /d "%~dp0"
 
 echo ========================================================
-echo   JsBOT v4.3.0 — Entorno Microsoft Windows
+echo   JsBOT RPA — Entorno Microsoft Windows
 echo ========================================================
 
 echo [INFO] Verificando interprete de Python...
@@ -40,6 +40,15 @@ if %errorlevel% neq 0 (
     echo [ALERTA] pip no esta disponible. Intentando activar ensurepip...
     %PYTHON_CMD% -m ensurepip --default-pip
 )
+
+REM Lectura dinamica de la version desde la fuente unica modulos/version.py
+set JSBOT_VER=4.4.0
+for /f "delims=" %%V in ('%PYTHON_CMD% -c "import sys; sys.path.insert(0, \'\'\'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
+title JsBOT v%JSBOT_VER% — Verificador de Entorno
+echo ========================================================
+echo   JsBOT v%JSBOT_VER% — Entorno Microsoft Windows
+echo ========================================================
+echo.
 
 %PYTHON_CMD% -c "import pandas, customtkinter, selenium" >nul 2>nul
 if %errorlevel% neq 0 (

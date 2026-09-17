@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-SUITE DE AUDITORIA COMPLETA UI/UX -- JsBOT v4.3.0
+SUITE DE AUDITORIA COMPLETA UI/UX -- JsBOT v4.4.0
 ===============================================================================
 Pruebas REALES de GUI: ventana real abierta, botones pulsados con .invoke(),
 widgets auditados via winfo_children(), efectos verificados en variables y logs.

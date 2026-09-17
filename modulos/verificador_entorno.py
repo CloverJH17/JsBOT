@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: VERIFICADOR DE INTEGRIDAD Y ENTORNO MULTIPLATAFORMA (verificador_entorno.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v3.6.1
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================

@@ -4,11 +4,10 @@
 ===============================================================================
 PAQUETE DE MÓDULOS PRINCIPALES: JsBOT RPA
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.3.0
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
 """
 
-__version__ = "4.3.0"
-__author__ = "Jair Alejandro Hernández González"
+from modulos.version import __version__, __author__, ETIQUETA_VERSION, NOMBRE_APP

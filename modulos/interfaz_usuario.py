@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: INTERFAZ DE USUARIO Y EXPERIENCIA UX/UI CONSOLIDADA (interfaz_usuario.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v3.5.2
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
@@ -16,6 +16,8 @@ import time
 import re
 import urllib.parse
 from datetime import datetime
+
+from modulos.version import ETIQUETA_VERSION
 
 # Compatibilidad de codificación en Windows
 if sys.platform == "win32":
@@ -46,11 +48,15 @@ except ImportError:
     INQUIRER_AVAILABLE = False
     Choice = None
 
+ANCHO_BANNER = 74
+
 def imprimir_banner():
-    """Muestra el banner principal oficial y limpio de JsBOT v4.3.0."""
-    print("╔══════════════════════════════════════════════════════════════════════════╗")
-    print("║   JsBOT v4.3.0 — GESTIÓN MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO    ║")
-    print("╚══════════════════════════════════════════════════════════════════════════╝")
+    """Muestra el banner principal oficial y limpio de JsBOT con la versión canónica."""
+    centro = f"   JsBOT {ETIQUETA_VERSION} — GESTIÓN MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO"
+    centro = centro[:ANCHO_BANNER].ljust(ANCHO_BANNER)
+    print("╔" + "═" * ANCHO_BANNER + "╗")
+    print(f"║{centro}║")
+    print("╚" + "═" * ANCHO_BANNER + "╝")
 
 def prompt_menu_principal() -> str:
     """Menú principal unificado del sistema JsBOT."""

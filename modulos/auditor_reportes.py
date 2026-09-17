@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: AUDITOR DE REPORTES E INSPECCIÓN ADMINISTRATIVA (auditor_reportes.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.2.3
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 Propósito : Extracción acelerada híbrida (Selenium login + HTTP Session concurrent),

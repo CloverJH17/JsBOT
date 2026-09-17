@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: ORQUESTADOR MAESTRO CONSOLIDADO (orquestador.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v4.3.0
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
@@ -30,6 +30,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+from modulos.version import ETIQUETA_VERSION
 from modulos.interfaz_usuario import (
     imprimir_banner,
     prompt_menu_principal,
@@ -270,7 +271,7 @@ def flujo_servicios(estado_previo: dict = None):
 
         with open(archivo_log, "w", encoding="utf-8") as f:
             f.write("=" * 80 + "\n")
-            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT v3.1.0\n")
+            f.write(f"REGISTRO DE AUDITORÍA — SERVICIOS JsBOT {ETIQUETA_VERSION}\n")
             f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Servicio     : {tipo_srv}\n")
             f.write(f"Fecha Reg.   : {fecha_srv}\n")
@@ -357,7 +358,7 @@ def flujo_servicios(estado_previo: dict = None):
         time.sleep(2)
 
 def flujo_consola():
-    """Bucle maestro del agente RPA JsBOT v4.3.0 en modo consola interactiva."""
+    """Bucle maestro del agente RPA JsBOT (ver modulos/version.py) en modo consola interactiva."""
     # PASO 0: Diagnóstico de Integridad y Requisitos de Entorno (Pre-vuelo)
     if not ejecutar_checklist_sistema():
         sys.exit(1)
@@ -403,7 +404,7 @@ def flujo_consola():
             break
 
 def iniciar_sistema(args: list = None):
-    """Punto de entrada bimodal para JsBOT v4.3.0.
+    """Punto de entrada bimodal para JsBOT (ver modulos/version.py).
 
     Soporta los flags de línea de comandos:
       --gui, -g: Fuerza el lanzamiento de la interfaz gráfica nativa (CustomTkinter).

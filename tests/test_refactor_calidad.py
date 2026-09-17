@@ -162,28 +162,35 @@ class TestClaveDedupUnificada(unittest.TestCase):
 
 
 class TestBannerYEstiloUI(unittest.TestCase):
-    def _lineas_banner(self):
-        src = inspect.getsource(imprimir_banner)
-        bordes = re.findall(r'═+', src)
-        texto = re.findall(r'"(║[^"]*JsBOT[^"]*)"', src)
-        return bordes, texto
+    def _capturar_banner(self):
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            imprimir_banner()
+        lineas = [l for l in buf.getvalue().splitlines() if l.strip()]
+        self.assertEqual(len(lineas), 3, "El banner debe tener 3 líneas (borde, título, borde)")
+        return lineas
 
     def test_banner_alineado(self):
-        bordes, texto = self._lineas_banner()
-        self.assertTrue(bordes and texto)
-        ancho_borde = len(bordes[0]) + 2   # bordes[0] son solo los '═' (+╔+╗)
-        ancho_texto = len(texto[0])
-        self.assertEqual(ancho_borde, ancho_texto,
-                         "El banner quedó desalineado: borde=%d texto=%d" % (ancho_borde, ancho_texto))
+        lineas = self._capturar_banner()
+        anchos = {len(l) for l in lineas}
+        self.assertEqual(len(anchos), 1,
+                         "El banner quedó desalineado: anchos=%s" % sorted(anchos))
+        self.assertTrue(lineas[0].startswith("╔") and lineas[1].startswith("║")
+                        and lineas[2].startswith("╚"))
 
     def test_banner_version_actualizada(self):
-        # El banner debe reflejar la misma versión que config/settings.json
-        _, texto = self._lineas_banner()
+        # Guarda anti-drift: banner == modulos/version.py == config/settings.json
+        from modulos.version import __version__
+        linea_titulo = self._capturar_banner()[1]
+        self.assertIn(f"v{__version__}", linea_titulo)
         import json as _json
         cfg = _json.load(open(
             os.path.join(BASE_DIR, "config", "settings.json"), encoding="utf-8"
         ))
-        self.assertIn(f'v{cfg["app"]["version"]}', texto[0])
+        self.assertEqual(cfg["app"]["version"], __version__,
+                         "settings.json desincronizado respecto a modulos/version.py")
 
     def test_prompt_tipo_servicio_qmark_vacio(self):
         src = inspect.getsource(prompt_tipo_servicio)

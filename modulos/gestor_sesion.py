@@ -4,7 +4,7 @@
 ===============================================================================
 MÓDULO: GESTOR DE SESIÓN, AUDITORÍA Y CHECKPOINTS (gestor_sesion.py)
 ===============================================================================
-Sistema   : JsBOT (Robotic Process Automation) — v3.5.2
+Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 ===============================================================================
@@ -32,6 +32,7 @@ from modulos.interfaz_usuario import (
     prompt_url_actividad
 )
 import modulos.entorno as entorno
+from modulos.version import ETIQUETA_VERSION
 
 BASE_DIR = str(entorno.RAIZ_PROYECTO)
 CONFIG_DIR = str(entorno.CARPETA_CONFIG)
@@ -390,7 +391,7 @@ def inicializar_sesion_actividad() -> dict:
 
     with open(archivo_log, "w", encoding="utf-8") as f:
         f.write("=" * 80 + "\n")
-        f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA v3.1.0\n")
+        f.write(f"REGISTRO DE AUDITORÍA — JsBOT RPA {ETIQUETA_VERSION}\n")
         f.write(f"Actividad ID : {id_act}\n")
         f.write(f"URL          : {url}\n")
         f.write(f"Fecha Inicio : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
