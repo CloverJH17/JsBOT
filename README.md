@@ -99,24 +99,27 @@ JsBOT/
 ├── config/                  # Ajustes, credenciales, plantillas ODS e iconos PNG
 │   ├── assets/iconos/       # Iconografía vectorial de la interfaz
 │   ├── settings.json        # Configuración centralizada de timeouts y parámetros
+│   ├── requirements.txt     # Dependencias técnicas del proyecto
 │   └── plantilla_base.ods   # Plantilla base institucional
 ├── modulos/                 # Lógica de negocio y módulos desacoplados
 │   ├── auditor_reportes.py  # Motor de auditoría, balances, Turbo HTTP y exportación multiformato
-│   ├── automatizador_web.py # Automatización Selenium y control de sesión
+│   ├── automatizador_web.py # Automatización Playwright/Selenium y control de sesión
 │   ├── generador_planilla.py# Motor de exportación OpenDocument (.ods)
-│   ├── gestor_sesion.py     # Checkpoints de sesión y reportes de incidencias
+│   ├── gestor_sesion.py     # Checkpoints ACID en SQLite y reportes de incidencias
 │   ├── interfaz_grafica.py  # Aplicación de escritorio nativa (CustomTkinter)
 │   ├── interfaz_usuario.py  # Interfaz de consola interactiva (Rich)
 │   ├── normalizador_datos.py# Motor ETL y normalización de identidades
 │   ├── orquestador.py       # Despachador bimodal y control de ejecución
 │   └── verificador_entorno.py# Diagnóstico de librerías y conectividad
+├── data/                    # Base de datos SQLite unificada (jsbot.db) para telemetría y checkpoints
+├── docs/                    # Documentación arquitectónica, manuales e historial de versiones
+├── Features/                # Entorno de pruebas y desarrollo de nuevos features
 ├── Reportes_Auditoria/      # Informes de auditoría exportados (.xlsx, .odt, .pdf, .csv)
 ├── Planillas/               # Planillas formativas oficiales generadas (.ods)
-├── tests/                   # Suite completa de 276 tests unitarios y de estrés
+├── tests/                   # Suite completa de tests unitarios y de estrés
 ├── main.py                  # Punto de entrada raíz unificado
 ├── windows.bat              # Lanzador resiliente para entornos Windows
 ├── linux.sh                 # Lanzador resiliente con auto-instalador para Linux
-├── requirements.txt         # Dependencias del proyecto
 └── README.md                # Documentación técnica
 ```
 

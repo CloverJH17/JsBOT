@@ -413,22 +413,31 @@ class TestOraculoEstadoBackend(_GuiTestBase):
     def test_42_guardar_credenciales_escribe_config(self):
         config_path = os.path.join(BASE_DIR, "config", "config.ini")
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        usuario_test = f"test_user_{int(time.time())}"
-        self.app.entry_cred_usuario.delete(0, "end")
-        self.app.entry_cred_usuario.insert(0, usuario_test)
-        self.app.entry_cred_clave.delete(0, "end")
-        self.app.entry_cred_clave.insert(0, "clave_test_1234")
-        _flush(self.app, 80)
-        self.app.btn_guardar_credenciales.invoke()
-        _flush(self.app, 200)
-        self.assertTrue(os.path.exists(config_path))
-        cfg = configparser.ConfigParser()
-        cfg.read(config_path, encoding="utf-8")
-        encontrado = any(
-            cfg.has_section(s) and cfg.get(s, "usuario", fallback="") == usuario_test
-            for s in ("LOGIN", "CREDENCIALES")
-        )
-        self.assertTrue(encontrado, f"Usuario '{usuario_test}' no en config.ini")
+        contenido_previo = None
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                contenido_previo = f.read()
+        try:
+            usuario_test = f"test_user_{int(time.time())}"
+            self.app.entry_cred_usuario.delete(0, "end")
+            self.app.entry_cred_usuario.insert(0, usuario_test)
+            self.app.entry_cred_clave.delete(0, "end")
+            self.app.entry_cred_clave.insert(0, "clave_test_1234")
+            _flush(self.app, 80)
+            self.app.btn_guardar_credenciales.invoke()
+            _flush(self.app, 200)
+            self.assertTrue(os.path.exists(config_path))
+            cfg = configparser.ConfigParser()
+            cfg.read(config_path, encoding="utf-8")
+            encontrado = any(
+                cfg.has_section(s) and cfg.get(s, "usuario", fallback="") == usuario_test
+                for s in ("LOGIN", "CREDENCIALES")
+            )
+            self.assertTrue(encontrado, f"Usuario '{usuario_test}' no en config.ini")
+        finally:
+            if contenido_previo is not None:
+                with open(config_path, "w", encoding="utf-8") as f:
+                    f.write(contenido_previo)
 
     def test_43_limpiar_logs_muta_textbox(self):
         self.app._agregar_log("[ORACULO] Linea de referencia.")

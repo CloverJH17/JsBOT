@@ -724,6 +724,26 @@ class JsBotGUI(ctk.CTk):
                 self.lbl_prevuelo_formacion_desglose.configure(text=desglose_txt)
                 self.lbl_prevuelo_formacion_estado.configure(text=estado_txt, text_color=estado_col)
 
+    def _crear_label_con_icono(self, master, text="", icono_clave=None, font=None, text_color=None, compound="left", **kwargs):
+        """Crea un CTkLabel tolerante a fallos de imagen o Tcl."""
+        img = self.iconos.get(icono_clave) if icono_clave and hasattr(self, "iconos") else None
+        if img:
+            try:
+                return ctk.CTkLabel(master, text=text, image=img, compound=compound, font=font, text_color=text_color, **kwargs)
+            except Exception:
+                pass
+        return ctk.CTkLabel(master, text=text, font=font, text_color=text_color, **kwargs)
+
+    def _crear_boton_con_icono(self, master, text="", icono_clave=None, command=None, font=None, compound="left", **kwargs):
+        """Crea un CTkButton tolerante a fallos de imagen o Tcl."""
+        img = self.iconos.get(icono_clave) if icono_clave and hasattr(self, "iconos") else None
+        if img:
+            try:
+                return ctk.CTkButton(master, text=text, image=img, command=command, compound=compound, font=font, **kwargs)
+            except Exception:
+                pass
+        return ctk.CTkButton(master, text=text, command=command, font=font, **kwargs)
+
     def _cargar_iconos(self):
         """Carga los iconos PNG desde config/assets/iconos/ usando CTkImage."""
         self.iconos = {}
@@ -736,7 +756,8 @@ class JsBotGUI(ctk.CTk):
                     ruta = alt_ruta
             if os.path.exists(ruta):
                 try:
-                    img = Image.open(ruta)
+                    with Image.open(ruta) as im:
+                        img = im.convert("RGBA").copy()
                     tam = (44, 44) if n == "robot_logo" else (18, 18)
                     self.iconos[n] = ctk.CTkImage(light_image=img, dark_image=img, size=tam)
                 except Exception:
@@ -786,12 +807,15 @@ class JsBotGUI(ctk.CTk):
 
         # 1. Logo de Robot en Sidebar
         if self.iconos.get("robot_logo"):
-            self.robot_logo_label = ctk.CTkLabel(
-                self.sidebar_frame,
-                text="",
-                image=self.iconos.get("robot_logo")
-            )
-            self.robot_logo_label.grid(row=0, column=0, padx=16, pady=(16, 4), sticky="w")
+            try:
+                self.robot_logo_label = ctk.CTkLabel(
+                    self.sidebar_frame,
+                    text="",
+                    image=self.iconos.get("robot_logo")
+                )
+                self.robot_logo_label.grid(row=0, column=0, padx=16, pady=(16, 4), sticky="w")
+            except Exception:
+                pass
 
         # 2. Título de la App y Versión
         self.logo_label = ctk.CTkLabel(
@@ -827,53 +851,60 @@ class JsBotGUI(ctk.CTk):
 
         for idx, (clave, texto, icono_k) in enumerate(secciones_superiores, start=4):
             es_activo = (clave == "Diagnostico")
-            btn = ctk.CTkButton(
-                self.sidebar_frame,
-                text=f"  {texto}",
-                image=self.iconos.get(icono_k) or self.iconos.get("credenciales") or self.iconos.get("cuenta"),
-                compound="left",
-                anchor="w",
-                height=38,
-                corner_radius=8,
-                font=ctk.CTkFont(size=12, weight="bold" if es_activo else "normal"),
-                fg_color="#1f538d" if es_activo else "transparent",
-                hover_color="#14375e" if es_activo else "#2B2B36",
-                command=lambda c=clave: self._mostrar_seccion(c)
-            )
+            img_icon = self.iconos.get(icono_k) or self.iconos.get("credenciales") or self.iconos.get("cuenta")
+            btn_args = {
+                "text": f"  {texto}",
+                "compound": "left",
+                "anchor": "w",
+                "height": 38,
+                "corner_radius": 8,
+                "font": ctk.CTkFont(size=12, weight="bold" if es_activo else "normal"),
+                "fg_color": "#1f538d" if es_activo else "transparent",
+                "hover_color": "#14375e" if es_activo else "#2B2B36",
+                "command": lambda c=clave: self._mostrar_seccion(c)
+            }
+            try:
+                btn = ctk.CTkButton(self.sidebar_frame, image=img_icon, **btn_args)
+            except Exception:
+                btn = ctk.CTkButton(self.sidebar_frame, **btn_args)
             btn.grid(row=idx, column=0, padx=12, pady=2, sticky="ew")
             self.nav_buttons[clave] = btn
 
         # 5. Botón 'Créditos' ubicado directamente arriba de 'Ajustes'
-        btn_creditos = ctk.CTkButton(
-            self.sidebar_frame,
-            text="  Créditos",
-            image=self.iconos.get("info"),
-            compound="left",
-            anchor="w",
-            height=38,
-            corner_radius=8,
-            font=ctk.CTkFont(size=12),
-            fg_color="transparent",
-            hover_color="#2B2B36",
-            command=lambda: self._mostrar_seccion("Creditos")
-        )
+        btn_cred_args = {
+            "text": "  Créditos",
+            "compound": "left",
+            "anchor": "w",
+            "height": 38,
+            "corner_radius": 8,
+            "font": ctk.CTkFont(size=12),
+            "fg_color": "transparent",
+            "hover_color": "#2B2B36",
+            "command": lambda: self._mostrar_seccion("Creditos")
+        }
+        try:
+            btn_creditos = ctk.CTkButton(self.sidebar_frame, image=self.iconos.get("info"), **btn_cred_args)
+        except Exception:
+            btn_creditos = ctk.CTkButton(self.sidebar_frame, **btn_cred_args)
         btn_creditos.grid(row=11, column=0, padx=12, pady=(0, 2), sticky="ew")
         self.nav_buttons["Creditos"] = btn_creditos
 
         # 6. Botón Ajustes
-        btn_ajustes = ctk.CTkButton(
-            self.sidebar_frame,
-            text="  Ajustes",
-            image=self.iconos.get("ajustes"),
-            compound="left",
-            anchor="w",
-            height=38,
-            corner_radius=8,
-            font=ctk.CTkFont(size=12),
-            fg_color="transparent",
-            hover_color="#2B2B36",
-            command=lambda: self._mostrar_seccion("Ajustes")
-        )
+        btn_aj_args = {
+            "text": "  Ajustes",
+            "compound": "left",
+            "anchor": "w",
+            "height": 38,
+            "corner_radius": 8,
+            "font": ctk.CTkFont(size=12),
+            "fg_color": "transparent",
+            "hover_color": "#2B2B36",
+            "command": lambda: self._mostrar_seccion("Ajustes")
+        }
+        try:
+            btn_ajustes = ctk.CTkButton(self.sidebar_frame, image=self.iconos.get("ajustes"), **btn_aj_args)
+        except Exception:
+            btn_ajustes = ctk.CTkButton(self.sidebar_frame, **btn_aj_args)
         btn_ajustes.grid(row=12, column=0, padx=12, pady=(0, 10), sticky="ew")
         self.nav_buttons["Ajustes"] = btn_ajustes
 
@@ -1017,21 +1048,19 @@ class JsBotGUI(ctk.CTk):
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 4))
 
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="Diagnóstico del Sistema y Entorno",
-            image=self.iconos.get("diagnostico"),
-            compound="left",
+            icono_clave="diagnostico",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
         lbl_title.pack(side="left")
 
-        self.btn_recomprobar = ctk.CTkButton(
+        self.btn_recomprobar = self._crear_boton_con_icono(
             header,
             text="Re-comprobar Entorno",
-            image=self.iconos.get("diagnostico"),
-            compound="left",
+            icono_clave="diagnostico",
             font=ctk.CTkFont(size=11, weight="bold"),
             height=30,
             fg_color="#2B2B36",
@@ -1100,7 +1129,7 @@ class JsBotGUI(ctk.CTk):
             valor_destacado="Sincronizadas",
             tag_texto="[OK]",
             tag_color="#30D158",
-            linea_1="Librerías: Selenium, Pandas, CTk, PIL",
+            linea_1="Librerías: Playwright, Pandas, CTk, PIL",
             linea_2="Estado: requirements.txt verificado"
         )
 
@@ -1123,7 +1152,7 @@ class JsBotGUI(ctk.CTk):
             valor_destacado=val_nav,
             tag_texto="[OK]" if nav_ok else "[AVISO]",
             tag_color="#30D158" if nav_ok else "#F5A623",
-            linea_1="Control: Selenium WebDriver",
+            linea_1="Control: Playwright",
             linea_2="Rutas: Encontrados en PATH"
         )
 
@@ -1216,11 +1245,10 @@ class JsBotGUI(ctk.CTk):
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(12, 6))
 
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="🔐 Gestión de Cuenta y Credenciales InfoApp",
-            image=self.iconos.get("cuenta"),
-            compound="left",
+            icono_clave="cuenta",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -1355,7 +1383,7 @@ class JsBotGUI(ctk.CTk):
 
         lbl_info_seguridad = ctk.CTkLabel(
             card_info,
-            text="🛡️ Seguridad y Privacidad: Tus credenciales se almacenan localmente en 'config/config.ini' y se utilizan\núnicamente durante el proceso automatizado con Selenium hacia los servidores oficiales de InfoApp.",
+            text="🛡️ Seguridad y Privacidad: Tus credenciales se almacenan localmente en 'config/config.ini' y se utilizan\núnicamente durante el proceso automatizado con Playwright hacia los servidores oficiales de InfoApp.",
             font=ctk.CTkFont(size=10),
             text_color="#8E8E98",
             justify="left"
@@ -1450,11 +1478,10 @@ class JsBotGUI(ctk.CTk):
 
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(12, 6))
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="Carga Masiva de Formación — Cursos y Actas ODS",
-            image=self.iconos.get("formacion"),
-            compound="left",
+            icono_clave="formacion",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -1637,11 +1664,10 @@ class JsBotGUI(ctk.CTk):
 
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(12, 6))
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="Carga de Servicios Comunitarios y Trámites",
-            image=self.iconos.get("servicios"),
-            compound="left",
+            icono_clave="servicios",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -1832,11 +1858,10 @@ class JsBotGUI(ctk.CTk):
 
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(12, 8))
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="Gestión de Planillas Oficiales y Reportes ODS",
-            image=self.iconos.get("reportes"),
-            compound="left",
+            icono_clave="reportes",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -1924,11 +1949,10 @@ class JsBotGUI(ctk.CTk):
         header = ctk.CTkFrame(frame, fg_color="transparent")
         header.pack(fill="x", padx=16, pady=(10, 4))
 
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             header,
             text="Inspector de Auditoría",
-            image=self.iconos.get("reportes"),
-            compound="left",
+            icono_clave="reportes",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -2565,7 +2589,7 @@ class JsBotGUI(ctk.CTk):
             datos_base = []
             for f_uid, d in facs_dict.items():
                 datos_base.append({
-                    "uid": str(f_uid),
+                    "uid": str(d.get("uid", f_uid)),
                     "nombre": str(d.get("nombre", f"UID {f_uid}")),
                     "info_id": str(d.get("info_id", "")),
                     "formaciones": int(d.get("formaciones", 0)),
@@ -2774,7 +2798,7 @@ class JsBotGUI(ctk.CTk):
         try:
             datetime.strptime(f_desde, "%Y-%m-%d")
             datetime.strptime(f_hasta, "%Y-%m-%d")
-        except ValueError:
+        except (ValueError, TypeError):
             self._mostrar_modal_mensaje("Error en Fechas", "Las fechas deben tener el formato AAAA-MM-DD (ej: 2026-09-01).", tipo="error")
             return
 
@@ -3207,8 +3231,11 @@ class JsBotGUI(ctk.CTk):
         head_box.pack(fill="x", padx=16, pady=(14, 8))
 
         if self.iconos.get("robot_logo"):
-            lbl_logo = ctk.CTkLabel(head_box, text="", image=self.iconos.get("robot_logo"))
-            lbl_logo.pack(pady=(0, 4))
+            try:
+                lbl_logo = self._crear_label_con_icono(head_box, text="", icono_clave="robot_logo")
+                lbl_logo.pack(pady=(0, 4))
+            except Exception:
+                pass
 
         lbl_title = ctk.CTkLabel(
             head_box,
@@ -3318,11 +3345,10 @@ class JsBotGUI(ctk.CTk):
         self.header_ajustes = ctk.CTkFrame(frame, fg_color="transparent")
         self.header_ajustes.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 4))
 
-        lbl_title = ctk.CTkLabel(
+        lbl_title = self._crear_label_con_icono(
             self.header_ajustes,
             text="Parámetros de Configuración y Preferencias",
-            image=self.iconos.get("ajustes"),
-            compound="left",
+            icono_clave="ajustes",
             font=ctk.CTkFont(size=15, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -3589,7 +3615,10 @@ class JsBotGUI(ctk.CTk):
         }
 
         if MODULOS_DISPONIBLES:
-            threading.Thread(target=cm.guardar_settings, args=(nuevos_settings,), daemon=True).start()
+            try:
+                cm.guardar_settings(nuevos_settings)
+            except Exception as e:
+                self._agregar_log(f"[ADVERTENCIA] Error guardando ajustes: {e}")
 
         self._ocultar_banner_advertencia_inmediato()
         self._agregar_log(f"[AJUSTES] Parámetros guardados y persistidos en config/settings.json: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s, Navegador={self.defaults_ajustes['browser']}.")
@@ -4199,7 +4228,7 @@ class JsBotGUI(ctk.CTk):
             entry_widget.configure(border_color="#3A3A4A")
             return
 
-        if "id_activity=" in texto or "id_service=" in texto:
+        if "id_activity=" in texto or "id_service=" in texto or "view=services" in texto or "services" in texto.lower():
             entry_widget.configure(border_color="#2ECC71")
         else:
             entry_widget.configure(border_color="#F39C12")
@@ -4330,14 +4359,21 @@ class JsBotGUI(ctk.CTk):
             )
             return
 
-        # 2. Validar sintaxis y presencia de id_service en la URL
+        # 2. Validar sintaxis y presencia de id_service o view=services en la URL
         url = self.entry_url_servicios.get().strip()
-        id_servicio = extraer_id_servicio(url) if MODULOS_DISPONIBLES else ""
-        if not url or ("id_service=" not in url and id_servicio == "general"):
+        if not url:
+            url = "https://infoapp2.infocentro.gob.ve/admin/index.php?view=services"
+            self.entry_url_servicios.delete(0, "end")
+            self.entry_url_servicios.insert(0, url)
+            self._validar_sintaxis_url(self.entry_url_servicios)
+
+        id_servicio = extraer_id_servicio(url) if MODULOS_DISPONIBLES else "general"
+        es_valida = bool("id_service=" in url or "view=services" in url or "services" in url.lower() or "infocentro.gob.ve" in url)
+        if not es_valida:
             self._agregar_log(f"[ERROR] URL de Servicio InfoApp no válida: '{url}'")
             self._mostrar_modal_mensaje(
                 titulo="URL de Servicio Inválida",
-                mensaje="La URL de Servicio no es válida. Debe contener el parámetro 'id_service=' (ej: https://infoapp2.infocentro.gob.ve/admin/index.php?r=service/create&id_service=12345).",
+                mensaje="La URL de Servicio no es válida. Debe ser una URL de InfoApp (ej: https://infoapp2.infocentro.gob.ve/admin/index.php?view=services o con id_service=...).",
                 tipo="error"
             )
             return
@@ -4441,7 +4477,6 @@ class JsBotGUI(ctk.CTk):
             )
 
             if len(cargados_exitosos) >= total:
-                finalizar_log_exito(config)
                 self.cola_eventos.put(("log", f"[OK] Carga completada exitosamente: {len(cargados_exitosos)}/{total} inyectados en {tiempo_seg:.1f}s."))
             else:
                 finalizar_log_incompleto(config, f"Parcial: {len(cargados_exitosos)}/{total} procesados")
@@ -4469,10 +4504,16 @@ class JsBotGUI(ctk.CTk):
                 except Exception as e_ods:
                     self.cola_eventos.put(("log", f"[ERROR] No se pudo generar la planilla .ODS: {e_ods}"))
 
+            if len(cargados_exitosos) >= total:
+                finalizar_log_exito(config)
+
         except Exception as e:
             self.cola_eventos.put(("log", f"[CRITICO] Error no controlado durante la carga: {e}"))
             if MODULOS_DISPONIBLES:
-                finalizar_log_incompleto(config, str(e))
+                try:
+                    finalizar_log_incompleto(config, str(e))
+                except Exception:
+                    pass
         finally:
             self.cola_eventos.put(("fin_formacion", len(cargados_exitosos)))
 

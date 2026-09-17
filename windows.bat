@@ -53,7 +53,7 @@ echo.
 %PYTHON_CMD% -c "import pandas, customtkinter, selenium" >nul 2>nul
 if %errorlevel% neq 0 (
     echo [INFO] Configurando dependencias por primera vez...
-    %PYTHON_CMD% -m pip install -r requirements.txt
+    %PYTHON_CMD% -m pip install -r config\requirements.txt
     if !errorlevel! neq 0 (
         echo.
         echo [X] Error al instalar dependencias. Revisa tu conexion a Internet.

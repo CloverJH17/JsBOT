@@ -12,11 +12,11 @@ Unica ubicacion del proyecto donde se declara el numero de version.
 Toda la UI, la CLI, los reportes y los lanzadores consumen estas constantes.
 Para publicar un nuevo release: actualizar aqui, espejar el valor en
 config/settings.json (app.version) y registrar el cambio en
-funcionamiento/version.txt.
+docs/version.txt y docs/historial/version.txt.
 ===============================================================================
 """
 
-__version__ = "4.4.0"
+__version__ = "4.8.0"
 __author__ = "Jair Alejandro Hernandez Gonzalez"
 NOMBRE_APP = "JsBOT (Robotic Process Automation)"
 ETIQUETA_VERSION = f"v{__version__}"

@@ -7,7 +7,7 @@ MÓDULO: AUDITOR DE REPORTES E INSPECCIÓN ADMINISTRATIVA (auditor_reportes.py)
 Sistema   : JsBOT (Robotic Process Automation) — versión: ver modulos/version.py
 Autor     : Jair Alejandro Hernández González
 Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
-Propósito : Extracción acelerada híbrida (Selenium login + HTTP Session concurrent),
+Propósito : Extracción acelerada híbrida (Playwright login + HTTP Session concurrent),
             clasificación cualitativa/cuantitativa, balance matemático y
             generación de reportes Excel profesionales agrupados por Infocentro.
 ===============================================================================
@@ -22,15 +22,12 @@ import zipfile
 import csv
 import configparser
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import parse_qs, urlparse
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.sync_api import sync_playwright
 
 import modulos.entorno as entorno
 
@@ -39,9 +36,7 @@ CONFIG_DIR = str(entorno.CARPETA_CONFIG)
 CONFIG_PATH = str(entorno.ARCHIVO_CONFIG_INI)
 REPORTES_DIR = os.path.join(BASE_DIR, "Reportes_Auditoria")
 CACHE_INSPECTOR_PATH = os.path.join(str(entorno.CARPETA_LOGS), "ultima_busqueda_inspector.json")
-from modulos.driver_factory import obtener_driver_resiliente
 from modulos.identidad_utils import LISTA_ESTADOS_VENEZUELA
-from modulos.web_utils import limpiar_overlays, esperar_desbloqueo_ajax, realizar_login_infoapp
 
 def guardar_cache_inspector(resultado: dict, ruta_archivo: str = None) -> str:
     """
@@ -136,18 +131,47 @@ def cargar_credenciales_auditoria(rol_auditor: bool = False) -> tuple:
                 return u, c
     return "", ""
 
-def iniciar_driver_auditoria(headless: bool = False):
-    """Instancia el WebDriver utilizando la factoría centralizada resiliente."""
-    return obtener_driver_resiliente(headless=headless)
+def iniciar_driver_auditoria(headless: bool = True):
+    """Instancia un contexto Playwright para autenticación en InfoApp respetando la prioridad de navegador."""
+    from modulos.driver_factory import obtener_contexto_playwright
+    from modulos import config_manager as _cm
+    cfg = _cm.obtener_browser_cfg()
+    nav = cfg["priority"][0] if cfg["priority"] else "firefox"
+    user_data_dir = str(entorno.CARPETA_DATA / "playwright_context")
+    pw, context = obtener_contexto_playwright(headless=headless, navegador=nav, user_data_dir=user_data_dir)
+    page = context.pages[0] if context.pages else context.new_page()
+    # Retornamos un objeto que simula la interfaz usada en ejecutar_auditoria
+    return _PlaywrightDriverAdapter(pw, context, page)
 
-def esperar_desbloqueo(driver, timeout: int = 12):
-    """Elimina indicadores de carga (#cover-spin) y overlays que bloquean la navegación."""
-    limpiar_overlays(driver)
-    esperar_desbloqueo_ajax(driver, timeout=timeout)
+class _PlaywrightDriverAdapter:
+    """Adaptador interno que expone la interfaz mínima esperada por ejecutar_auditoria."""
+    def __init__(self, pw, context, page):
+        self._pw = pw
+        self._context = context
+        self.page = page
+
+    def get_cookies(self):
+        """Retorna las cookies del contexto en formato compatible con requests.Session."""
+        return [
+            {"name": c["name"], "value": c["value"],
+             "domain": c.get("domain", ""), "path": c.get("path", "/")}
+            for c in self._context.cookies()
+        ]
+
+    def quit(self):
+        try:
+            self._context.close()
+        except Exception:
+            pass
+        try:
+            self._pw.stop()
+        except Exception:
+            pass
 
 def autenticar_infoapp(driver, usuario: str, clave: str) -> bool:
-    """Inicia sesión en el portal de administración de InfoApp delegando a web_utils."""
-    return realizar_login_infoapp(driver, usuario, clave)
+    """Inicia sesión en el portal de administración de InfoApp con Playwright."""
+    from modulos.web_utils import realizar_login_infoapp
+    return realizar_login_infoapp(driver.page, usuario, clave)
 
 # =============================================================================
 # 1. PARSEO DE CONTENIDO CON BEAUTIFULSOUP (HTML)
@@ -182,18 +206,54 @@ def parsear_pagina_actividades_bs4(html: str, default_info_id: str = "", default
             continue
 
         # 1. Badges de Participantes y Productos
-        b_part = f.select_one("a.btn-info") or f.select_one(".badge-info")
-        b_prod = f.select_one("a.btn-danger") or f.select_one(".badge-danger")
+        b_part = (
+            f.select_one("a[href*='view=participants_list']")
+            or f.select_one("a.btn-info")
+            or f.select_one(".badge-info")
+            or f.select_one("a[class*='btn-info']")
+            or f.select_one("span[class*='badge-info']")
+            or f.select_one("a[href*='id_activity'][class*='info']")
+        )
+        b_prod = (
+            f.select_one("a[href*='view=products_list']")
+            or f.select_one("a.btn-danger")
+            or f.select_one(".badge-danger")
+            or f.select_one("a[class*='btn-danger']")
+            or f.select_one("span[class*='badge-danger']")
+            or f.select_one("a[href*='id_activity'][class*='danger']")
+        )
 
-        part = int(b_part.get_text(strip=True)) if (b_part and b_part.get_text(strip=True).isdigit()) else 0
-        prod = int(b_prod.get_text(strip=True)) if (b_prod and b_prod.get_text(strip=True).isdigit()) else 0
+        part = 0
+        if b_part:
+            m_part = re.search(r'\b(\d+)\b', b_part.get_text(strip=True))
+            if m_part:
+                part = int(m_part.group(1))
 
-        # Si no hay badges con clase btn-info pero hay números en celdas posteriores
-        if part == 0 and b_part is None and len(tds) > 4:
+        prod = 0
+        if b_prod:
+            m_prod = re.search(r'\b(\d+)\b', b_prod.get_text(strip=True))
+            if m_prod:
+                prod = int(m_prod.group(1))
+
+        # Si aún es 0 o no se encontró el badge, buscar en las columnas de la tabla
+        if part == 0 and len(tds) > 4:
             for td_elem in tds[4:]:
-                t_txt = td_elem.get_text(strip=True)
-                if t_txt.isdigit() and int(t_txt) > 0 and part == 0:
-                    part = int(t_txt)
+                if "participants" in str(td_elem).lower() or td_elem.select_one(".badge-info, .btn-info, a[href*='participants']"):
+                    m = re.search(r'\b(\d+)\b', td_elem.get_text(strip=True))
+                    if m and int(m.group(1)) > 0:
+                        part = int(m.group(1))
+                        break
+
+        # Fallback posicional para tabla estándar de InfoApp view=report (9 columnas)
+        if len(tds) >= 7:
+            if part == 0:
+                m_td5 = re.search(r'\b(\d+)\b', tds[5].get_text(strip=True))
+                if m_td5:
+                    part = int(m_td5.group(1))
+            if prod == 0:
+                m_td6 = re.search(r'\b(\d+)\b', tds[6].get_text(strip=True))
+                if m_td6:
+                    prod = int(m_td6.group(1))
 
         # Extraer parámetros de consulta desde los enlaces href de la fila
         params_href = {}
@@ -348,14 +408,97 @@ def parsear_pagina_servicios_bs4(html: str, default_info_id: str = "", default_u
 # =============================================================================
 # 2. EXTRACCIÓN ACELERADA HTTP CON REQUESTS + CONCURRENCIA
 # =============================================================================
+def _generar_rango_dias_auditoria(start_at: str, finish_at: str) -> list:
+    """Genera lista de fechas YYYY-MM-DD entre start_at y finish_at inclusive."""
+    try:
+        dt_ini = datetime.strptime(str(start_at).strip(), "%Y-%m-%d")
+        dt_fin = datetime.strptime(str(finish_at).strip(), "%Y-%m-%d")
+        if dt_ini > dt_fin:
+            return []
+        dias = []
+        curr = dt_ini
+        while curr <= dt_fin:
+            dias.append(curr.strftime("%Y-%m-%d"))
+            curr += timedelta(days=1)
+        return dias
+    except Exception:
+        return []
+
 def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
                                        start_at: str, finish_at: str, callback_log=None) -> tuple:
-    """Extrae todas las actividades en view=report mediante peticiones concurrentes HTTP."""
+    """Extrae todas las actividades en view=report mediante exportación nativa directa con fallback concurrente."""
     def log(msg):
         if callback_log:
             callback_log(msg)
         else:
             print(msg)
+
+    # Intento 1: Motor de exportación nativa ultra rápido v4.8.0
+    try:
+        from modulos.motor_export_auditoria import consultar_actividades_infoapp_export
+        total_exp, acts_exp = consultar_actividades_infoapp_export(
+            session, info_id=info_id, uid=uid, estado=estado,
+            start_at=start_at, finish_at=finish_at, callback_log=callback_log
+        )
+        if total_exp > 0:
+            return total_exp, acts_exp
+    except Exception as err_exp:
+        log(f"⚠️ Nota de aceleración nativa: {err_exp}. Continuando con escaneo...")
+
+    # Si hay rango de fechas de hasta 90 días, particionar por día para evitar el bug de paginación del backend InfoApp
+    dias = _generar_rango_dias_auditoria(start_at, finish_at)
+    if dias and len(dias) <= 90:
+        log(f"⚡ [Auditoría Acelerada] Escaneando {len(dias)} días en paralelo ({start_at} al {finish_at})...")
+        mapa_actividades = {}
+        sin_id = []
+
+        def descargar_dia(dia_str):
+            acts_dia = []
+            url_dia = (
+                f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=report"
+                f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
+                f"&start_at={dia_str}&finish_at={dia_str}&id_act=&pag=1"
+            )
+            try:
+                r = session.get(url_dia, timeout=25)
+                html_dia = r.text
+                m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html_dia, re.IGNORECASE)
+                pags_dia = int(m_pag.group(1)) if m_pag else 1
+                parsed = parsear_pagina_actividades_bs4(html_dia, default_info_id=info_id, default_uid=uid)
+                acts_dia.extend(parsed)
+
+                if pags_dia > 1:
+                    for p_sub in range(2, pags_dia + 1):
+                        url_sub = (
+                            f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=report"
+                            f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
+                            f"&start_at={dia_str}&finish_at={dia_str}&id_act=&pag={p_sub}"
+                        )
+                        r_sub = session.get(url_sub, timeout=25)
+                        acts_dia.extend(parsear_pagina_actividades_bs4(r_sub.text, default_info_id=info_id, default_uid=uid))
+            except Exception:
+                pass
+            return dia_str, acts_dia
+
+        max_workers = min(15, max(4, len(dias)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futuros = [executor.submit(descargar_dia, d) for d in dias]
+            for fut in concurrent.futures.as_completed(futuros):
+                d_str, acts = fut.result()
+                for a in acts:
+                    id_act = a.get("id") or a.get("id_actividad") or a.get("id_activity")
+                    if id_act:
+                        if id_act not in mapa_actividades:
+                            mapa_actividades[id_act] = a
+                    else:
+                        sin_id.append(a)
+
+        todas_actividades = list(mapa_actividades.values()) + sin_id
+        # Ordenar por fecha cronológica descendente si es posible
+        todas_actividades.sort(key=lambda x: str(x.get("fecha", "")), reverse=True)
+        total_registros = len(todas_actividades)
+        log(f"✅ [Actividades HTTP] Total único consolidado: {total_registros} actividades extraídas sin omisiones.")
+        return total_registros, todas_actividades
 
     url_base = (
         f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=report"
@@ -363,8 +506,12 @@ def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, 
         f"&start_at={start_at}&finish_at={finish_at}&id_act=&pag=1"
     )
 
-    resp = session.get(url_base, timeout=25)
-    html = resp.text
+    try:
+        resp = session.get(url_base, timeout=25)
+        html = resp.text
+    except requests.exceptions.RequestException as req_err:
+        log(f"❌ [Error de Red] No se pudo conectar a InfoApp: {req_err}")
+        raise RuntimeError(f"Fallo de conexión con InfoApp (verifique su conexión a Internet o DNS): {req_err}") from req_err
 
     m_tot = re.search(r'Hay\s+(\d+)\s+Registros', html, re.IGNORECASE)
     m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html, re.IGNORECASE)
@@ -387,8 +534,11 @@ def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, 
                 f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
                 f"&start_at={start_at}&finish_at={finish_at}&id_act=&pag={p}"
             )
-            r = session.get(url_p, timeout=25)
-            return p, parsear_pagina_actividades_bs4(r.text, default_info_id=info_id, default_uid=uid)
+            try:
+                r = session.get(url_p, timeout=25)
+                return p, parsear_pagina_actividades_bs4(r.text, default_info_id=info_id, default_uid=uid)
+            except Exception:
+                return p, []
 
         max_workers = min(10, total_paginas)
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -406,12 +556,69 @@ def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, 
 
 def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
                                      start_at: str, finish_at: str, callback_log=None) -> tuple:
-    """Extrae todos los servicios en view=services mediante peticiones concurrentes HTTP."""
+    """Extrae todos los servicios en view=services mediante exportación nativa directa con fallback concurrente."""
     def log(msg):
         if callback_log:
             callback_log(msg)
         else:
             print(msg)
+
+    # Intento 1: Motor de exportación nativa ultra rápido v4.8.0
+    try:
+        from modulos.motor_export_auditoria import consultar_servicios_infoapp_export
+        total_exp, srvs_exp = consultar_servicios_infoapp_export(
+            session, info_id=info_id, uid=uid, estado=estado,
+            start_at=start_at, finish_at=finish_at, callback_log=callback_log
+        )
+        if total_exp > 0:
+            return total_exp, srvs_exp
+    except Exception as err_exp:
+        log(f"⚠️ Nota de aceleración nativa: {err_exp}. Continuando con escaneo...")
+
+    dias = _generar_rango_dias_auditoria(start_at, finish_at)
+    if dias and len(dias) <= 90:
+        log(f"⚡ [Servicios Acelerados] Escaneando {len(dias)} días en paralelo ({start_at} al {finish_at})...")
+        todos_servicios = []
+
+        def descargar_dia_srv(dia_str):
+            srvs_dia = []
+            url_dia = (
+                f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=services&q="
+                f"&info_id={info_id}&uid={uid}&user_estado={estado}"
+                f"&start_at={dia_str}&finish_at={dia_str}&pag=1"
+            )
+            try:
+                r = session.get(url_dia, timeout=25)
+                html_dia = r.text
+                m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html_dia, re.IGNORECASE)
+                pags_dia = int(m_pag.group(1)) if m_pag else 1
+                parsed = parsear_pagina_servicios_bs4(html_dia, default_info_id=info_id, default_uid=uid)
+                srvs_dia.extend(parsed)
+
+                if pags_dia > 1:
+                    for p_sub in range(2, pags_dia + 1):
+                        url_sub = (
+                            f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=services&q="
+                            f"&info_id={info_id}&uid={uid}&user_estado={estado}"
+                            f"&start_at={dia_str}&finish_at={dia_str}&pag={p_sub}"
+                        )
+                        r_sub = session.get(url_sub, timeout=25)
+                        srvs_dia.extend(parsear_pagina_servicios_bs4(r_sub.text, default_info_id=info_id, default_uid=uid))
+            except Exception:
+                pass
+            return dia_str, srvs_dia
+
+        max_workers = min(15, max(4, len(dias)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futuros = [executor.submit(descargar_dia_srv, d) for d in dias]
+            for fut in concurrent.futures.as_completed(futuros):
+                _, srvs = fut.result()
+                todos_servicios.extend(srvs)
+
+        todos_servicios.sort(key=lambda x: str(x.get("fecha", "")), reverse=True)
+        total_servicios = len(todos_servicios)
+        log(f"✅ [Servicios HTTP] Total único consolidado: {total_servicios} atenciones extraídas.")
+        return total_servicios, todos_servicios
 
     url_base = (
         f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=services&q="
@@ -419,8 +626,12 @@ def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, ui
         f"&start_at={start_at}&finish_at={finish_at}&pag=1"
     )
 
-    resp = session.get(url_base, timeout=25)
-    html = resp.text
+    try:
+        resp = session.get(url_base, timeout=25)
+        html = resp.text
+    except requests.exceptions.RequestException as req_err:
+        log(f"❌ [Error de Red] No se pudo consultar servicios en InfoApp: {req_err}")
+        raise RuntimeError(f"Fallo de conexión al consultar servicios en InfoApp: {req_err}") from req_err
 
     m_tot = re.search(r'Hay\s+(\d+)\s+Registros', html, re.IGNORECASE)
     m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html, re.IGNORECASE)
@@ -443,8 +654,11 @@ def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, ui
                 f"&info_id={info_id}&uid={uid}&user_estado={estado}"
                 f"&start_at={start_at}&finish_at={finish_at}&pag={p}"
             )
-            r = session.get(url_p, timeout=25)
-            return p, parsear_pagina_servicios_bs4(r.text, default_info_id=info_id, default_uid=uid)
+            try:
+                r = session.get(url_p, timeout=25)
+                return p, parsear_pagina_servicios_bs4(r.text, default_info_id=info_id, default_uid=uid)
+            except Exception:
+                return p, []
 
         max_workers = min(10, total_paginas)
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -461,12 +675,14 @@ def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, ui
     return total_servicios, todos_servicios
 
 # =============================================================================
-# 3. MÉTODOS COMPATIBLES DE EXTRACCIÓN (SELENIUM FALLBACK O MOCKS)
+# 3. MÉTODOS COMPATIBLES DE EXTRACCIÓN (PLAYWRIGHT FALLBACK)
 # =============================================================================
-def consultar_actividades_infoapp_selenium(driver, info_id: str, uid: str, estado: str,
-                                            start_at: str, finish_at: str,
-                                            callback_log=None) -> tuple:
-    """Fallback tradicional de extracción de actividades mediante Selenium."""
+def consultar_actividades_infoapp_playwright(page, info_id: str, uid: str, estado: str,
+                                              start_at: str, finish_at: str,
+                                              callback_log=None) -> tuple:
+    """Fallback de extracción de actividades mediante Playwright (page.goto + page.content)."""
+    from modulos.web_utils import esperar_desbloqueo_ajax, limpiar_overlays
+
     def log(msg):
         if callback_log:
             callback_log(msg)
@@ -478,10 +694,10 @@ def consultar_actividades_infoapp_selenium(driver, info_id: str, uid: str, estad
         f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
         f"&start_at={start_at}&finish_at={finish_at}&id_act=&pag=1"
     )
-    driver.get(url_base)
-    esperar_desbloqueo(driver)
+    page.goto(url_base, wait_until="domcontentloaded")
+    esperar_desbloqueo_ajax(page)
 
-    html = driver.page_source
+    html = page.content()
     m_tot = re.search(r'Hay\s+(\d+)\s+Registros', html, re.IGNORECASE)
     m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html, re.IGNORECASE)
 
@@ -501,19 +717,21 @@ def consultar_actividades_infoapp_selenium(driver, info_id: str, uid: str, estad
                 f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
                 f"&start_at={start_at}&finish_at={finish_at}&id_act=&pag={p}"
             )
-            driver.get(url_p)
-            esperar_desbloqueo(driver)
+            page.goto(url_p, wait_until="domcontentloaded")
+            esperar_desbloqueo_ajax(page)
 
-        p_acts = parsear_pagina_actividades_bs4(driver.page_source, default_info_id=info_id, default_uid=uid)
+        p_acts = parsear_pagina_actividades_bs4(page.content(), default_info_id=info_id, default_uid=uid)
         actividades.extend(p_acts)
         log(f"   ✓ Página {p}/{total_paginas} procesada ({len(actividades)} actividades acumuladas)")
 
     return total_registros, actividades
 
-def consultar_servicios_infoapp_selenium(driver, info_id: str, uid: str, estado: str,
-                                          start_at: str, finish_at: str,
-                                          callback_log=None) -> tuple:
-    """Fallback tradicional de extracción de servicios mediante Selenium."""
+def consultar_servicios_infoapp_playwright(page, info_id: str, uid: str, estado: str,
+                                            start_at: str, finish_at: str,
+                                            callback_log=None) -> tuple:
+    """Fallback de extracción de servicios mediante Playwright (page.goto + page.content)."""
+    from modulos.web_utils import esperar_desbloqueo_ajax, limpiar_overlays
+
     def log(msg):
         if callback_log:
             callback_log(msg)
@@ -525,10 +743,10 @@ def consultar_servicios_infoapp_selenium(driver, info_id: str, uid: str, estado:
         f"&info_id={info_id}&uid={uid}&user_estado={estado}"
         f"&start_at={start_at}&finish_at={finish_at}&pag=1"
     )
-    driver.get(url_base)
-    esperar_desbloqueo(driver)
+    page.goto(url_base, wait_until="domcontentloaded")
+    esperar_desbloqueo_ajax(page)
 
-    html = driver.page_source
+    html = page.content()
     m_tot = re.search(r'Hay\s+(\d+)\s+Registros', html, re.IGNORECASE)
     m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html, re.IGNORECASE)
 
@@ -548,10 +766,10 @@ def consultar_servicios_infoapp_selenium(driver, info_id: str, uid: str, estado:
                 f"&info_id={info_id}&uid={uid}&user_estado={estado}"
                 f"&start_at={start_at}&finish_at={finish_at}&pag={p}"
             )
-            driver.get(url_p)
-            esperar_desbloqueo(driver)
+            page.goto(url_p, wait_until="domcontentloaded")
+            esperar_desbloqueo_ajax(page)
 
-        p_srvs = parsear_pagina_servicios_bs4(driver.page_source, default_info_id=info_id, default_uid=uid)
+        p_srvs = parsear_pagina_servicios_bs4(page.content(), default_info_id=info_id, default_uid=uid)
         servicios.extend(p_srvs)
         log(f"   ✓ Página {p}/{total_paginas} de servicios procesada ({len(servicios)} atenciones acumuladas)")
 
@@ -560,24 +778,26 @@ def consultar_servicios_infoapp_selenium(driver, info_id: str, uid: str, estado:
 def consultar_actividades_infoapp(target, info_id: str, uid: str, estado: str,
                                   start_at: str, finish_at: str,
                                   callback_log=None) -> tuple:
-    """Punto de entrada universal: despacha a HTTP o Selenium según el tipo de objeto recibido."""
+    """Punto de entrada universal: despacha a HTTP Session o Playwright Page según el tipo de objeto."""
     if isinstance(target, requests.Session):
         return consultar_actividades_infoapp_http(
             target, info_id, uid, estado, start_at, finish_at, callback_log=callback_log
         )
-    return consultar_actividades_infoapp_selenium(
+    # Fallback Playwright — target es una Playwright Page
+    return consultar_actividades_infoapp_playwright(
         target, info_id, uid, estado, start_at, finish_at, callback_log=callback_log
     )
 
 def consultar_servicios_infoapp(target, info_id: str, uid: str, estado: str,
                                 start_at: str, finish_at: str,
                                 callback_log=None) -> tuple:
-    """Punto de entrada universal: despacha a HTTP o Selenium según el tipo de objeto recibido."""
+    """Punto de entrada universal: despacha a HTTP Session o Playwright Page según el tipo de objeto."""
     if isinstance(target, requests.Session):
         return consultar_servicios_infoapp_http(
             target, info_id, uid, estado, start_at, finish_at, callback_log=callback_log
         )
-    return consultar_servicios_infoapp_selenium(
+    # Fallback Playwright — target es una Playwright Page
+    return consultar_servicios_infoapp_playwright(
         target, info_id, uid, estado, start_at, finish_at, callback_log=callback_log
     )
 
@@ -1221,9 +1441,9 @@ def ejecutar_auditoria(
     if isinstance(formato_exp, str):
         formato_exp = formato_exp.lower().strip()
 
-    headless = False
-    if browser_cfg and isinstance(browser_cfg, dict):
-        headless = browser_cfg.get("headless", False)
+    headless = True if modo_turbo else False
+    if browser_cfg and isinstance(browser_cfg, dict) and "headless" in browser_cfg:
+        headless = bool(browser_cfg.get("headless", headless))
 
     log("=" * 80)
     log(f"🔍 INICIANDO AUDITORÍA INTEGRAL — Criterio: [{criterio_tipo.upper()}: {criterio_valor}]")
@@ -1264,7 +1484,7 @@ def ejecutar_auditoria(
             motor_extraccion = session
         else:
             log("🧭 Modo Visual / Selenium activo: Navegando páginas directamente con WebDriver...")
-            motor_extraccion = driver
+            motor_extraccion = driver.page
 
         # 1. Auditoría de Actividades
         tot_act, lista_act = consultar_actividades_infoapp(
@@ -1285,11 +1505,14 @@ def ejecutar_auditoria(
         total_estudiantes = 0
 
         for act in lista_act:
-            dims_lower = act["dimensiones"].lower()
-            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "taller" in dims_lower:
+            dims_lower = (act.get("dimensiones") or "").lower()
+            p_cnt = act.get("participantes", 0)
+            prod_cnt = act.get("productos", 0)
+
+            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower:
                 formaciones.append(act)
-                total_estudiantes += act["participantes"]
-            elif act["productos"] > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower:
+                total_estudiantes += p_cnt
+            elif prod_cnt > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower:
                 productos.append(act)
             else:
                 otras_actividades.append(act)
@@ -1298,18 +1521,22 @@ def ejecutar_auditoria(
         cuadre_perfecto = (tot_act == total_procesadas)
 
         # Desglose de Servicios
-        conteo_servicios = Counter([s["servicio"] for s in lista_serv])
-        cedulados_serv = sum(1 for s in lista_serv if s["cedula"] and s["cedula"] != "No cedulado")
+        conteo_servicios = Counter([s.get("servicio", s.get("tipo_servicio", "Servicio Comunitario")) for s in lista_serv])
+        cedulados_serv = sum(1 for s in lista_serv if s.get("cedula") and s.get("cedula") != "No cedulado")
         no_cedulados_serv = len(lista_serv) - cedulados_serv
 
         # 4. Agrupación por Facilitador (para sedes o estados)
         resumen_facilitadores = {}
         for act in lista_act:
-            f_uid = act["uid"] or "S/D"
-            if f_uid not in resumen_facilitadores:
-                resumen_facilitadores[f_uid] = {
-                    "nombre": act["responsable"] or f"UID {f_uid}",
-                    "info_id": act["info_id"] or info_id,
+            f_uid = str(act.get("uid") or "").strip()
+            resp_nom = str(act.get("responsable") or act.get("facilitador") or "").strip()
+            clave_fac = f_uid if (f_uid and f_uid != "S/D") else (resp_nom if resp_nom else "S/D")
+
+            if clave_fac not in resumen_facilitadores:
+                resumen_facilitadores[clave_fac] = {
+                    "uid": f_uid if (f_uid and f_uid != "S/D") else "S/D",
+                    "nombre": resp_nom or (f"UID {f_uid}" if f_uid else "Sin Facilitador"),
+                    "info_id": act.get("info_id") or info_id,
                     "formaciones": 0,
                     "estudiantes": 0,
                     "productos": 0,
@@ -1317,24 +1544,33 @@ def ejecutar_auditoria(
                     "total_act": 0,
                     "servicios": 0
                 }
-            dims_lower = act["dimensiones"].lower()
-            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "taller" in dims_lower:
-                resumen_facilitadores[f_uid]["formaciones"] += 1
-                resumen_facilitadores[f_uid]["estudiantes"] += act["participantes"]
-            elif act["productos"] > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower:
-                resumen_facilitadores[f_uid]["productos"] += 1
+            
+            dims_lower = (act.get("dimensiones") or "").lower()
+            p_cnt = act.get("participantes", 0)
+            prod_cnt = act.get("productos", 0)
+
+            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
+                resumen_facilitadores[clave_fac]["formaciones"] += 1
+                resumen_facilitadores[clave_fac]["estudiantes"] += p_cnt
+            elif prod_cnt > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
+                resumen_facilitadores[clave_fac]["productos"] += 1
             else:
-                resumen_facilitadores[f_uid]["otras"] += 1
-            resumen_facilitadores[f_uid]["total_act"] += 1
+                resumen_facilitadores[clave_fac]["otras"] += 1
+            resumen_facilitadores[clave_fac]["total_act"] += 1
 
         for s in lista_serv:
-            s_uid = s["uid"] or "S/D"
-            if s_uid in resumen_facilitadores:
-                resumen_facilitadores[s_uid]["servicios"] += 1
+            s_uid = str(s.get("uid") or "").strip()
+            s_nom = str(s.get("usuario") or s.get("usuario_nombre") or "").strip()
+            s_infoid = s.get("info_id") or info_filtro
+            clave_s = s_uid if (s_uid and s_uid != "S/D") else (s_nom if s_nom else "S/D")
+
+            if clave_s in resumen_facilitadores:
+                resumen_facilitadores[clave_s]["servicios"] += 1
             else:
-                resumen_facilitadores[s_uid] = {
-                    "nombre": s["usuario"] or f"UID {s_uid}",
-                    "info_id": s["info_id"] or info_filtro,
+                resumen_facilitadores[clave_s] = {
+                    "uid": s_uid if (s_uid and s_uid != "S/D") else "S/D",
+                    "nombre": s_nom or f"UID {s_uid}",
+                    "info_id": s_infoid,
                     "formaciones": 0,
                     "estudiantes": 0,
                     "productos": 0,

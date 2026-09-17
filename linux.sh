@@ -30,7 +30,7 @@ fi
 echo "🔍 Verificando paquetes Python del proyecto..."
 if ! python3 -c "import pandas, selenium, PIL, openpyxl, customtkinter, InquirerPy, rich" &> /dev/null; then
     echo "📦 Descargando librerías precompiladas desde PyPI (esto tomará pocos segundos)..."
-    python3 -m pip install -r requirements.txt --break-system-packages
+    python3 -m pip install -r config/requirements.txt --break-system-packages
     if [ $? -ne 0 ]; then
         echo "❌ Error durante la instalación de paquetes PyPI."
         read -p "Presiona Enter para salir..."

@@ -9,6 +9,8 @@ build/
 
 # Trazas y entornos de ejecución web
 sesion_selenium/
+data/playwright_context/
+playwright_context/
 logs/
 *.lock
 *.log

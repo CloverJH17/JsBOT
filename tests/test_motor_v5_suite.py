@@ -60,7 +60,6 @@ from modulos.automatizador_web import (
     AdaptadorWebHibrido,
     iniciar_contexto_playwright,
     registrar_alumno_playwright,
-    PLAYWRIGHT_DISPONIBLE
 )
 
 
@@ -341,12 +340,37 @@ class TestPlaywrightAutomatizador(unittest.TestCase):
     """Valida la integración de Playwright y el adaptador híbrido."""
 
     def test_disponibilidad_playwright(self):
-        self.assertTrue(PLAYWRIGHT_DISPONIBLE, "Playwright debe estar disponible en el entorno")
+        """Playwright es el único motor — su importación debe funcionar siempre."""
+        try:
+            from playwright.sync_api import sync_playwright
+            disponible = True
+        except ImportError:
+            disponible = False
+        self.assertTrue(disponible, "Playwright debe estar instalado (ver requirements.txt)")
 
     def test_adaptador_hibrido_instanciacion(self):
-        adaptador = AdaptadorWebHibrido(motor="selenium")
-        self.assertEqual(adaptador.motor_preferido, "selenium")
-        self.assertIsNone(adaptador.motor_activo)
+        """El adaptador Playwright-only inicia correctamente y expone motor_activo."""
+        adaptador = AdaptadorWebHibrido()
+        self.assertEqual(adaptador.motor_activo, "playwright")
+        self.assertIsNone(adaptador.pw)       # No abierto hasta llamar iniciar()
+        self.assertIsNone(adaptador.context)
+
+    def test_adaptador_hibrido_rechaza_alumno_sin_documento(self):
+        """El adaptador rechaza alumnos sin ningún documento sin abrir el navegador."""
+        from unittest.mock import MagicMock
+        adaptador = AdaptadorWebHibrido()
+        # Simular page ya abierta
+        adaptador.page = MagicMock()
+        adaptador.page.url = "https://infoapp2.infocentro.gob.ve/admin/index.php?id_activity=1"
+        alumno_sin_doc = {
+            "nombre": "Test", "apellido": "Bot",
+            "cedula": "", "cedula_escolar": "", "cedula_padre": "",
+            "cedulado": "sin_documento"
+        }
+        config = {"url": "https://infoapp2.infocentro.gob.ve/admin/index.php?id_activity=1"}
+        ok, msg = adaptador.registrar_alumno(alumno_sin_doc, config)
+        self.assertFalse(ok)
+        self.assertIn("sin documento", msg.lower())
 
 
 if __name__ == "__main__":

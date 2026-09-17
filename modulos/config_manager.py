@@ -22,16 +22,11 @@ BASE_DIR = str(entorno.RAIZ_PROYECTO)
 SETTINGS_PATH = str(entorno.ARCHIVO_SETTINGS)
 
 DEFAULTS = {
-    "timeouts": {
-        "ajax_wait_seconds": 15,
-        "element_wait_seconds": 12,
-        "login_wait_seconds": 15
-    },
     "urls": {
         "base_login": "https://infoapp2.infocentro.gob.ve/admin/index.php"
     },
     "browser": {
-        "priority": ["firefox", "chrome", "edge"],
+        "priority": ["chromium", "firefox", "webkit"],
         "start_maximized": True
     },
     "validation": {
@@ -93,14 +88,6 @@ def guardar_settings(nuevos_settings: dict, ruta: str = None) -> bool:
         return False
 
 
-def obtener_timeout(campo: str, default: int = None) -> int:
-    """Obtiene un timeout de la sección timeouts (en segundos)."""
-    try:
-        return int(cargar_settings()["timeouts"].get(campo, default))
-    except Exception:
-        return int(default)
-
-
 def obtener_url_login() -> str:
     """URL del panel administrativo de InfoApp."""
     return str(
@@ -110,7 +97,7 @@ def obtener_url_login() -> str:
 
 
 def obtener_browser_cfg() -> dict:
-    """Configuración de navegadores: prioridad y ventana maximizada."""
+    """Configuración de navegadores Playwright: prioridad y ventana maximizada."""
     cfg = cargar_settings().get("browser", {})
     prioridad = cfg.get("priority") or DEFAULTS["browser"]["priority"]
     if not isinstance(prioridad, (list, tuple)) or not prioridad:

@@ -666,3 +666,30 @@ def generar_planilla_oficial(participantes: list, id_actividad: str = "", url_ac
     """Enrutador retrocompatible para generación de planilla oficial."""
     return generar_planilla_multiformato(participantes, id_actividad=id_actividad, url_actividad=url_actividad, ruta_salida=ruta_salida, formato="ods")
 
+
+def generar_planilla_desde_actividad_infoapp(session, id_activity: str, ruta_salida: str = "", formato: str = "ods") -> str:
+    """
+    Descarga directamente los participantes registrados en una actividad de InfoApp
+    y genera la planilla oficial física (.ods, .xlsx o .pdf) lista para imprimir y firmar.
+    """
+    from modulos.verificador_cargas_export import obtener_participantes_existentes_actividad
+    participantes = obtener_participantes_existentes_actividad(session, str(id_activity))
+    if not participantes:
+        return ""
+
+    parts_adaptados = []
+    for p in participantes:
+        parts_adaptados.append({
+            "nombre": p.get("nombre", ""),
+            "apellido": p.get("apellido", ""),
+            "cedula": p.get("dni", ""),
+            "nacionalidad": "V",
+            "genero": p.get("genero", ""),
+            "f_nacimiento": p.get("f_nacimiento", ""),
+            "telefono": p.get("telefono", ""),
+            "correo": p.get("correo", "")
+        })
+    url_actividad = f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=participants_list&id_activity={id_activity}"
+    return generar_planilla_multiformato(parts_adaptados, id_actividad=str(id_activity), url_actividad=url_actividad, ruta_salida=ruta_salida, formato=formato)
+
+

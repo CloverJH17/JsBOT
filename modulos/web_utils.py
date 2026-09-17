@@ -1,111 +1,155 @@
 """
 UTILIDADES WEB Y MANIPULACIÓN DEL DOM — JsBOT
-Centraliza el bypass de overlays, neutralización de spinners, inyección JS y autenticación.
+Centraliza el bypass de overlays, neutralización de spinners, inyección JS
+y autenticación usando Playwright (auto-waiting nativo).
 """
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from playwright.sync_api import Page
 
-def limpiar_overlays(driver) -> None:
+
+# ---------------------------------------------------------------------------
+# Script JS reutilizable para limpiar overlays de InfoApp
+# ---------------------------------------------------------------------------
+_JS_LIMPIAR_OVERLAYS = """
+    document.querySelectorAll(
+        '#cover-spin, .toastify, .alert, .badge, .modal-backdrop, .loading, .swal2-container'
+    ).forEach(el => {
+        el.style.display = 'none';
+        el.remove();
+    });
+"""
+
+_JS_AJAX_LISTO = """
+    () => {
+        let spin = document.getElementById('cover-spin');
+        let spinOculto = !spin || spin.style.display === 'none'
+                          || getComputedStyle(spin).display === 'none';
+        let jqListo = (typeof window.jQuery !== 'undefined')
+                       ? (window.jQuery.active === 0)
+                       : true;
+        return spinOculto && jqListo;
+    }
+"""
+
+
+def limpiar_overlays(page: Page) -> None:
     """Elimina del DOM el spinner #cover-spin, alertas flotantes y toasts de InfoApp."""
     try:
-        driver.execute_script("""
-            document.querySelectorAll('#cover-spin, .toastify, .alert, .badge, .modal-backdrop, .loading, .swal2-container').forEach(el => {
-                el.style.display = 'none';
-                el.remove();
-            });
-        """)
+        page.evaluate(_JS_LIMPIAR_OVERLAYS)
     except Exception:
         pass
 
-def esperar_desbloqueo_ajax(driver, timeout: int = 12) -> None:
-    """Aguarda a que el spinner #cover-spin desaparezca, concluyan peticiones jQuery y limpia overlays."""
+
+def esperar_desbloqueo_ajax(page: Page, timeout: int = 12) -> None:
+    """
+    Aguarda a que el spinner #cover-spin desaparezca y jQuery termine.
+    Con Playwright, esto es sólo una comprobación extra de seguridad;
+    el auto-waiting nativo ya maneja la mayoría de casos.
+    timeout en segundos (se convierte a ms internamente).
+    """
     try:
-        WebDriverWait(driver, timeout).until(
-            lambda d: d.execute_script("""
-                let spin = document.getElementById('cover-spin');
-                let spinOculto = !spin || spin.style.display === 'none' || getComputedStyle(spin).display === 'none';
-                let jqListo = (typeof window.jQuery !== 'undefined') ? (window.jQuery.active === 0) : true;
-                return spinOculto && jqListo;
-            """)
+        page.wait_for_function(_JS_AJAX_LISTO, timeout=timeout * 1000)
+    except Exception:
+        pass
+    limpiar_overlays(page)
+
+
+def scroll_y_obtener(page: Page, locator: str):
+    """
+    Realiza scroll centrado sobre el elemento y lo retorna listo para interactuar.
+    Con Playwright el auto-scroll es nativo, pero se fuerza para garantizar visibilidad.
+    """
+    esperar_desbloqueo_ajax(page)
+    limpiar_overlays(page)
+    elem = page.locator(locator)
+    elem.scroll_into_view_if_needed()
+    esperar_desbloqueo_ajax(page)
+    limpiar_overlays(page)
+    return elem
+
+
+def escribir_input_nativo_js(page: Page, locator: str, valor: str) -> None:
+    """
+    Asigna valor disparando eventos 'input' y 'change' para burlar máscaras reactivas.
+    Recibe el locator CSS/XPath como string.
+    """
+    try:
+        page.evaluate(
+            """([sel, val]) => {
+                const el = document.querySelector(sel);
+                if (!el) return;
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            [locator, str(valor)]
         )
     except Exception:
         pass
-    limpiar_overlays(driver)
 
-def scroll_y_obtener(driver, wait: WebDriverWait, by: By, locator: str):
-    """Realiza scroll centrado sobre el elemento y aguarda hasta que sea cliqueable."""
-    esperar_desbloqueo_ajax(driver)
-    limpiar_overlays(driver)
-    elem = wait.until(EC.presence_of_element_located((by, locator)))
-    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", elem)
-    esperar_desbloqueo_ajax(driver)
-    limpiar_overlays(driver)
-    return wait.until(EC.element_to_be_clickable((by, locator)))
-
-def escribir_input_nativo_js(driver, elemento, valor: str) -> None:
-    """Asigna valor disparando eventos 'input' y 'change' para burlar máscaras reactivas defectuosas."""
-    try:
-        driver.execute_script("""
-            arguments[0].value = arguments[1];
-            arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-            arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-        """, elemento, str(valor))
-    except Exception:
-        pass
 
 def realizar_login_infoapp(
-    driver, 
-    usuario: str, 
-    clave: str, 
+    page: Page,
+    usuario: str,
+    clave: str,
     url_login: str = "https://infoapp2.infocentro.gob.ve/admin/index.php"
 ) -> bool:
-    """Protocolo unificado de autenticación en InfoApp con validación de URL y retorno booleano."""
-    wait = WebDriverWait(driver, 15)
-    driver.get(url_login)
-    esperar_desbloqueo_ajax(driver)
-
-    campo_email = wait.until(EC.visibility_of_element_located((By.NAME, "email")))
-    campo_email.clear()
-    campo_email.send_keys(usuario)
-
-    campo_pass = wait.until(EC.visibility_of_element_located((By.ID, "password")))
-    campo_pass.clear()
-    campo_pass.send_keys(clave)
-
-    btn_submit = None
-    selectores = [
-        "//input[@value='Iniciar Sesión']",
-        "//input[@type='submit']",
-        "//input[contains(@value, 'Iniciar')]",
-        "//button[@type='submit']",
-        "//button[contains(text(), 'Iniciar')]"
-    ]
-    for sel in selectores:
-        try:
-            elem = driver.find_element(By.XPATH, sel)
-            if elem.is_displayed():
-                btn_submit = elem
-                break
-        except Exception:
-            pass
-
-    if btn_submit:
-        try:
-            btn_submit.click()
-        except Exception:
-            driver.execute_script("arguments[0].click();", btn_submit)
-    else:
-        try:
-            btn = driver.find_element(By.XPATH, "//input[@value='Iniciar Sesión']")
-            btn.click()
-        except Exception:
-            pass
-
+    """
+    Protocolo unificado de autenticación en InfoApp con Playwright.
+    Usa auto-waiting nativo y verificación de presencia de sesión.
+    """
     try:
-        wait.until(EC.url_changes(url_login))
-    except Exception:
-        pass
+        # 1. Navegar primero a la raíz donde está el formulario de login de InfoApp
+        page.goto("https://infoapp2.infocentro.gob.ve/index.php", wait_until="domcontentloaded", timeout=25000)
+        esperar_desbloqueo_ajax(page)
 
-    limpiar_overlays(driver)
-    return True
+        email_input = page.locator("input[name='email'], input#email").first
+        pass_input = page.locator("input[name='password'], input#password").first
+
+        # Si los campos de login están presentes, rellenar y enviar
+        if email_input.is_visible(timeout=4000) or pass_input.is_visible(timeout=4000):
+            try:
+                email_input.fill(usuario)
+                pass_input.fill(clave)
+            except Exception:
+                pass
+
+            selectores_btn = [
+                "input[value='Iniciar Sesión']",
+                "input[value*='Iniciar']",
+                "input[type='submit']",
+                "button[type='submit']",
+                "button:has-text('Iniciar')",
+            ]
+            click_exitoso = False
+            for sel in selectores_btn:
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible():
+                        btn.click()
+                        click_exitoso = True
+                        break
+                except Exception:
+                    continue
+
+            if not click_exitoso:
+                try:
+                    page.evaluate("() => { const form = document.querySelector('form'); if(form) form.submit(); }")
+                except Exception:
+                    pass
+
+            page.wait_for_timeout(2500)
+            esperar_desbloqueo_ajax(page)
+            limpiar_overlays(page)
+
+        # 2. Navegar al panel de administración para confirmar sesión
+        page.goto("https://infoapp2.infocentro.gob.ve/admin/index.php", wait_until="domcontentloaded", timeout=15000)
+        esperar_desbloqueo_ajax(page)
+        limpiar_overlays(page)
+
+        # Comprobar que no hayamos sido rebotados al login
+        email_rebotado = page.locator("input[name='email'], input#email").first
+        login_valido = not email_rebotado.is_visible(timeout=1500)
+        return login_valido
+    except Exception:
+        return False
+

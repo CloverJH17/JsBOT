@@ -16,6 +16,7 @@ import json
 import configparser
 import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime
 import pandas as pd
 from loguru import logger
@@ -117,12 +118,36 @@ def gestionar_credenciales() -> tuple:
 # PERSISTENCIA ACID Y AUDITORÍA HISTÓRICA CON SQLITE3
 # =============================================================================
 
-def inicializar_db(db_path: str = None):
-    """Crea y valida el esquema ACID de la base de datos SQLite data/jsbot.db."""
+@contextmanager
+def _abrir_conexion_db(db_path: str = None, timeout: float = 30.0):
+    """Context manager que garantiza commit, rollback y cierre explícito de la conexión SQLite."""
     ruta = db_path or DB_FILE
     os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
-    with sqlite3.connect(ruta, timeout=30.0) as conn:
+    conn = sqlite3.connect(ruta, timeout=timeout)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def inicializar_db(db_path: str = None):
+    """Crea y valida el esquema ACID de la base de datos SQLite data/jsbot.db con WAL mode."""
+    with _abrir_conexion_db(db_path, timeout=30.0) as conn:
         cursor = conn.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            cursor.execute("PRAGMA synchronous=NORMAL;")
+        except Exception:
+            pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS checkpoints (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,17 +171,29 @@ def inicializar_db(db_path: str = None):
                 fecha_registro TEXT NOT NULL
             );
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS app_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                nivel TEXT NOT NULL,
+                origen TEXT NOT NULL,
+                mensaje TEXT NOT NULL,
+                metadata TEXT
+            );
+        """)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_checkpoints_actividad ON checkpoints(id_actividad, tipo);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_actividad ON inscritos_historico(id_actividad);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_historico_cedula ON inscritos_historico(cedula);")
-        conn.commit()
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_logs_ts ON app_logs(timestamp);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_logs_nivel ON app_logs(nivel);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_logs_origen ON app_logs(origen);")
 
 def guardar_checkpoint_db(id_actividad: str, indice: int, cedula: str = None, estado: str = "EN_PROCESO", tipo: str = "formacion", timestamp: str = None, datos_json: str = None, db_path: str = None):
     """Persiste un checkpoint transaccional con semántica ACID."""
     ruta = db_path or DB_FILE
     inicializar_db(ruta)
     ts = timestamp or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with sqlite3.connect(ruta, timeout=30.0) as conn:
+    with _abrir_conexion_db(ruta, timeout=30.0) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO checkpoints (id_actividad, cedula, indice, estado, tipo, timestamp, datos_json)
@@ -168,7 +205,6 @@ def guardar_checkpoint_db(id_actividad: str, indice: int, cedula: str = None, es
                 timestamp = excluded.timestamp,
                 datos_json = excluded.datos_json;
         """, (str(id_actividad), str(cedula or ''), int(indice), str(estado), str(tipo), ts, str(datos_json or '')))
-        conn.commit()
 
 def obtener_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_path: str = None) -> dict:
     """Recupera el checkpoint activo más reciente desde SQLite."""
@@ -176,7 +212,7 @@ def obtener_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_
     if not os.path.exists(ruta):
         return None
     try:
-        with sqlite3.connect(ruta, timeout=30.0) as conn:
+        with _abrir_conexion_db(ruta, timeout=30.0) as conn:
             cursor = conn.cursor()
             if id_actividad:
                 cursor.execute("""
@@ -213,13 +249,12 @@ def limpiar_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_
     if not os.path.exists(ruta):
         return
     try:
-        with sqlite3.connect(ruta, timeout=30.0) as conn:
+        with _abrir_conexion_db(ruta, timeout=30.0) as conn:
             cursor = conn.cursor()
             if id_actividad:
                 cursor.execute("DELETE FROM checkpoints WHERE tipo = ? AND id_actividad = ?;", (tipo, str(id_actividad)))
             else:
                 cursor.execute("DELETE FROM checkpoints WHERE tipo = ?;", (tipo,))
-            conn.commit()
     except Exception:
         pass
 
@@ -228,13 +263,12 @@ def registrar_inscrito_historico_db(id_actividad: str, cedula: str, nombre: str,
     ruta = db_path or DB_FILE
     inicializar_db(ruta)
     ts = fecha_registro or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with sqlite3.connect(ruta, timeout=30.0) as conn:
+    with _abrir_conexion_db(ruta, timeout=30.0) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO inscritos_historico (id_actividad, cedula, nombre, telefono, fecha_registro)
             VALUES (?, ?, ?, ?, ?);
         """, (str(id_actividad), str(cedula), str(nombre or ''), str(telefono or ''), ts))
-        conn.commit()
 
 def consultar_inscritos_historico_db(id_actividad: str = None, cedula: str = None, db_path: str = None) -> list:
     """Consulta registros históricos por actividad y/o cédula."""
@@ -242,7 +276,7 @@ def consultar_inscritos_historico_db(id_actividad: str = None, cedula: str = Non
     if not os.path.exists(ruta):
         return []
     try:
-        with sqlite3.connect(ruta, timeout=30.0) as conn:
+        with _abrir_conexion_db(ruta, timeout=30.0) as conn:
             cursor = conn.cursor()
             query = "SELECT id_actividad, cedula, nombre, telefono, fecha_registro FROM inscritos_historico WHERE 1=1"
             params = []
@@ -269,11 +303,104 @@ def consultar_inscritos_historico_db(id_actividad: str = None, cedula: str = Non
         return []
 
 # =============================================================================
-# CONFIGURACIÓN DE BITÁCORAS CON LOGURU (ROTACIÓN 5MB + COMPRESIÓN ZIP)
+# PERSISTENCIA ATÓMICA DE LOGS EN SQLITE Y LOGURU SINK
 # =============================================================================
 
-def configurar_logger(ruta_log: str = None, nivel: str = "INFO"):
-    """Configura Loguru con rotación automática a 5MB y compresión zip."""
+def registrar_log_db(nivel: str, origen: str, mensaje: str, metadata: dict = None, db_path: str = None):
+    """Registra una entrada estructurada en SQLite de forma atómica, transaccional y thread-safe."""
+    ruta = db_path or DB_FILE
+    inicializar_db(ruta)
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    meta_str = json.dumps(metadata, ensure_ascii=False) if metadata else None
+    try:
+        with _abrir_conexion_db(ruta, timeout=15.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO app_logs (timestamp, nivel, origen, mensaje, metadata)
+                VALUES (?, ?, ?, ?, ?);
+            """, (ts, str(nivel).upper(), str(origen), str(mensaje), meta_str))
+    except Exception:
+        pass
+
+def consultar_logs_db(limite: int = 100, nivel: str = None, origen: str = None, desde_ts: str = None, db_path: str = None) -> list:
+    """Consulta logs estructurados almacenados en SQLite con filtros."""
+    ruta = db_path or DB_FILE
+    if not os.path.exists(ruta):
+        return []
+    try:
+        with _abrir_conexion_db(ruta, timeout=15.0) as conn:
+            cursor = conn.cursor()
+            query = "SELECT id, timestamp, nivel, origen, mensaje, metadata FROM app_logs WHERE 1=1"
+            params = []
+            if nivel:
+                query += " AND nivel = ?"
+                params.append(str(nivel).upper())
+            if origen:
+                query += " AND origen = ?"
+                params.append(str(origen))
+            if desde_ts:
+                query += " AND timestamp >= ?"
+                params.append(str(desde_ts))
+            query += " ORDER BY id DESC LIMIT ?;"
+            params.append(int(limite))
+            cursor.execute(query, params)
+            filas = cursor.fetchall()
+            return [
+                {
+                    "id": f[0],
+                    "timestamp": f[1],
+                    "nivel": f[2],
+                    "origen": f[3],
+                    "mensaje": f[4],
+                    "metadata": json.loads(f[5]) if f[5] else None
+                }
+                for f in filas
+            ]
+    except Exception:
+        return []
+
+def purgar_logs_antiguos_db(dias_retencion: int = 30, max_registros: int = 10000, db_path: str = None) -> int:
+    """Purga registros antiguos de logs para optimizar espacio y rendimiento."""
+    ruta = db_path or DB_FILE
+    if not os.path.exists(ruta):
+        return 0
+    eliminados = 0
+    try:
+        with _abrir_conexion_db(ruta, timeout=15.0) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                DELETE FROM app_logs
+                WHERE datetime(timestamp) < datetime('now', '-' || ? || ' days');
+            """, (int(dias_retencion),))
+            eliminados += cursor.rowcount
+
+            cursor.execute("SELECT COUNT(*) FROM app_logs;")
+            total = cursor.fetchone()[0]
+            if total > max_registros:
+                exceso = total - max_registros
+                cursor.execute("""
+                    DELETE FROM app_logs WHERE id IN (
+                        SELECT id FROM app_logs ORDER BY id ASC LIMIT ?
+                    );
+                """, (exceso,))
+                eliminados += cursor.rowcount
+    except Exception:
+        pass
+    return eliminados
+
+def _sqlite_loguru_sink(message):
+    """Sink interno que deriva eventos de Loguru hacia la base de datos SQLite."""
+    try:
+        record = message.record
+        nivel = record["level"].name
+        origen = record["name"]
+        mensaje = record["message"]
+        registrar_log_db(nivel=nivel, origen=origen, mensaje=mensaje)
+    except Exception:
+        pass
+
+def configurar_logger(ruta_log: str = None, nivel: str = "INFO", activar_sink_db: bool = True):
+    """Configura Loguru con rotación automática a 5MB, compresión zip y sincronización SQLite."""
     if ruta_log is None:
         ruta_log = str(entorno.CARPETA_LOGS / "actividad_{time:YYYY-MM-DD}.log")
     os.makedirs(os.path.dirname(os.path.abspath(ruta_log)), exist_ok=True)
@@ -288,6 +415,11 @@ def configurar_logger(ruta_log: str = None, nivel: str = "INFO"):
         encoding="utf-8",
         level=nivel
     )
+    if activar_sink_db:
+        try:
+            logger.add(_sqlite_loguru_sink, level=nivel)
+        except Exception:
+            pass
     return logger
 
 try:

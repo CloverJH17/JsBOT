@@ -20,7 +20,7 @@ from modulos.normalizador_datos import (
     generar_cedula_escolar
 )
 from modulos.automatizador_web import (
-    registrar_alumno_en_web,
+    registrar_alumno_playwright,
     registrar_nuevo_usuario_perfil
 )
 
@@ -63,9 +63,9 @@ class TestValidacionDocumentos(unittest.TestCase):
 
     def test_automatizador_rechaza_participante_sin_documento(self):
         """Verifica que el automatizador web no intente inyectar a alumnos sin documento."""
-        mock_driver = MagicMock()
-        mock_driver.current_url = "https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=100"
-        
+        mock_page = MagicMock()
+        mock_page.url = "https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=100"
+
         alumno_sin_doc = {
             "nombre": "Isaac",
             "apellido": "Ávila",
@@ -75,14 +75,14 @@ class TestValidacionDocumentos(unittest.TestCase):
             "cedulado": "sin_documento"
         }
         config = {"url": "https://infoapp2.infocentro.gob.ve/admin/index.php?r=activity/create&id_activity=100"}
-        
-        ok, msg = registrar_alumno_en_web(mock_driver, alumno_sin_doc, config)
+
+        ok, msg = registrar_alumno_playwright(mock_page, alumno_sin_doc, config)
         self.assertFalse(ok)
         self.assertIn("sin documento", msg.lower())
 
     def test_automatizador_servicios_rechaza_menor_sin_tutor(self):
         """Verifica que servicios rechace registrar perfiles de menores sin tutor."""
-        mock_driver = MagicMock()
+        mock_page = MagicMock()
         persona_sin_doc = {
             "nombre": "Isaac",
             "apellido": "Ávila",
@@ -90,7 +90,7 @@ class TestValidacionDocumentos(unittest.TestCase):
             "cedula_padre": "",
             "cedulado": "sin_documento"
         }
-        ok, msg = registrar_nuevo_usuario_perfil(mock_driver, persona_sin_doc, {})
+        ok, msg = registrar_nuevo_usuario_perfil(mock_page, persona_sin_doc, {})
         self.assertFalse(ok)
         self.assertIn("sin documento", msg.lower())
 

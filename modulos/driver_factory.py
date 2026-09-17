@@ -1,91 +1,103 @@
 """
-FACTORÍA CENTRALIZADA DE NAVEGADORES WEB (WEBDRIVER FACTORY) — JsBOT
-Unifica el arranque de Selenium con blindaje para Linux Debian/Canaima y timeouts de red.
+FACTORÍA CENTRALIZADA DE NAVEGADORES WEB (PLAYWRIGHT FACTORY) — JsBOT
+Unifica el arranque de Playwright con soporte para Linux Debian/Canaima
+y contextos persistentes para mantener sesiones entre ejecuciones.
 """
 import sys
-from typing import Optional
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
+import os
+from typing import Optional, Tuple
 
-def obtener_driver_resiliente(
-    headless: bool = False, 
-    timeout_pagina: int = 30, 
-    timeout_script: int = 20,
-    navegador_preferido: Optional[str] = None
-) -> Optional[webdriver.Remote]:
+from playwright.sync_api import sync_playwright, Playwright, BrowserContext
+
+
+def obtener_contexto_playwright(
+    headless: bool = False,
+    navegador: str = "chromium",
+    user_data_dir: Optional[str] = None,
+    timeout_pagina: int = 30000,
+) -> Tuple[Playwright, BrowserContext]:
     """
-    Instancia y retorna un WebDriver configurado con cascada Chrome -> Firefox -> Edge (o navegador preferido).
-    Inyecta blindaje crítico para entornos Linux/Canaima y timeouts de socket anti-bloqueo.
+    Instancia y retorna un contexto persistente Playwright configurado.
+
+    Playwright usa auto-waiting nativo — no se necesitan timeouts manuales
+    para elementos web. El parámetro timeout_pagina (en ms) controla la
+    espera máxima de navegación.
+
+    Retorna (pw, context) que el llamador debe cerrar con context.close() + pw.stop().
     """
-    def _crear_chrome():
-        opts_chrome = ChromeOptions()
-        if headless:
-            opts_chrome.add_argument("--headless=new")
-        opts_chrome.add_argument("--start-maximized")
-        opts_chrome.add_argument("--log-level=3")
+    pw = sync_playwright().start()
 
-        # Banderas indispensables para Linux Debian / Canaima / VIT
-        if sys.platform.startswith("linux"):
-            opts_chrome.add_argument("--no-sandbox")
-            opts_chrome.add_argument("--disable-dev-shm-usage")
-            opts_chrome.add_argument("--disable-gpu")
-            opts_chrome.add_argument("--disable-software-rasterizer")
-            opts_chrome.add_argument("--remote-debugging-port=9222")
-            opts_chrome.set_capability("goog:loggingPrefs", {"browser": "ALL"})
+    # Selección del tipo de navegador (chromium por defecto)
+    nombre = str(navegador).strip().lower()
+    if "firefox" in nombre:
+        browser_type = pw.firefox
+    elif "webkit" in nombre or "safari" in nombre:
+        browser_type = pw.webkit
+    else:
+        browser_type = pw.chromium
 
-        return webdriver.Chrome(options=opts_chrome)
+    args = []
+    if sys.platform.startswith("linux"):
+        args.extend(["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
 
-    def _crear_firefox():
-        opts_ff = FirefoxOptions()
-        if headless:
-            opts_ff.add_argument("--headless")
-        d = webdriver.Firefox(options=opts_ff)
-        try:
-            d.maximize_window()
-        except Exception:
-            pass
-        return d
-
-    def _crear_edge():
-        from selenium.webdriver.edge.options import Options as EdgeOptions
-        opts_edge = EdgeOptions()
-        if headless:
-            opts_edge.add_argument("--headless=new")
-        opts_edge.add_argument("--start-maximized")
-        return webdriver.Edge(options=opts_edge)
-
-    creadores = {
-        "chrome": ("Google Chrome", _crear_chrome),
-        "firefox": ("Mozilla Firefox", _crear_firefox),
-        "edge": ("Microsoft Edge", _crear_edge)
+    launch_kwargs = {
+        "headless": headless,
+        "args": args,
     }
 
-    if navegador_preferido and str(navegador_preferido).lower() in creadores:
-        pref = str(navegador_preferido).lower()
-        orden = [pref] + [b for b in ("chrome", "firefox", "edge") if b != pref]
-    else:
-        orden = ["chrome", "firefox", "edge"]
+    if "chrome" in nombre and "chromium" not in nombre:
+        launch_kwargs["channel"] = "chrome"
+    elif "edge" in nombre or "msedge" in nombre:
+        launch_kwargs["channel"] = "msedge"
 
-    driver = None
-    for nom in orden:
-        label, fn = creadores[nom]
+    if user_data_dir:
+        subfolder = "firefox" if "firefox" in nombre else "webkit" if ("webkit" in nombre or "safari" in nombre) else "chromium"
+        motor_dir = os.path.join(user_data_dir, subfolder)
+        os.makedirs(motor_dir, exist_ok=True)
         try:
-            driver = fn()
-            if driver is not None:
-                break
-        except Exception as err:
-            print(f"⚠️ [DriverFactory] {label} no pudo inicializarse: {err}.")
+            context = browser_type.launch_persistent_context(
+                user_data_dir=motor_dir,
+                **launch_kwargs
+            )
+        except Exception:
+            # Fallback a chromium estándar si el canal específico falla
+            launch_kwargs.pop("channel", None)
+            context = browser_type.launch_persistent_context(
+                user_data_dir=motor_dir,
+                **launch_kwargs
+            )
+    else:
+        try:
+            browser = browser_type.launch(**launch_kwargs)
+        except Exception:
+            launch_kwargs.pop("channel", None)
+            browser = browser_type.launch(**launch_kwargs)
+        context = browser.new_context(no_viewport=True) if not headless else browser.new_context()
 
-    if driver is None:
-        print("❌ [DriverFactory] Error crítico: No se pudo levantar ningún navegador.")
-        return None
+    # Timeout de navegación global (en ms)
+    context.set_default_navigation_timeout(timeout_pagina)
+    context.set_default_timeout(timeout_pagina)
 
-    # Inyección estricta de timeouts de transporte contra congelamientos por pérdida de paquetes
-    try:
-        driver.set_page_load_timeout(timeout_pagina)
-        driver.set_script_timeout(timeout_script)
-    except Exception:
-        pass
+    return pw, context
 
-    return driver
+
+# Alias de compatibilidad para código que importaba obtener_driver_resiliente
+def obtener_driver_resiliente(
+    headless: bool = False,
+    navegador_preferido: Optional[str] = None,
+    **kwargs
+) -> Tuple[Playwright, BrowserContext]:
+    """
+    Alias de compatibilidad. Retorna (pw, context) Playwright.
+    El parámetro navegador_preferido mapea a los tipos Playwright:
+      chromium / chrome → chromium
+      firefox           → firefox
+      webkit / safari   → webkit
+    """
+    nav = str(navegador_preferido or "chromium").lower()
+    # Normalizar nombres legacy de Selenium
+    if nav in ("chrome", "google chrome"):
+        nav = "chromium"
+    elif nav in ("edge", "microsoft edge"):
+        nav = "chromium"  # Edge es Chromium-based; usar chromium
+    return obtener_contexto_playwright(headless=headless, navegador=nav)

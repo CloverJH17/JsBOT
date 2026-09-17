@@ -44,7 +44,9 @@ LOGS_DIR = os.path.join(BASE_DIR, "logs")
 SCREENSHOTS_DIR = os.path.join(LOGS_DIR, "screenshots")
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 PLANTILLA_ODS = os.path.join(CONFIG_DIR, "plantilla_base.ods")
-REQUIREMENTS_FILE = os.path.join(BASE_DIR, "requirements.txt")
+REQUIREMENTS_FILE = os.path.join(CONFIG_DIR, "requirements.txt")
+if not os.path.exists(REQUIREMENTS_FILE):
+    REQUIREMENTS_FILE = os.path.join(BASE_DIR, "requirements.txt")
 
 try:
     from rich.console import Console

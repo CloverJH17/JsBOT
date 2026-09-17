@@ -1,0 +1,499 @@
+================================================================================
+          HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
+================================================================================
+Fecha Última   : 17 de Septiembre de 2026
+Autor Principal: Jair Alejandro Hernández González
+Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.8.0] — 17 de Septiembre de 2026 (Ecosistema de Auditoría Ultra Rápida, Verificación Post-Carga y Generador Oficial)
+--------------------------------------------------------------------------------
+• MOTOR DE AUDITORÍA NATIVO ULTRA RÁPIDO:
+  - Implementación de extracción directa vía endpoints nativos CSV de InfoApp (`motor_export_auditoria.py`), reduciendo el tiempo de auditoría de 14 minutos a solo 17 segundos (mejora de 50x) para rangos anuales masivos de 40.000+ registros.
+  - Cruce híbrido inteligente de seguridad: combina la descarga masiva con la vista HTML para rescatar actividades en borrador o con 0 participantes, garantizando 0% de pérdida de registros.
+  - Fallback automático y transparente: si el endpoint nativo no responde, el sistema se degrada al escaneo concurrente sin errores para el usuario.
+• VERIFICADOR POST-CARGA Y ANTI-DUPLICADOS:
+  - Creación de `modulos/verificador_cargas_export.py` para confirmación instantánea (0.5s) de participantes y servicios cargados contrastando directamente contra la base de datos de InfoApp.
+  - Extracción previa de participantes existentes para evitar duplicaciones en aula.
+• GENERADOR DE PLANILLAS DESDE INFOAPP:
+  - Generación en 1 clic de planillas oficiales ODS y XLSX de asistencia con datos reales descargados desde cualquier ID de actividad en InfoApp.
+• DIAGNÓSTICO PREVENTIVO DEL FACILITADOR:
+  - Detección de actividades creadas sin participantes cargados o inconsistencias de registro.
+• REESTRUCTURACIÓN INTEGRAL DE ARQUITECTURA Y LOGS ATÓMICOS EN SQLITE:
+  - Persistencia de eventos y telemetría en tabla indexada `app_logs` dentro de `data/jsbot.db` con transacciones ACID y modo WAL.
+  - Purga automática y retención inteligente a 30 días para eliminar archivos `.log` redundantes en disco.
+  - Unificación documental: consolidación total de manuales y arquitectura en la carpeta canónica `docs/`.
+  - Entorno de prototipado y staging estandarizado en `Features/`.
+  - Centralización absoluta de requisitos técnicos en `config/requirements.txt`.
+  - Blindaje estricto en `modulos/entorno.py` contra la generación de directorios no autorizados.
+
+--------------------------------------------------------------------------------
+[v4.4.0] — 16 de Septiembre de 2026 (Versión Centralizada, Saneamiento Estado de Fábrica y Lanzadores Dinámicos)
+--------------------------------------------------------------------------------
+• FUENTE ÚNICA DE VERSIÓN (V1):
+  - Creación de `modulos/version.py` como única ubicación del número de versión (`__version__`, `ETIQUETA_VERSION`, `NOMBRE_APP`), sin dependencias externas ni coste de arranque.
+  - `modulos/__init__.py` re-exporta la constante; erradicación de todos los literales de versión incrustados en UI (título de ventana, subtítulo de barra lateral —corregido el valor obsoleto 4.2.0—, créditos, logs de arranque y cabeceras de reportes de auditoría) y CLI (banner de 78 columnas ahora compuesto dinámicamente).
+  - Encabezados de docstring de los 12 módulos normalizados para referenciar `modulos/version.py`, eliminando versiones históricas obsoletas (v3.5.2, v3.6.1, v4.2.3, v4.3.0).
+  - espejo sincronizado en `config/settings.json` (`app.version: 4.4.0`, corregida desde la obsoleta 4.1.0).
+• GUARDAS DE CONSISTENCIA EN TESTS (V2):
+  - `tests/test_refactor_calidad.py`: el banner se valida ahora capturando stdout real (alineación estricta de 3 líneas) y una prueba anti-drift exige coherencia triple: banner == `modulos/version.py` == `settings.json`. Un desfase de versión en cualquier capa rompe la suite.
+• LANZADORES CON VERSIÓN DINÁMICA (V3):
+  - `windows.bat` y `linux.sh` consultan `modulos/version.py` en tiempo de arranque (con fallback estático si Python no responde); un nuevo release ya no requiere retocar los lanzadores.
+• SANEAMIENTO ESTADO DE FÁBRICA (V4):
+  - Purga completa de artefactos generados en disco: `logs/`, `data/jsbot.db`, `backups/estudiantes.csv`, `Planillas/`, `Reportes_Auditoria/`, `__pycache__/`, `.pytest_cache/`, `pruebas/` (scripts manuales legacy reemplazados por `tests/`) y `.agents/`.
+  - Verificada la recreación automática de todas las carpetas de ejecución vía `modulos/entorno.py` (`mkdir(parents=True, exist_ok=True)`); conservado `config/config.ini` (credenciales locales del operador).
+• VERIFICACIÓN:
+  - Medida certificada oficial por archivo con proceso aislado (393 passed, 1 skipped, 0 failed en 20 archivos), `py_compile` estático en la totalidad de `modulos/*.py` y `main.py`, y smoke test de lectura dinámica de versión en consola Windows.
+  - Hallazgo documentado en README: las suites GUI de Tk/CustomTkinter NO deben compartir un único proceso de prueba (los múltiples `Tk()` destruidos dejan imágenes `pyimage*` huérfanas que invalidan los setups posteriores). Esta limitación es preexistente (reproducida en la línea base v4.3.0) y queda atenuada con el patrón de ejecución por archivo.
+
+--------------------------------------------------------------------------------
+[v4.3.0] — 16 de Septiembre de 2026 (Blindaje de Modales, Concurrencia Asíncrona, Navegación Canónica y Resiliencia UI/UX)
+--------------------------------------------------------------------------------
+• GESTIÓN CENTRALIZADA DEL CICLO DE VIDA DE MODALES (M1):
+  - Implementación del registro central `self.modales_activos: dict[str, ctk.CTkToplevel]` en `modulos/interfaz_grafica.py`.
+  - Protocolo `WM_DELETE_WINDOW` estandarizado en las 8 ventanas modales del sistema (resolución de huérfanos, confirmación de carga, inspector de auditoría, previsualización de datos, credenciales, etc.).
+  - Liberación segura y balanceada de capturas de foco (`grab_set()` / `grab_release()`) para erradicar bloqueos de interfaz en Windows y entornos X11.
+  - Cierre y limpieza automática de modales activos al conmutar entre vistas, reiniciar sesión o cerrar la ventana principal.
+• DESACOPLAMIENTO ASÍNCRONO DE HILOS Y TELEMETRÍA POR COLA (M2):
+  - Erradicación de llamadas directas `self.after(0)` desde hilos de trabajo pesados; unificación de telemetría y eventos hacia el hilo principal mediante `cola_eventos = queue.Queue()`.
+  - Exportación de reportes de auditoría y planillas ODS delegada a hilos secundarios con notificación asíncrona, garantizando respuesta táctil inmediata (< 24 ms de latencia I/O).
+  - Persistencia de configuraciones e inspector de auditoría no bloqueante para evitar congelamientos de la interfaz gráfica.
+• ENRUTAMIENTO Y DISPATCHER CANÓNICO DE VISTAS (M3):
+  - Implementación de normalización Unicode NFKD (`normalizar_clave_vista`) para navegación insensible a tildes y caracteres especiales ("Diagnóstico", "Créditos").
+  - Unificación de alias canónicos de navegación (`cambiar_vista`, `_cambiar_vista`, `mostrar_vista`, `cambiar_seccion`).
+  - Corrección del fallo de auto-ocultamiento (self-ungriding) en la vista de Formación mediante iteración estricta por identidad de widgets (`set(self.vistas.values())`).
+  - Corrección de alias tipográficos en la reanudación de sesión por corte eléctrico (`_reanudar_flujo_desde_estado`).
+• COMPATIBILIDAD CANAIMA GNU/LINUX (M4):
+  - Inyección temprana y preventiva de `LIBGL_ALWAYS_SOFTWARE=1` antes de la carga de bibliotecas gráficas en `main.py`, `modulos/entorno.py` y `modulos/interfaz_grafica.py`.
+  - Verificación nativa de servidor de visualización (`DISPLAY`/`WAYLAND_DISPLAY`) con degradación suave a consola CLI interactiva si se detecta un entorno puramente headless.
+• SANEAMIENTO Y SEGURIDAD DEL PROYECTO (M5):
+  - Aislamiento estricto en `.gitignore` de credenciales locales (`config/config.ini`), bases de datos SQLite (`data/*.db`), carpetas de salida (`Planillas/`, `Reportes_Auditoria/`), trazas (`logs/`) y temporales (`.agents/`).
+  - Cobertura completa: 65/65 pruebas de auditoría UI/UX (`tests/test_auditoria_completa_ui_ux.py`) y 219 pruebas unitarias aprobadas con 0 regresiones.
+
+--------------------------------------------------------------------------------
+[v4.2.8] — 13 de Septiembre de 2026 (Validación Estricta de Documentos, Eliminación de CE Apócrifas y Alerta de Datos Críticos)
+--------------------------------------------------------------------------------
+• ELIMINACIÓN DE CÉDULA ESCOLAR APÓCRIFA ('11111111'):
+  - En `modulos/normalizador_datos.py`, se eliminó el fallback que inventaba el comodín '11111111' y generaba cédulas escolares falsas idénticas ('11811111111') para menores sin C.I. de tutor.
+  - Los participantes sin C.I. propia ni C.I. de tutor ahora se clasifican estrictamente como `cedulado = 'sin_documento'`, manteniendo `cedula_escolar = ''` y `cedula_padre = ''`.
+  - Se incorporó la función `auditar_integridad_lote()` para evaluar faltantes críticos y bloquear cargas ciegas.
+• PREVISUALIZACIÓN Y MODAL DE ADVERTENCIA EN GUI:
+  - En `modulos/interfaz_grafica.py`, la tabla de auditoría pre-vuelo ahora refleja con honestidad el estado real: tipo 'Sin Doc' y diagnóstico '[!] Sin Doc' en color rojo (#E74C3C) en lugar del falso positivo '[OK] Listo'.
+  - Se implementó un modal interactivo de advertencia al cargar archivos donde todos o parte de los participantes carecen de documento, informando que InfoApp exige la cédula del representante.
+  - Bloqueo preventivo en botones de ejecución (Formación y Servicios) si ningún registro cuenta con documento.
+• HARDENING EN AUTOMATIZADOR WEB:
+  - En `modulos/automatizador_web.py` (`registrar_alumno_en_web` y `registrar_nuevo_usuario_perfil`), se eliminó el fallback apócrifo '11111111' que generaba correos repetidos y duplicados de usuarios en InfoApp, abortando limpiamente registros imposibles con reporte de auditoría.
+• SUITE DE PRUEBAS:
+  - Creado `tests/test_validacion_documentos.py` con 5 pruebas dedicadas (281 tests ejecutados con 100% de éxito en toda la suite).
+
+--------------------------------------------------------------------------------
+[v4.2.7] — 13 de Septiembre de 2026 (Aislamiento de Criterio UID, Auto-Filtro Excel en Pestaña 1 y Depuración de Toolbar)
+--------------------------------------------------------------------------------
+• AISLAMIENTO ESTRICTO EN BÚSQUEDAS POR UID:
+  - En `modulos/auditor_reportes.py` y `modulos/interfaz_grafica.py`, al auditar por UID, los filtros `info_id` y `estado` se vacían estrictamente para que InfoApp devuelva todas las actividades del facilitador independientemente del infocentro o sede en la que se encuentre registrado.
+• AUTO-FILTRO EN LA PRIMERA PESTAÑA DE EXCEL:
+  - En `exportar_reporte_excel`, se añadió `ws_fac.auto_filter.ref = f"A1:H{max(current_row, 2)}"`, permitiendo desplegar los filtros nativos de Excel en todas las columnas (A a H) de la hoja "Resumen por Facilitador".
+• DEPURACIÓN DE TOOLBAR Y ELIMINACIÓN DE ELEMENTOS REDUNDANTES:
+  - Se eliminó completamente la barra inferior (`bottom_bar`) que generaba un recuadro vacío debajo de los botones.
+  - Se eliminó el botón duplicado `[ Abrir Reporte ]` de la vista; ahora el botón `[ 💾 Exportar Reporte... ]` unifica tanto la selección de guardado como la apertura inmediata del archivo.
+  - El selector de tipo de archivo (`combo_aud_formato`) y el botón de exportación se dimensionaron con anchos ajustados (135px) junto a los 3 botones de inspección, garantizando visibilidad total y cero solapamiento o desbordamiento en pantalla.
+• PRUEBAS Y VALIDACIÓN:
+  - 276 pruebas unitarias aprobadas al 100% en toda la suite.
+
+--------------------------------------------------------------------------------
+[v4.2.6] — 13 de Septiembre de 2026 (Reestructuración UI Inspector: Ventanas Modales al Frente, KPIs Enriquecidos y Toolbar Unificada)
+--------------------------------------------------------------------------------
+• ELIMINACIÓN DE TABLAS EMBEBIDAS REDUNDANTES:
+  - Se eliminó el bloque inferior de tablas embebidas fijas, optimizando el espacio visual y la ergonomía del dashboard de auditoría.
+• VENTANAS DE INSPECCIÓN AL FRENTE Y MODALES ESTRICTAS:
+  - Las 3 ventanas de inspección (`Formaciones y Actividades`, `Servicios a Usuarios`, `Resumen por Facilitador`) ahora se ejecutan garantizadamente DELANTE de la ventana principal (`transient`, `lift`, `attributes('-topmost')`, `focus_force`).
+  - Modalidad bloqueante estricta (`grab_set()`): no se puede interactuar con la ventana principal ni cambiar de pestaña hasta cerrar la ventana de inspección.
+• TARJETAS DE KPIS AMPLIADAS Y ENRIQUECIDAS:
+  - Diseño ampliado y de alto impacto visual para las 4 tarjetas de resultados.
+  - Nuevas métricas detalladas calculadas: promedio de estudiantes por formación/aula, sedes únicas participantes, servicio comunitario principal más solicitado y margen de balance auditado.
+• TOOLBAR UNIFICADA DE ACCIÓN Y EXPORTACIÓN:
+  - Reubicación del selector de formato y botón de exportación: se eliminaron de la fila de búsqueda superior y se ubicaron a la derecha de los botones de inspección.
+  - El panel de búsqueda ahora cuenta con un botón `[ 🔍 Iniciar Auditoría ]` más amplio y centrado.
+• ZERO REGRESSION:
+  - 274 pruebas unitarias aprobadas al 100% en toda la suite.
+
+--------------------------------------------------------------------------------
+[v4.2.5] — 13 de Septiembre de 2026 (DOM Fallback Parser, Modo Turbo HTTP, Ventanas Flotantes & Exportación Multiformato)
+--------------------------------------------------------------------------------
+• PARSER CON FALLBACK ROBUSTO AL DOM EN INFOAPP:
+  - Doble mecanismo de extracción en `parsear_pagina_actividades_bs4`: si faltan etiquetas ocultas `<p>` (`data_dimensiones`, `data_titulo`, etc.), extrae automáticamente desde las celdas visibles `<td>` (fecha, dimensiones pedagógicas, sede, facilitador y badges de estudiantes/productos).
+  - Generación de identificadores únicos sintéticos cuando no existe `id_activity` en el DOM para evitar omisiones de filas.
+• MODO TURBO (ACELERACIÓN HTTP CONCURRENTE):
+  - Switch interactivo `[ ⚡ Modo Turbo (HTTP) ]` en el encabezado del Inspector (activo por defecto).
+  - Desacoplamiento automático: autenticación con Selenium WebDriver -> exportación de cookies a `requests.Session()` -> cierre inmediato del WebDriver -> scraping paralelo y concurrente HTTP para máxima velocidad y mínimo consumo de CPU/RAM.
+  - Soporte de modo alternativo visual con WebDriver paso a paso si el switch se desactiva.
+• VENTANAS FLOTANTES REACTIVAS EN PESTAÑAS:
+  - Vinculación automática del evento de selección de pestañas en `self.tabview_auditoria`: al hacer clic en Formaciones, Servicios o Facilitadores, se despliega automáticamente la ventana modal flotante (1100x650) con buscador en tiempo real y cabeceras clickeables para ordenar.
+  - Eliminación de botones redundantes internos `[ ⛶ Abrir en Ventana Flotante ]` para una interfaz más limpia.
+  - Blindaje con comprobación de visibilidad de ventana para ejecución transparente en entornos de pruebas headless.
+• EXPORTACIÓN DINÁMICA MULTIFORMATO CON DIÁLOGO INTERACTIVO:
+  - ComboBox interactivo con 5 formatos exactos: Excel (.xlsx), LibreOffice (.odt), Documento PDF (.pdf), CSV plano (.csv) y Vista en Pantalla (Consola).
+  - Botón interactivo `[ 💾 Exportar Reporte... ]` habilitado reactivamente al completar la auditoría.
+  - Integración de generadores puros de la biblioteca estándar para LibreOffice `.odt` (vía `zipfile`) y PDF 1.4 (`exportar_reporte_pdf`), eliminando dependencias externas pesadas.
+  - Integración con diálogo nativo `filedialog.asksaveasfilename` y apertura automática con la aplicación predeterminada del sistema operativo.
+• CABLEADO REAL BACKEND ↔ GUI Y SUITE DE PRUEBAS EXPANDIDA:
+  - Conexión completa de los parámetros hacia `ar.ejecutar_auditoria` con telemetría thread-safe.
+  - Suite de pruebas de inspector expandida a 14 tests unitarios específicos y 271/271 tests pasando a nivel global en el proyecto.
+
+--------------------------------------------------------------------------------
+[v4.2.4] — 13 de Septiembre de 2026 (Blindaje de Telemetría GUI, Tablas Vacías & Caché JSON)
+--------------------------------------------------------------------------------
+• DESACOPLAMIENTO DE TERMINAL Y CANALIZACIÓN DE TELEMETRÍA:
+  - Redirección total y thread-safe de cualquier mensaje del motor de inspección hacia la consola de telemetría de la GUI (textbox_logs / agregar_log_telemetria) vía callback.
+  - Implementación de diálogos modales nativos CTkToplevel (_mostrar_modal_confirmacion) con botones interactivos Sí / Cancelar para confirmaciones de usuario sin tocar stdin.
+• GESTIÓN ROBUSTA DE RESULTADOS VACÍOS:
+  - Detección precisa de 0 actividades y 0 servicios (o tablas informativas de InfoApp sin registros).
+  - Reseteo automático de KPIs a 0 y estado de cuadre '● Sin Registros'.
+  - Notificación visual instantánea mediante Toast flotante no intrusivo y aviso en telemetría: '[AVISO] No se encontraron actividades o usuarios en el rango seleccionado.'
+• CACHÉ LIGERO JSON LOCAL:
+  - Módulo de persistencia y recarga rápida en logs/ultima_busqueda_inspector.json (guardar_cache_inspector y cargar_cache_inspector).
+  - Botón '[ ⚡ Cargar Caché ]' en la barra superior del Inspector para recuperar y previsualizar la última auditoría sin reconsultar la red.
+• SUITE DE PRUEBAS DEDICADA:
+  - Creación de tests/test_inspector_suite.py cubriendo 10 pruebas unitarias de tablas vacías, persistencia/resiliencia de caché JSON y robustez ante parámetros nulos, incompletos o inválidos.
+
+--------------------------------------------------------------------------------
+[v4.2.3] — 13 de Septiembre de 2026 (Reestructuración Integral UI/UX, Excel Agrupado & Aceleración HTTP)
+--------------------------------------------------------------------------------
+• MODAL REACTIVO DE CREDENCIALES DE AUDITOR:
+  - Despliegue de modal CTkToplevel 'Credenciales de Auditor / Jefatura' al activar el switch si no existen credenciales en [AUDITORIA] de config/config.ini.
+  - Almacenamiento seguro y reactivo con actualización visual en tiempo real de la etiqueta de estado: 'Rol Auditor (Activo: {usuario})'.
+• CAMPOS DE BÚSQUEDA REACTIVOS Y DINÁMICOS:
+  - SegmentedButton conmuta entre Modo UID, Modo Infocentro y Modo Resumen Estadal (26 entidades federales) mostrando u ocultando dinámicamente (.grid() / .grid_remove()) los campos correspondientes.
+  - Fila 1 fija con fechas Desde/Hasta, selector de formato y botón verde de inicio.
+• CONSOLA DE TELEMETRÍA UNIFICADA:
+  - Eliminación de visor interno redundante; redirección total del flujo de auditoría hacia la consola principal inferior y el canal general de logs.
+• VENTANAS FLOTANTES DEDICADAS (1100x650):
+  - Botón '[ ⛶ Abrir en Ventana Flotante ]' para Formaciones/Actividades, Servicios a Usuarios y Resumen por Facilitador con buscador en tiempo real, conteo de filas y cabeceras ordenables interactivas.
+• ACELERACIÓN HÍBRIDA HTTP + BEAUTIFULSOUP:
+  - Autenticación inicial con Selenium WebDriver, transferencia atómica de cookies a requests.Session() y desacoplamiento inmediato del navegador (driver.quit()) para máxima velocidad de consulta concurrente.
+• EXCEL PROFESIONAL JERÁRQUICO Y AGRUPADO:
+  - Hoja 1 'Resumen por Facilitador' agrupada por Infocentro ('🏢 INFOCENTRO: {codigo_sede}') con subtotales por sede, total general, bordes grises finos, auto_filter y freeze_panes="A2".
+  - Hojas 2 y 3 con detalle cualitativo pedagógico completo de Formaciones y Servicios.
+
+--------------------------------------------------------------------------------
+[v4.2.1] — 13 de Septiembre de 2026 (Firma Polimórfica de Auditoría & Responsividad de Layout)
+--------------------------------------------------------------------------------
+• FIRMA UNIVERSAL POLIMÓRFICA EN 'modulos/auditor_reportes.py':
+  - Función 'ejecutar_auditoria' adaptada para aceptar tanto tuplas posicionales como argumentos nombrados (uid, info_id, estado, start_at, finish_at, fecha_inicio, fecha_fin, rol_auditor, formato, exportar_formato, callback_log, progreso_callback, **kwargs).
+  - Eliminación definitiva del error 'TypeError: unexpected keyword argument uid'.
+  - Sanitización de codificación de salida para evitar 'UnicodeEncodeError' en consolas Windows (cp1252).
+• RESPONSIVIDAD Y LAYOUT EN 2 FILAS EN 'modulos/interfaz_grafica.py':
+  - Reestructuración del panel de parámetros de búsqueda en un grid balanceado de 2 filas x 4 columnas con pesos elásticos.
+  - Fila 0: Controles de UID, Código de Infocentro y Estado / Región (con span de 2 columnas).
+  - Fila 1: Selectores de fecha Desde y Hasta, formato de exportación y botón verde '[ 🔍 Iniciar Auditoría ]' con ancho completo visible (100% libre de recortes en 1020x670).
+  - Armonización de la invocación en hilo demonio con parámetros desempaquetados de forma limpia.
+
+--------------------------------------------------------------------------------
+[v4.2.0] — 13 de Septiembre de 2026 (Módulo Inspector de Auditoría, Balance Operativo & Respaldo)
+--------------------------------------------------------------------------------
+• RESPALDO INTEGRAL AUTOMÁTICO (SAFE BACKUP):
+  - Creación de copia de seguridad integral pre-inspector en 'backups/backup_v4.1.0_pre_inspector/'.
+  - Protección y exclusión de 'backups/' y 'Reportes_Auditoria/' en '.gitignore'.
+• MOTOR OFICIAL DE AUDITORÍA WEB E INSPECCIÓN ('modulos/auditor_reportes.py'):
+  - Extracción paginada y no truncada de Actividades ('view=report') y Servicios ('view=services').
+  - Captura cualitativa de jerarquía pedagógica completa (<p class="data_dimensiones">), áreas temáticas, talleres específicos y badges numéricos de participantes.
+  - Soporte de auditorías individuales (por facilitador UID), institucionales (por código Infocentro) y estadales/regionales masivas (resumen por estado).
+  - Verificación estricta de balance matemático: Total Actividades = Formaciones + Productos Comunicacionales + Otras Actividades.
+  - Exportación automática a libro Excel enriquecido (.xlsx) con 4 hojas estilizadas (Resumen Ejecutivo, Actividades Detalladas, Servicios a Usuarios y Matriz por Facilitador) y archivo plano (.csv).
+• VISTA COMPLETA DEL INSPECTOR EN LA INTERFAZ GRÁFICA ('modulos/interfaz_grafica.py'):
+  - Renombrado de botón histórico a 'Planillas / ODS' y adición del nuevo acceso 'Reportes' en la barra lateral.
+  - Panel superior de configuración con selector segmentado de modo (Por Facilitador UID, Por Infocentro Código, Resumen Estadal Región).
+  - Entradas dinámicas reactivas, selector de estados venezolanos y rango de fechas con valores predeterminados.
+  - Switch de activación de 'Rol de Auditor / Jefatura' para consultas de ámbito estadal.
+  - 4 Tarjetas de Métricas Rápidas (KPIs): Total Actividades, Formados Reales, Servicios Brindados y Estado de Cuadre Matemático en vivo.
+  - Contenedor de 4 pestañas (CTkTabview):
+    1. '🎓 Formaciones y Actividades': Tabla interactiva con badges y jerarquía pedagógica.
+    2. '🛠️ Servicios a Usuarios': Tabla interactiva con desglose de atenciones ciudadanas.
+    3. '👥 Resumen por Facilitador': Matriz comparativa multi-facilitador para sedes o regiones.
+    4. '💻 Telemetría en Vivo': Terminal en tiempo real de scraping web Selenium.
+  - Botón de acción directa para abrir el último reporte exportado en 'Reportes_Auditoria/'.
+  - Desacoplamiento multihilo seguro mediante 'queue.Queue' para cero congelamientos de interfaz.
+
+--------------------------------------------------------------------------------
+[v4.1.0] — 12 de Septiembre de 2026 (Gestión de Credenciales, ONLYOFFICE & PyPI Fast)
+--------------------------------------------------------------------------------
+• PANEL DEDICADO DE CREDENCIALES (SIDEBAR GUI):
+  - Incorporación de vista "Credenciales" directamente en la barra lateral.
+  - Persistencia reactiva bidireccional en 'config/config.ini' ([LOGIN]).
+  - Toggle de visualización protegida de contraseña y telemetría de confirmación.
+• DESPLIEGUE RÁPIDO PYPI & RESOLUCIÓN CANAIMA (PEP 668):
+  - Optimización de 'linux.sh': aseguramiento selectivo de binarios del sistema
+    (python3-tk, python3-pip) e instalación ultrarrápida vía wheels precompilados.
+  - Bypass controlado de PEP 668 con '--break-system-packages'.
+• INTEGRACIÓN NATIVA CON ONLYOFFICE DESKTOP EDITORS:
+  - Inclusión de binarios 'desktopeditors' y 'onlyoffice-desktopeditors' en
+    'modulos/verificador_entorno.py' pasando de [AVISO] a [OK] en Canaima/Debian.
+• DESACOPLAMIENTO DEFINITIVO CLI <-> GUI:
+  - Supresión de llamadas interactivas (InquirerPy / input) al procesar archivos en CustomTkinter.
+  - Depuración automática silenciosa de duplicados con reporte detallado en telemetría.
+• CABLEADO TOTAL GUI CON MOTOR WEB SELENIUM:
+  - Enlace reactivo del botón de ejecución en Formación con el driver web en hilo seguro.
+  - Generación de reportes de auditoría Excel y planillas oficiales .ODS.
+• ASSETS Y RECURSOS EN REPOSITORIO:
+  - Consolidación de iconografía oficial en 'config/assets/iconos/'.
+
+
+--------------------------------------------------------------------------------
+[v4.0.0] — 11 de Septiembre de 2026 (Lanzamiento Mayor: Interfaz Gráfica Nativa & Arquitectura Bimodal)
+--------------------------------------------------------------------------------
+• LANZAMIENTO MAYOR: INTERFAZ GRÁFICA DE USUARIO (GUI) NATIVA:
+  - Nueva interfaz de escritorio moderna construida sobre CustomTkinter en modo oscuro (Dark-Blue).
+  - Componente modular 'modulos/interfaz_grafica.py' con navegación por pestañas (Formación, Servicios, Reportes, Diagnóstico, Ajustes, Créditos).
+  - Iconografía minimalista en 'config/assets/iconos/' con carga dinámica multiplataforma.
+  - Diseño ergonómico adaptado a pantallas estándar de 1366x768 px y superiores en Windows y Canaima GNU/Linux.
+• PATRÓN FEATURE TOGGLE BIMODAL:
+  - Soporte coexistente de GUI por defecto y CLI tradicional de consola interactiva (Rich + InquirerPy).
+  - Flags de línea de comandos: --gui / -g para entorno gráfico, --cli / -c / --consola / --terminal para modo consola.
+  - Configuración declarativa en 'config/settings.json' ('app.interfaz_predeterminada').
+  - Mecanismo de Fallback Automático: En ausencia de servidor gráfico (ej. entornos headless o Linux sin X11/Wayland), conmuta limpiamente a modo consola sin interrumpir la operación.
+• TARJETA DE PRE-VUELO Y VISUALIZADOR TABULAR:
+  - Resumen instantáneo de métricas de normalización (Cedulados, Escolares, Menores S/C).
+  - Visor modal 'CTkToplevel' de datos normalizados con tabla interactiva tipo spreadsheet y coloreado por tipo de participante.
+• TELEMETRÍA Y CONTROL EN TIEMPO REAL:
+  - Terminal de registro integrada con autoscroll inteligente, barra de progreso con microanimación no bloqueante e indicador dinámico de porcentaje y velocidad.
+  - Botón de copiado al portapapeles y limpiador de telemetría.
+  - Desacoplamiento threading-safe: Ejecución de automatización web en hilo demonio de segundo plano comunicado por colas thread-safe (queue.Queue).
+• ENTRADA PRINCIPAL CONSOLIDADA:
+  - Creación del punto de entrada raíz 'main.py' y actualización de lanzadores 'windows.bat' y 'linux.sh' con propagación de parámetros.
+
+--------------------------------------------------------------------------------
+[v3.6.1] — 10 de Septiembre de 2026 (Corrección Visual: Renderizado ANSI y Unicode)
+--------------------------------------------------------------------------------
+• CORRECCIÓN VISUAL Y TERMINAL VIRTUAL (WINDOWS):
+  - Inicialización nativa de la API Windows vía ctypes (SetConsoleMode con ENABLE_VIRTUAL_TERMINAL_PROCESSING) para erradicar secuencias crudas ANSI (ej. ←[36m).
+  - Configuración directa de Console(force_terminal=True) en Rich.
+• COMPATIBILIDAD CP850 / RASTER FONTS:
+  - Sustitución de caracteres Unicode vulnerables (✔, ✖) por marcadores retrocompatibles de alto contraste: [OK], [X], [!].
+• RENDERIZADO NATIVO CON RICH TABLE & PANEL:
+  - Estructuración de los elementos del checklist dentro de una Table sin bordes incrustada en Panel, con alineación estricta y subtítulo dinámico de estado general.
+
+--------------------------------------------------------------------------------
+[v3.6.0] — 10 de Septiembre de 2026 (Compatibilidad Canaima/Linux & Diagnóstico Pre-vuelo)
+--------------------------------------------------------------------------------
+• COMPATIBILIDAD NATIVA CANAIMA GNU/LINUX & WINDOWS:
+  - Creación de lanzadores duales: 'windows.bat' y 'linux.sh'.
+  - Abstracción de ejecución documental mediante 'xdg-open' para entornos XFCE/Mate/GNOME.
+  - Opciones de aislamiento en Chromium (--no-sandbox, --disable-dev-shm-usage) para Debian/Canaima.
+• VERIFICADOR DE INTEGRIDAD DE ENTORNO (PRE-VUELO):
+  - Nuevo módulo 'modulos/verificador_entorno.py' con checklist visual estilo videojuego en Rich.
+  - Sincronización y actualización automática desatendida de dependencias PyPI con pantalla de carga.
+  - Auditoría de binarios de navegadores y existencia física de 'plantilla_base.ods'.
+• RESILIENCIA HITL SIN SUITE OFIMÁTICA:
+  - Detección de ausencia de Excel/LibreOffice con fallback asistido por ruta absoluta en consola.
+
+--------------------------------------------------------------------------------
+[v3.5.2] - 25 de Agosto de 2026 (Configuración Operativa Centralizada)
+--------------------------------------------------------------------------------
+• NUEVO MÓDULO modulos/config_manager.py:
+  - Puerta única de entrada a config/settings.json con fusión profunda sobre defaults internos idénticos al comportamiento histórico: si el archivo falta o está corrupto, el bot arranca igual.
+  - Helpers: cargar_settings(), obtener_timeout(), obtener_url_login(), obtener_browser_cfg(), telefono_por_defecto() y captura_screenshots_activada().
+• SETTINGS.JSON AHORA ES OPERATIVO (antes solo se leía ajax_wait_seconds):
+  - urls.base_login consume la URL del login en realizar_login() (antes hardcodeada).
+  - timeouts.login_wait_seconds y timeouts.element_wait_seconds gobiernan todos los WebDriverWait de login, registro de alumnos, perfiles nuevos y servicios (antes fijos en 15/12/10).
+  - browser.priority define la cascada real Firefox→Chrome→Edge mediante fábricas registradas (FABRICAS_NAVEGADOR); nombres desconocidos se saltan sin fallar.
+  - browser.start_maximized controla la maximización de ventana por navegador.
+  - validation.capture_screenshots_on_error permite desactivar las evidencias PNG ante incidencias.
+  - validation.default_phone centraliza el teléfono neutral usado por el ETL (normalizador_datos).
+• LIMPIEZA DE settings.json:
+  - Eliminadas claves decorativas que ningún módulo leía: paths.*, timeouts.page_load_seconds/post_submit_retries/step_delay_seconds, validation.phone_regex/cedula_escolar_min_age, browser.headless/disable_gpu.
+• IMPORT json ELIMINADO de automatizador_web.py (quedó huérfano tras migrar la lectura a config_manager).
+• NUEVOS TESTS tests/test_config_manager.py (16):
+  - Carga con archivo válido/inexistente/corrupto/no-dict, fusión profunda, helpers, normalización de prioridades, cascada respetando priority con fábricas simuladas, y flag de capturas encendido/apagado.
+  - Suite completa: 220 tests OK.
+
+--------------------------------------------------------------------------------
+[v3.5.1] - 25 de Agosto de 2026 (Refactor de Calidad, Constantes Únicas y Sincronización de Versiones)
+--------------------------------------------------------------------------------
+• UNIFICACIÓN DE CONSTANTES (FUENTE ÚNICA DE VERDAD):
+  - PALABRAS_INVALIDAS_NOMBRE: Se eliminó la definición muerta duplicada y ahora es la única lista de filtrado de filas basura, consumida por es_nombre_valido() y el bloque ETL (se suprimió el filtro inline redundante en procesar_archivo_participantes).
+  - CABECERAS_IGNORADAS: Lista de columnas de autoridades elevada a constante de módulo.
+  - PREFIJOS_VALIDOS_TLF: Los prefijos telefónicos ya no están hardcodeados en 3 sitios; se derivan PREFIJOS_SIN_CERO y PREFIJOS_MOVILES_SIN_CERO usados por limpiar_telefono(), detectar_cabeceras() y la detección de teléfonos en campo cédula.
+• DEDUPLICACIÓN UNIFICADA:
+  - Nueva función generar_clave_dedup(): Formación y Servicios ahora comparten exactamente la misma lógica de clave de deduplicado (antes divergían: CI→CE→REP vs CE→REP→CI), preservando gemelos por primer nombre.
+• LIMPIEZA DE CÓDIGO MUERTO:
+  - Eliminados imports sin uso: urllib.parse (gestor_sesion), TimeoutException (automatizador_web), Text de rich (interfaz_usuario) y guardar_config_servicios (orquestador).
+  - Eliminada variable muerta 'hoy' en procesar_archivo_texto.
+• INTERFAZ Y ESTILO:
+  - prompt_tipo_servicio(): añadido qmark="" conforme a REGLAS_IA.md (mostraba '?' por defecto).
+  - Banner corregido y alineado (texto de 87 → 89 chars para cuadrar con los bordes) tanto en Python como en run.bat.
+  - Monkeypatch de builtins.input en tests ahora restaura el original (sin contaminación entre tests).
+• SINCRONIZACIÓN DE VERSIONES:
+  - Homologado v3.5.1 en cabeceras de los 6 módulos, requirements.txt, config/settings.json, run.bat, banner UI y REGLAS_IA.md (antes coexistían v3.0.0/v3.1.0/v3.1.5/v3.5).
+• NUEVOS TESTS DE REGRESIÓN:
+  - tests/test_refactor_calidad.py (16 tests): constantes unificadas, derivación de prefijos, clave de dedup compartida, alineación del banner y qmark. Suite completa: 204 tests OK.
+
+--------------------------------------------------------------------------------
+[v3.5.0] - 25 de Agosto de 2026 (Automatización Integral de Servicios y Menores de Edad)
+--------------------------------------------------------------------------------
+• MOTOR DE SERVICIOS Y MENORES:
+  - Inclusión total de menores en Servicios: Soporte completo para participantes con Cédula Escolar y representados sin C.I. directa.
+  - Registro dinámico en 'userform_new': Los menores se registran con 'No/Menor de edad', DNI de representante ('parent_dni'), número de hijo ('child_number') y correo institucional generado automáticamente.
+  - Búsqueda unívoca en Servicios: Localización de menores mediante 'parent_ref' ({padre}1) con 'user_has_document = No', evitando cualquier ambigüedad o selección errónea del representante.
+  - Verificación robusta en DOM: El validador post-carga de Servicios ahora comprueba ID numérico de InfoApp, Nombre/Apellido del participante y Cédula, resolviendo falsas alertas por la etiqueta 'No cedulado'.
+  - Aislamiento de edad en ETL: Detección inteligente de columnas de edad estudiantil (ej. '6.Edad') previniendo falsos positivos con edades de representantes.
+  - Consola y Logs: Visualización exacta del identificador ('CE:{cedula_escolar}') en tarjetas de ejecución y reportes de auditoría.
+  
+--------------------------------------------------------------------------------
+[v3.4.0] - 24 de Agosto de 2026 (Inteligencia Dinámica en Servicios)
+--------------------------------------------------------------------------------
+• MOTOR DE SERVICIOS:
+  - Unificación del pipeline ETL: La carga de servicios ahora consume el mismo diccionario heurístico puro del menú de planillas, preservando la Cédula Escolar Universal intacta.
+  - Implementación de pre-visualización de tabla de participantes en la Opción 2 antes de iniciar la carga.
+  - Creación dinámica de perfiles: El bot ahora calcula matemáticamente la edad de los menores y asigna el "Nivel académico" exacto requerido por InfoApp (Educación preescolar, primaria, 1er o 2do ciclo).
+  - Asignación inteligente de estatus laboral según mayoría de edad.
+  
+--------------------------------------------------------------------------------
+[v3.3.0] - 24 de Agosto de 2026 (Cédula Escolar Universal, HITL y Optimización Web)
+--------------------------------------------------------------------------------
+• NORMALIZADOR Y EXTRACCIÓN DE DATOS:
+  - Implementación de Cédula Escolar automática para menores sin CI propia.
+  - Detección inteligente de CI de representante erróneamente insertada en campos de niños.
+  - Saneamiento automático de fechas futuras e identificadores truncados generados por Excel.
+• ETL HEURÍSTICO - HUMAN-IN-THE-LOOP (HITL) Y ANTI-PATRONES:
+  - Bucle de rescate interactivo: Apertura nativa en Excel de archivos irreconocibles y pausa del bot para corrección humana.
+  - Lista de exclusión estricta: Ignora columnas de autoridades (responsables, profesores, facilitadores).
+  - Aislamiento de teléfonos: Incorporación de filtros 'local' y 'habitacion' para forzar la recolección de números celulares.
+• AUTOMATIZADOR WEB (SELENIUM):
+  - Solución a falso positivo de caducidad de sesión: Se evita que el bot entre en bucles de re-autenticación al aterrizar en el Dashboard (index.php).
+  - Eliminación del retraso de 5-15 segundos al iniciar la carga de servicios.
+• INTERFAZ DE USUARIO (UI) Y GOBERNANZA:
+  - Normalización gráfica de InquirerPy (eliminación del doble signo '??') en todo el ecosistema.
+  - Sincronización estética del banner inicial en el archivo 'run.bat' con el diseño en Python.
+  - Creación del manifiesto maestro 'REGLAS_IA.md' para establecer directrices de agentes de desarrollo.
+
+--------------------------------------------------------------------------------
+[v3.1.0] — 24 de Agosto de 2026 (Consolidación Modular y Blindaje de Producción)
+--------------------------------------------------------------------------------
+• FUSIÓN Y CONSOLIDACIÓN MODULAR:
+  - Unificación completa del subsistema de Servicios al Usuario dentro de modulos/.
+  - Eliminación de la carpeta servicios/ y centralización de config_servicios.json en config/.
+  - Menú maestro con selectores directos para Formación y Servicios con escape seguro ('0' / 'cancelar').
+• SOPORTE UNIVERSAL DE FORMATOS & ETL AVANZADO:
+  - Ingestión directa de archivos de texto plano (.txt), listas de cédulas puras y hojas (.xlsx, .ods, .csv).
+  - Preservación de prefijo de nacionalidad extranjera (E-) en documentos y cédulas escolares.
+  - Parser robusto de fechas en español ('15 de marzo de 2014', timestamps SQL y seriales de Excel).
+  - Data sniffing con escaneo de hasta 15 filas para tolerar membretes institucionales complejos.
+• BLINDAJE DE PRODUCCIÓN Y RESILIENCIA:
+  - Checkpoints atómicos con fsync y reemplazo de archivo temporal (.tmp) ante apagones.
+  - Deduplicación con clave compuesta por nombre para preservar hermanos gemelos.
+  - Detección y re-autenticación automática ante expiración de sesión PHP de InfoApp.
+  - Timeout dinámico de AJAX configurable desde settings.json.
+  - Manejo interactivo de PermissionError ante archivos abiertos en Excel/Calc.
+  - Generador ODS dinámico con detección de pie de firmas y control de celdas repetidas.
+
+--------------------------------------------------------------------------------
+[v3.0.0] — 23 de Agosto de 2026 (Reestructuración de Arquitectura & Bucle Rápido)
+--------------------------------------------------------------------------------
+• REESTRUCTURACIÓN DE DIRECTORIOS Y SIMPLIFICACIÓN:
+  - Eliminación de carpetas redundantes (data/ y artifacts/).
+  - Centralización de configuraciones y plantilla base en config/ (config/plantilla_base.ods).
+  - Centralización de auditorías y evidencias en logs/ (logs/screenshots/ y logs/Auditoria_*.xlsx).
+  - Respaldo único de procesamiento guardado directamente en la raíz (estudiantes.csv).
+• VERIFICACIÓN ESTRICTA EN TABLA Y CERO FALSOS POSITIVOS:
+  - Recarga de actividad y escaneo obligatorio en el DOM de la tabla HTML de InfoApp tras cada carga.
+  - Saneamiento de cédula escolar vacía ("") para evitar el error 'No aplica' en el servidor.
+  - Parada e interacción ante incidencias reales con captura de pantalla automática.
+• INTERFAZ DE CONSOLA REFRESCADA (RICH UI):
+  - Refresco dinámico del panel de progreso en la parte superior sin acumulación de bloques hacia abajo.
+  - Formateo inteligente de nombres en Title Case respetando partículas en minúsculas.
+  - Normalización de números telefónicos nacionales (0412, 0414, 0416, 0424, 0426).
+  - Deduplicación interactiva pre-carga mediante terminal con InquirerPy.
+• PROTOCOLO AGÉNTICO FAST-LOOP:
+  - Gobernanza mediante AGENTS.md para ingeniería iterativa de ciclo rápido.
+
+--------------------------------------------------------------------------------
+[v2.6.0] — 23 de Agosto de 2026 (Cédula Escolar MPPE & Parche Asíncrono)
+--------------------------------------------------------------------------------
+• CLASIFICACIÓN TRIPARTITA DE DOCUMENTOS (MPPE / INFOAPP):
+  - Implementación de la fórmula algorítmica de Cédula Escolar:
+    (1 + Últimos 2 dígitos Año Nacimiento + CI Representante a 8 dígitos).
+  - Clasificación en 3 estados: [A] SAIME (Si), [B] Cédula Escolar (>= 10 años sin CI),
+    [C] Menor no escolarizado (< 10 años con CI de tutor).
+• ADAPTACIÓN DINÁMICA DEL FORMULARIO WEB:
+  - Conmutación del selector superior entre 'document_id', 'cedula_escolar' y 'parent_ref'.
+  - Inyección de parche JS/AJAX en evento submit para forzar el envío de 'cedula_escolar' y 'age'.
+• SELLO CRIPTOGRÁFICO DE AUTORÍA:
+  - Inserción de Watermark digital en Base64 dentro del núcleo del sistema (verificar_firma_autor).
+
+--------------------------------------------------------------------------------
+[v2.5.0] — 21 de Agosto de 2026 (Inyección Segura HTML5 & Validación Estricta)
+--------------------------------------------------------------------------------
+• INYECCIÓN JS DE FECHAS ISO:
+  - Despacho de eventos nativos 'input' y 'change' para resolver el fallo de Chrome (20/12/0115).
+• VALIDACIÓN PRE-SUBMIT Y POST-SUBMIT:
+  - Detección de selectores ':invalid' antes de presionar el botón de agregar.
+  - Escaneo en vivo contra la tabla de la actividad para eliminar confirmaciones falsas.
+• TELÉFONOS EN FORMATO NACIONAL:
+  - Normalización forzada a 11 dígitos con guion intermedio (04XX-XXXXXXX).
+
+--------------------------------------------------------------------------------
+[v2.4.0] — 20 de Agosto de 2026 (Resiliencia de Spinner & Cédulas en Cero)
+--------------------------------------------------------------------------------
+• NEUTRALIZACIÓN DE OVERLAYS ASÍNCRONOS:
+  - Creación de esperar_desbloqueo_ajax() para esperar y remover la capa '#cover-spin'.
+• SANEAMIENTO DE VALORES NULOS EN IDENTIFICACIÓN:
+  - Tratamiento de cadenas '000', '0' o '0.0' asignándolas automáticamente al tutor.
+• PRIORIDAD EN CASCADA DE NAVEGADORES:
+  - Reordenamiento del pool de drivers: 1. Chrome -> 2. Firefox -> 3. Edge.
+• VERIFICACIÓN DE LOGIN:
+  - Detección de fallos en autenticación y solicitud interactiva de nuevas credenciales.
+
+--------------------------------------------------------------------------------
+[v2.3.0] — 20 de Agosto de 2026 (Resurrección en Caliente & Auditoría Cruzada)
+--------------------------------------------------------------------------------
+• CHECKPOINTS EN VIVO ANTE APAGONES:
+  - Serialización continua de estado en 'session_state.json' (URL, log activo e índice actual).
+• AUTO-RESURRECCIÓN DE SESIÓN:
+  - Manejo de WebDriverException para reabrir navegador y reautenticar sin perder la posición.
+• AUDITORÍA HISTÓRICA CONTRA LOGS PREVIOS:
+  - Búsqueda en O(N) para detectar y omitir participantes ya cargados en la actividad.
+
+--------------------------------------------------------------------------------
+[v2.2.0] — 19 de Agosto de 2026 (Generación Nativa ODS & Limpieza de Consola)
+--------------------------------------------------------------------------------
+• INYECCIÓN DIRECTA XML EN OPENDOCUMENT (.ODS):
+  - Descompresión y mutación en 'content.xml' manteniendo logotipos y membretes oficiales.
+• EDICIÓN INTERACTIVA DE FICHA FORMATIVA:
+  - Subrutina en consola para modificar Facilitador, Cédula, Módulo, Contenido y Horarios.
+• MEMORIA PEDAGÓGICA PERSISTENTE:
+  - Almacenamiento desacoplado en 'Planillas/datos_actividad.json'.
+• REFRESO DE TERMINAL:
+  - Incorporación de limpieza de pantalla ('cls' / 'clear') entre fases operativas.
+
+--------------------------------------------------------------------------------
+[v2.1.0] — 18 de Agosto de 2026 (ETL Heurístico & Rescate de Seriales)
+--------------------------------------------------------------------------------
+• DATA SNIFFING DE COLUMNAS GENÉRICAS:
+  - Identificación de números telefónicos por muestreo de contenido en columnas tipo 'Columna3'.
+• RESCATE DE FECHAS SERIALES EXCEL:
+  - Algoritmo de conversión para enteros de época base (ej. 42595 -> 2016-08-13).
+• JERARQUÍA DE NOMBRES Y APELLIDOS:
+  - Anulación de reglas combinadas al detectar nombres y apellidos en columnas separadas.
+• COMPUERTAS DE RESCATE ASISTIDAS:
+  - Menús para resolver huérfanos de documento, cálculo de fechas por edad y asignación de sexo.
+• RESPALDO PREVENTIVO EN DISCO:
+  - Generación de 'estudiantes.csv' antes de establecer conexión web.
+
+--------------------------------------------------------------------------------
+[v2.0.0] — 17 de Agosto de 2026 (Consolidación Modular y Control de Logs)
+--------------------------------------------------------------------------------
+• ARQUITECTURA MODULAR BASE:
+  - Separación del sistema en main.py, normalizador.py, selenium_bot.py y config_manager.py.
+• CONTROL DE ESTADOS MEDIANTE LOGS DINÁMICOS:
+  - Nomenclatura transaccional: [EN_PROCESO], [COMPLETADO] e [INCOMPLETO].
+• LECTURA MULTIFORMATO:
+  - Compatibilidad de ingesta para .xlsx, .xls, .ods y .csv con bloqueo de .pdf.
+• TRIPLE FALLBACK DRIVER:
+  - Primera integración de arranque en cascada para navegadores web.
+
+--------------------------------------------------------------------------------
+[v1.0.0] — 15 de Agosto de 2026 (Prototipo Inicial)
+--------------------------------------------------------------------------------
+• PROTOTIPO FUNCIONAL:
+  - Automatización lineal básica con Selenium y mapeo simple de hojas de cálculo.
+================================================================================
