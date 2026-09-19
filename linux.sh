@@ -1,48 +1,64 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
 
-# Lectura dinámica de la versión desde la fuente única modulos/version.py
-JSBOT_VER=$(python3 -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2>/dev/null)
-[ -z "$JSBOT_VER" ] && JSBOT_VER="4.4.0"
-
-echo "========================================================"
-echo "  JsBOT v${JSBOT_VER} — Entorno Canaima GNU/Linux (PyPI Fast)"
-echo "========================================================"
-
-# 1. Asegurar binarios críticos del sistema operativo
+# -----------------------------------------------------------------------------
+# 1. VERIFICACIÓN E INSTALACIÓN PRIORITARIA DE PYTHON Y DEPENDENCIAS DEL SISTEMA
+# -----------------------------------------------------------------------------
 PAQUETES_BASE=()
-for pkg in python3-tk python3-pip; do
+for pkg in python3 python3-pip python3-tk python3-venv; do
     if ! dpkg -s "$pkg" &> /dev/null; then
         PAQUETES_BASE+=("$pkg")
     fi
 done
 
 if [ ${#PAQUETES_BASE[@]} -ne 0 ]; then
-    echo "🔍 Instalando soporte gráfico y gestor base: ${PAQUETES_BASE[*]}"
+    echo "🔍 Instalando soporte Python y paquetes base del sistema: ${PAQUETES_BASE[*]}"
     if command -v pkexec &> /dev/null; then
-        pkexec apt-get install -y "${PAQUETES_BASE[@]}"
+        pkexec apt-get update && pkexec apt-get install -y "${PAQUETES_BASE[@]}"
     elif command -v sudo &> /dev/null; then
-        sudo apt-get install -y "${PAQUETES_BASE[@]}"
+        sudo apt-get update && sudo apt-get install -y "${PAQUETES_BASE[@]}"
+    else
+        echo "❌ No se encontraron permisos de administrador (pkexec/sudo) para instalar: ${PAQUETES_BASE[*]}"
+        echo "   Por favor ejecuta: sudo apt install ${PAQUETES_BASE[*]}"
+        read -p "Presiona Enter para continuar..."
     fi
 fi
 
-# 2. Instalación rápida de dependencias vía Wheels precompilados (Bypass PEP 668)
+# -----------------------------------------------------------------------------
+# 2. LECTURA DINÁMICA DE VERSIÓN
+# -----------------------------------------------------------------------------
+JSBOT_VER=$(python3 -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2>/dev/null)
+[ -z "$JSBOT_VER" ] && JSBOT_VER="4.8.0"
+
+echo "========================================================"
+echo "  JsBOT v${JSBOT_VER} — Entorno Canaima / Debian GNU/Linux"
+echo "========================================================"
+
+# -----------------------------------------------------------------------------
+# 3. VERIFICACIÓN E INSTALACIÓN DE DEPENDENCIAS PYPI
+# -----------------------------------------------------------------------------
 echo "🔍 Verificando paquetes Python del proyecto..."
-if ! python3 -c "import pandas, selenium, PIL, openpyxl, customtkinter, InquirerPy, rich" &> /dev/null; then
-    echo "📦 Descargando librerías precompiladas desde PyPI (esto tomará pocos segundos)..."
+if ! python3 -c "import pandas, playwright, python_calamine, PIL, openpyxl, customtkinter, InquirerPy, rich, bs4, requests" &> /dev/null; then
+    echo "📦 Descargando librerías requeridas desde PyPI..."
     python3 -m pip install -r config/requirements.txt --break-system-packages
     if [ $? -ne 0 ]; then
         echo "❌ Error durante la instalación de paquetes PyPI."
         read -p "Presiona Enter para salir..."
         exit 1
     fi
+    echo "🔍 Asegurando navegador Playwright (Chromium)..."
+    python3 -m playwright install chromium 2>/dev/null || true
 fi
 
-# 3. Forzar estabilidad en servidor gráfico X11
+# -----------------------------------------------------------------------------
+# 4. FORZAR ESTABILIDAD EN SERVIDOR GRÁFICO X11
+# -----------------------------------------------------------------------------
 export LIBGL_ALWAYS_SOFTWARE=1
 clear
 
-# 4. Lanzamiento de JsBOT con fallback bimodal automático
+# -----------------------------------------------------------------------------
+# 5. LANZAMIENTO DE JSBOT CON FALLBACK BIMODAL AUTOMÁTICO
+# -----------------------------------------------------------------------------
 python3 main.py "$@"
 
 if [ $? -ne 0 ]; then

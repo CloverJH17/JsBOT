@@ -6,9 +6,11 @@ pandas>=2.0.0
 openpyxl>=3.1.0
 xlrd>=2.0.1
 odfpy>=1.4.1
+python-calamine>=0.2.0
 beautifulsoup4>=4.12.0
 requests>=2.31.0
 rich>=13.7.0
 InquirerPy>=0.3.4
 customtkinter>=5.2.0
 pillow>=9.5.0
+
