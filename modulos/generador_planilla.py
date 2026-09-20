@@ -74,21 +74,27 @@ def sanitizar_nombre_archivo(texto: str) -> str:
     return s[:60]
 
 def parsear_metadatos_url(url: str) -> dict:
-    """Extrae parámetros de la URL de InfoApp para poblar la cabecera del reporte."""
+    """Extrae parámetros de la URL de InfoApp o usa los metadatos institucionales de datos_actividad.json."""
+    try:
+        from modulos.config_manager import cargar_datos_actividad
+        cfg_act = cargar_datos_actividad()
+    except Exception:
+        cfg_act = {}
+
     datos = {
         'nombre_actividad': 'Actividad Formativa',
         'id_actividad': '',
-        'estado': 'Yaracuy',
-        'nombre_infocentro': 'Felix Pifano',
-        'codigo_infocentro': 'Yar23',
-        'nombre_facilitador': 'Jair Hernández',
-        'cedula_facilitador': '30.348.783',
-        'contenido': 'Formación en Tecnologías Libres',
-        'modulo': 'Comunidades de participación digital',
+        'estado': cfg_act.get('estado', 'Yaracuy'),
+        'nombre_infocentro': cfg_act.get('nombre_infocentro', 'Felix Pifano'),
+        'codigo_infocentro': cfg_act.get('codigo_infocentro', 'Yar23'),
+        'nombre_facilitador': cfg_act.get('nombre_facilitador', 'Jair Hernández'),
+        'cedula_facilitador': cfg_act.get('cedula_facilitador', '30.348.783'),
+        'contenido': cfg_act.get('contenido', 'Formación en Tecnologías Libres'),
+        'modulo': cfg_act.get('modulo', 'Comunidades de participación digital'),
         'fecha_desde': datetime.now().strftime("%d/%m/%Y"),
         'fecha_hasta': datetime.now().strftime("%d/%m/%Y"),
-        'hora_inicio': '9:00 am',
-        'hora_fin': '12:00 pm'
+        'hora_inicio': cfg_act.get('hora_inicio', '9:00 am'),
+        'hora_fin': cfg_act.get('hora_fin', '12:00 pm')
     }
 
     if not url:
@@ -542,6 +548,40 @@ def generar_planilla_pdf(participantes: list, id_actividad: str = "", url_activi
         ruta_salida = os.path.join(planillas_dir, f"Planilla_Participantes_Actividad{id_s}_{ts}.pdf")
     else:
         os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
+
+    # 1. Intento de exportación fiel desde el ODS oficial vía LibreOffice headless
+    try:
+        from modulos.verificador_entorno import detectar_suite_ofimatica
+        suite_ok, suite_ruta = detectar_suite_ofimatica()
+        if suite_ok and suite_ruta and ("soffice" in suite_ruta.lower() or "libreoffice" in suite_ruta.lower()):
+            import subprocess
+            temp_ods = os.path.splitext(ruta_salida)[0] + "_temp.ods"
+            generar_planilla_ods_odfdo(participantes, id_actividad, url_actividad, temp_ods)
+            if os.path.exists(temp_ods):
+                outdir = os.path.dirname(os.path.abspath(ruta_salida))
+                cmd = [suite_ruta, "--headless", "--convert-to", "pdf", "--outdir", outdir, temp_ods]
+                subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+                pdf_generado = os.path.splitext(temp_ods)[0] + ".pdf"
+                if os.path.exists(pdf_generado):
+                    if os.path.abspath(pdf_generado) != os.path.abspath(ruta_salida):
+                        if os.path.exists(ruta_salida):
+                            try:
+                                os.remove(ruta_salida)
+                            except Exception:
+                                pass
+                        os.rename(pdf_generado, ruta_salida)
+                    try:
+                        os.remove(temp_ods)
+                    except Exception:
+                        pass
+                    print(f"\n📊 Planilla oficial PDF (Exportación fiel LibreOffice) guardada con éxito en:\n   {ruta_salida}")
+                    return ruta_salida
+                try:
+                    os.remove(temp_ods)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
     # Generar HTML estructurado
     html_filas = ""

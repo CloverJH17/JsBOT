@@ -121,3 +121,127 @@ def captura_screenshots_activada() -> bool:
     return bool(
         cargar_settings().get("validation", {}).get("capture_screenshots_on_error", True)
     )
+
+
+# ===============================================================================
+# GESTIÓN CENTRALIZADA DE SERVICIOS (config_servicios.json)
+# ===============================================================================
+CONFIG_SERVICIOS_PATH = str(getattr(entorno, "ARCHIVO_CONFIG_SERVICIOS", os.path.join(BASE_DIR, "config", "config_servicios.json")))
+
+DEFAULTS_SERVICIOS = {
+    "catalogo_servicios": [
+        "Gestión en el Sistema de Protección Social Patria",
+        "Actividades de educación o aprendizaje",
+        "Operaciones bancarias por Internet",
+        "Interacción con organizaciones gubernamentales en general",
+        "Préstamo de espacios del Infocentro",
+        "Descarga de películas, imágenes y música, programas de televisión o videos, programas de radio o música",
+        "Interacción y producción de contenidos en redes sociales y medios digitales de comunicación",
+        "Envío o recepción de mensajes electrónicos",
+        "Lectura o descarga de periódicos, revistas en línea o libros electrónicos",
+        "Obtención de información sobre organizaciones gubernamentales en general",
+        "Obtención de información relacionada con la salud o con servicios médicos",
+        "Compra o pedido de bienes y servicios",
+        "Descarga de programas informáticos",
+        "Llamadas telefónicas a través del Protocolo de Internet",
+        "Publicación de información o de mensajes instantáneos",
+        "Registro/Actualización enmarcados en las Políticas de Gobierno",
+        "Uso o descarga de video juegos",
+        "Reunión Sede Central",
+        "Visita Sede Central"
+    ],
+    "servicio_por_defecto": "Actividades de educación o aprendizaje",
+    "infocentro": {
+        "user_id": "1325",
+        "code_info": "NRYAR24",
+        "estado_nombre": "Yaracuy",
+        "estado_id": "22",
+        "municipio_nombre": "San Felipe",
+        "municipio_id": "1",
+        "direccion": "Av. principal El Jovito, Antigua Sede Del Inan"
+    }
+}
+
+
+def cargar_config_servicios(ruta: str = None) -> dict:
+    """
+    Carga la configuración de servicios comunitarios desde config/config_servicios.json.
+    Si el archivo no existe o está dañado, devuelve los DEFAULTS_SERVICIOS de forma segura.
+    """
+    ruta = ruta or str(getattr(entorno, "ARCHIVO_CONFIG_SERVICIOS", CONFIG_SERVICIOS_PATH))
+    if os.path.exists(ruta):
+        try:
+            with open(ruta, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+            if isinstance(datos, dict) and datos.get("catalogo_servicios"):
+                return datos
+        except Exception:
+            pass
+    return dict(DEFAULTS_SERVICIOS)
+
+
+def guardar_config_servicios(datos: dict, ruta: str = None) -> bool:
+    """
+    Persiste la configuración de servicios en config/config_servicios.json de forma atómica.
+    """
+    ruta = ruta or str(getattr(entorno, "ARCHIVO_CONFIG_SERVICIOS", CONFIG_SERVICIOS_PATH))
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
+        with open(ruta, "w", encoding="utf-8") as f:
+            json.dump(datos, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"⚠️ Error al guardar config_servicios en {ruta}: {e}")
+        return False
+
+
+# ===============================================================================
+# GESTIÓN CENTRALIZADA DE FICHA FORMATIVA (datos_actividad.json)
+# ===============================================================================
+CONFIG_DATOS_ACTIVIDAD_PATH = str(getattr(entorno, "ARCHIVO_DATOS_ACTIVIDAD", os.path.join(BASE_DIR, "config", "datos_actividad.json")))
+
+DEFAULTS_DATOS_ACTIVIDAD = {
+    "estado": "Yaracuy",
+    "nombre_infocentro": "Infocentro UNEFA",
+    "codigo_infocentro": "NRYAR24",
+    "nombre_facilitador": "Jair Alejandro Hernández González",
+    "cedula_facilitador": "30.348.783",
+    "modulo": "Robótica",
+    "contenido": "Plan Vacacional",
+    "hora_inicio": "9:00 am",
+    "hora_fin": "12:00 pm"
+}
+
+
+def cargar_datos_actividad(ruta: str = None) -> dict:
+    """
+    Carga la ficha formativa y metadatos pedagógicos desde config/datos_actividad.json.
+    Si el archivo no existe o está corrupto, devuelve DEFAULTS_DATOS_ACTIVIDAD de forma segura.
+    """
+    ruta = ruta or str(getattr(entorno, "ARCHIVO_DATOS_ACTIVIDAD", CONFIG_DATOS_ACTIVIDAD_PATH))
+    if os.path.exists(ruta):
+        try:
+            with open(ruta, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+            if isinstance(datos, dict) and datos.get("nombre_facilitador"):
+                return {**DEFAULTS_DATOS_ACTIVIDAD, **datos}
+        except Exception:
+            pass
+    return dict(DEFAULTS_DATOS_ACTIVIDAD)
+
+
+def guardar_datos_actividad(datos: dict, ruta: str = None) -> bool:
+    """
+    Persiste los metadatos de la ficha formativa en config/datos_actividad.json.
+    """
+    ruta = ruta or str(getattr(entorno, "ARCHIVO_DATOS_ACTIVIDAD", CONFIG_DATOS_ACTIVIDAD_PATH))
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
+        fusionado = {**DEFAULTS_DATOS_ACTIVIDAD, **datos}
+        with open(ruta, "w", encoding="utf-8") as f:
+            json.dump(fusionado, f, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"⚠️ Error al guardar datos_actividad en {ruta}: {e}")
+        return False
+

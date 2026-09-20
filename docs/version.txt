@@ -1,9 +1,44 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 17 de Septiembre de 2026
+Fecha Última   : 19 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.10.0] — 19 de Septiembre de 2026 (Generación Directa de Planillas Multiformato, Ficha Formativa GUI y Selector Dinámico de Servicios)
+--------------------------------------------------------------------------------
+• GENERACIÓN DIRECTA DE PLANILLAS MULTIFORMATO (GUI):
+  - Ingesta y generación directa de planillas oficiales (.ods, .xlsx, .pdf) en la sección de Planillas sin requerir registro web ni automatización RPA.
+  - Diseño homogéneo replicado de Formación: contenedor drop, selección vía explorador (.xlsx, .ods, .csv, .txt), chip de archivo con descarte rápido [✕] y reseteo completo de estado.
+  - Tarjeta de Pre-vuelo ETL en tiempo real: conteo de registros válidos, desglose por cédulas SAIME, escolares, menores representados y duplicados depurados, con acceso a auditoría tabular interactiva ("👁 Ver Tabla de Datos").
+  - Menú desplegable oficial de formatos: OpenDocument (.ods), Microsoft Excel (.xlsx) y Documento PDF (.pdf).
+  - Integración de LibreOffice headless (soffice --headless --convert-to pdf) para exportar directamente desde la plantilla base oficial (.ods) preservando el 100% de la fidelidad visual, márgenes y tipografía institucional, con fallback automático a WeasyPrint/HTML.
+• MODAL DE EDICIÓN DE FICHA FORMATIVA (datos_actividad.json):
+  - Incorporación del botón "✏️ Ficha Formativa" en la cabecera del módulo de Planillas, equivalente gráfico al cuestionario interactivo de la CLI.
+  - Ventana modal flotante con 8 campos editables: Facilitador, Cédula, Infocentro, Código, Módulo, Contenido, Hora Inicio y Hora Fin.
+  - Persistencia segura y atómica gestionada en modulos/config_manager.py e inyección automática en generador_planilla.py al parsear metadatos en frío o sin parámetros de URL.
+• SELECTOR DINÁMICO DE SERVICIOS COMUNITARIOS:
+  - Reemplazo del botón toggle binario ("Trámite Comunitario / Asesoría") por un CTkOptionMenu dinámico que despliega la lista oficial de 18 servicios.
+  - Valor predeterminado actualizado al estándar de educación institucional: "Actividades de educación o aprendizaje".
+  - Centralización de la configuración en modulos/config_manager.py (cargar_config_servicios / guardar_config_servicios) y modulos/entorno.py (ARCHIVO_CONFIG_SERVICIOS), desacoplando modulos/gestor_sesion.py y preservando retrocompatibilidad total.
+• AUDITORÍA Y CALIDAD CERTIFICADA:
+  - Creación de suites de pruebas específicas: tests/test_servicios_selector_actividad.py y tests/test_generacion_directa_planillas_gui.py.
+  - Regresión total del sistema verificada: 404 pruebas ejecutadas exitosamente (0 errores, 0 fallos).
+
+--------------------------------------------------------------------------------
+[v4.9.0] — 19 de Septiembre de 2026 (Lanzadores Autónomos Multiplataforma, Autoinstalación de Python 3.12 y Consolidación de Dependencias)
+--------------------------------------------------------------------------------
+• LANZADORES AUTÓNOMOS MULTIPLATAFORMA (WINDOWS & LINUX):
+  - windows.bat: Detección inteligente de Python con expansión retardada (!errorlevel!), instalación silenciosa y síncrona de Python 3.12 (64-bit) vía curl y Start-Process -Wait, e inyección dinámica al PATH de la sesión activa.
+  - linux.sh: Verificación de paquetes base del sistema con pkexec/sudo (python3, python3-pip, python3-tk, python3-venv), inyección de LIBGL_ALWAYS_SOFTWARE=1 para compatibilidad gráfica Canaima y conmutación automática con fallback bimodal a modo CLI (--cli).
+  - scripts/instalar.sh: Desplegador y clonador autónomo de repositorio actualizado a v4.9.0.
+• CONSOLIDACIÓN TOTAL DE DEPENDENCIAS Y BINARIOS PLAYWRIGHT:
+  - Inclusión de loguru, odfdo y CTkMessagebox en config/requirements.txt y verificación en tiempo de ejecución.
+  - Verificación y descarga desatendida de binarios Chromium para Playwright (Chrome for Testing v1243).
+• BLINDAJE ANTE POLÍTICAS DE SEGURIDAD Y FORMATO CRLF:
+  - Saneamiento de saltos de línea Windows (CRLF) y codificación UTF-8 sin BOM para prevenir descalibraciones en cmd.exe.
+  - Retención visual de consola (pause) ante advertencias para prevenir cierres abruptos de ventana.
 
 --------------------------------------------------------------------------------
 [v4.8.0] — 17 de Septiembre de 2026 (Ecosistema de Auditoría Ultra Rápida, Verificación Post-Carga y Generador Oficial)

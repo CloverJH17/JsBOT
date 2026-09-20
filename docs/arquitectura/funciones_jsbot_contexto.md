@@ -1,7 +1,7 @@
-# JSBOT v4.8.0 — Catálogo Integral y Contexto Técnico para IA
+# JSBOT v4.9.0 — Catálogo Integral y Contexto Técnico para IA
 
 > **Documento de Contexto de Arquitectura, Flujos de Usuario y Motor Backend**  
-> **Versión Actual**: `v4.8.0`  
+> **Versión Actual**: `v4.9.0`  
 > **Entorno de Ejecución**: Windows / Canaima GNU/Linux (Python 3.10+)  
 > **Frameworks**: CustomTkinter, Playwright, Requests / Session HTTP, Odfdo, Openpyxl, BeautifulSoup4, SQLite3.
 

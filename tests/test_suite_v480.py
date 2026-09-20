@@ -26,21 +26,21 @@ from modulos.generador_planilla import generar_planilla_desde_actividad_infoapp
 class TestSuiteV480(unittest.TestCase):
 
     def test_01_consistencia_version_v480(self):
-        """Verifica que la versión 4.8.0 esté perfectamente sincronizada."""
-        self.assertEqual(ver.__version__, "4.8.0")
-        self.assertEqual(ver.ETIQUETA_VERSION, "v4.8.0")
+        """Verifica que la versión 4.10.0 esté perfectamente sincronizada."""
+        self.assertEqual(ver.__version__, "4.10.0")
+        self.assertEqual(ver.ETIQUETA_VERSION, "v4.10.0")
         
         # settings.json
         settings_path = str(entorno.ARCHIVO_SETTINGS)
         with open(settings_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        self.assertEqual(cfg.get("app", {}).get("version"), "4.8.0")
+        self.assertEqual(cfg.get("app", {}).get("version"), "4.10.0")
         
         # version.txt
         version_txt_path = Path(entorno.RAIZ_PROYECTO) / "docs" / "version.txt"
         with open(version_txt_path, "r", encoding="utf-8") as f:
             txt = f.read()
-        self.assertIn("[v4.8.0]", txt)
+        self.assertIn("[v4.10.0]", txt)
 
     @patch("requests.Session.get")
     def test_02_obtener_participantes_existentes_actividad(self, mock_get):

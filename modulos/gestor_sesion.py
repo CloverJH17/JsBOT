@@ -641,54 +641,17 @@ def generar_reporte_auditoria_excel(config: dict, exitosos: list, fallidos: list
 # CHECKPOINTS Y AUDITORÍA DE SERVICIOS
 # =============================================================================
 
-def cargar_config_servicios() -> dict:
-    """Carga configuración de servicios desde config/config_servicios.json."""
-    if os.path.exists(CONFIG_SERV_PATH):
-        try:
-            with open(CONFIG_SERV_PATH, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "catalogo_servicios": [
-            "Gestión en el Sistema de Protección Social Patria",
-            "Actividades de educación o aprendizaje",
-            "Operaciones bancarias por Internet",
-            "Interacción con organizaciones gubernamentales en general",
-            "Préstamo de espacios del Infocentro",
-            "Descarga de películas, imágenes y música, programas de televisión o videos, programas de radio o música",
-            "Interacción y producción de contenidos en redes sociales y medios digitales de comunicación",
-            "Envío o recepción de mensajes electrónicos",
-            "Lectura o descarga de periódicos, revistas en línea o libros electrónicos",
-            "Obtención de información sobre organizaciones gubernamentales en general",
-            "Obtención de información relacionada con la salud o con servicios médicos",
-            "Compra o pedido de bienes y servicios",
-            "Descarga de programas informáticos",
-            "Llamadas telefónicas a través del Protocolo de Internet",
-            "Publicación de información o de mensajes instantáneos",
-            "Registro/Actualización enmarcados en las Políticas de Gobierno",
-            "Uso o descarga de video juegos"
-        ],
-        "servicio_por_defecto": "Gestión en el Sistema de Protección Social Patria",
-        "infocentro": {
-            "user_id": "1325",
-            "code_info": "NRYAR24",
-            "estado_nombre": "Yaracuy",
-            "estado_id": "22",
-            "municipio_nombre": "San Felipe",
-            "municipio_id": "1",
-            "direccion": "Av. principal El Jovito, Antigua Sede Del Inan"
-        }
-    }
+def cargar_config_servicios(ruta: str = None) -> dict:
+    """Carga configuración de servicios delegando en config_manager."""
+    from modulos.config_manager import cargar_config_servicios as _cfg_cargar
+    ruta_efectiva = ruta or CONFIG_SERV_PATH
+    return _cfg_cargar(ruta=ruta_efectiva)
 
-def guardar_config_servicios(cfg: dict):
-    """Persiste configuración de servicios."""
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(CONFIG_SERV_PATH, 'w', encoding='utf-8') as f:
-            json.dump(cfg, f, indent=4, ensure_ascii=False)
-    except Exception as e:
-        print(f"⚠️ Error al guardar config de servicios: {e}")
+def guardar_config_servicios(cfg: dict, ruta: str = None):
+    """Persiste configuración de servicios delegando en config_manager."""
+    from modulos.config_manager import guardar_config_servicios as _cfg_guardar
+    ruta_efectiva = ruta or CONFIG_SERV_PATH
+    return _cfg_guardar(cfg, ruta=ruta_efectiva)
 
 def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, personas: list, indice_ultimo: int):
     """Guarda checkpoint de servicios de forma atómica y en SQLite."""

@@ -10,108 +10,114 @@ echo ========================================================
 echo.
 
 REM -----------------------------------------------------------------------------
-REM 1. DETECCIÓN E INSTALACIÓN PRIORITARIA DE PYTHON
+REM 1. DETECCION E INSTALACION DE PYTHON
 REM -----------------------------------------------------------------------------
-echo [INFO] Verificando intérprete de Python...
+echo [INFO] Verificando interprete de Python...
+set "PYTHON_CMD="
 
-set PYTHON_CMD=
-
-REM Probar ejecución real de comandos para evitar alias rotos de la Tienda de Windows
 py -3 -c "import sys" >nul 2>nul
-if %errorlevel% equ 0 (
+if not errorlevel 1 (
     set "PYTHON_CMD=py -3"
-) else (
-    python -c "import sys" >nul 2>nul
-    if %errorlevel% equ 0 (
-        set "PYTHON_CMD=python"
-    ) else (
-        py -c "import sys" >nul 2>nul
-        if %errorlevel% equ 0 (
-            set "PYTHON_CMD=py"
-        ) else (
-            python3 -c "import sys" >nul 2>nul
-            if %errorlevel% equ 0 (
-                set "PYTHON_CMD=python3"
-            )
-        )
-    )
+    goto :python_found
 )
 
-REM Si no está en PATH, buscar rutas estándar de instalación
-if "%PYTHON_CMD%"=="" (
-    for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "%ProgramFiles(x86)%\Python3*") do (
-        if exist "%%D\python.exe" (
-            "%%D\python.exe" -c "import sys" >nul 2>nul
-            if !errorlevel! equ 0 (
-                set "PYTHON_CMD=%%D\python.exe"
-                set "PATH=%%D;%%D\Scripts;!PATH!"
-            )
-        )
-    )
+python -c "import sys" >nul 2>nul
+if not errorlevel 1 (
+    set "PYTHON_CMD=python"
+    goto :python_found
 )
 
-REM Si Python NO está instalado, proceder con la instalación automática
-if "%PYTHON_CMD%"=="" (
-    echo.
-    echo ========================================================
-    echo  [AVISO] Python no fue detectado en su sistema.
-    echo  Iniciando instalación automática de Python 3...
-    echo ========================================================
-    echo.
+py -c "import sys" >nul 2>nul
+if not errorlevel 1 (
+    set "PYTHON_CMD=py"
+    goto :python_found
+)
 
-    where winget >nul 2>nul
-    if %errorlevel% equ 0 (
-        echo [INFO] Descargando e instalando Python oficial mediante Windows Package Manager (winget)...
-        winget install --id Python.Python.3.12 --exact --accept-package-agreements --accept-source-agreements --scope user
-    ) else (
-        echo [INFO] Descargando instalador oficial de Python para Windows...
-        powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe', '$env:TEMP\python_installer.exe')"
-        if exist "%TEMP%\python_installer.exe" (
-            echo [INFO] Ejecutando instalación silenciosa de Python con soporte PATH...
-            "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1
-            del "%TEMP%\python_installer.exe" 2>nul
-        )
-    )
+python3 -c "import sys" >nul 2>nul
+if not errorlevel 1 (
+    set "PYTHON_CMD=python3"
+    goto :python_found
+)
 
-    REM Refrescar búsqueda tras la instalación
-    for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3*") do (
-        if exist "%%D\python.exe" (
+for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "%ProgramFiles(x86)%\Python3*") do (
+    if exist "%%D\python.exe" (
+        "%%D\python.exe" -c "import sys" >nul 2>nul
+        if not errorlevel 1 (
             set "PYTHON_CMD=%%D\python.exe"
             set "PATH=%%D;%%D\Scripts;!PATH!"
+            goto :python_found
         )
-    )
-
-    if "%PYTHON_CMD%"=="" (
-        py -3 -c "import sys" >nul 2>nul && set "PYTHON_CMD=py -3"
-        python -c "import sys" >nul 2>nul && set "PYTHON_CMD=python"
     )
 )
 
-REM Verificación final de Python
+echo.
+echo ========================================================
+echo  [AVISO] Python no fue detectado en su sistema.
+echo  Iniciando instalacion automatica de Python 3.12 64-bit...
+echo ========================================================
+echo.
+
+where winget >nul 2>nul
+if not errorlevel 1 (
+    echo [INFO] Instalando Python mediante winget...
+    winget install --id Python.Python.3.12 --exact --accept-package-agreements --accept-source-agreements --scope user
+) else (
+    echo [INFO] Descargando instalador oficial de Python para Windows...
+    where curl >nul 2>nul
+    if not errorlevel 1 (
+        curl.exe -L -o "%TEMP%\python_installer.exe" "https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe"
+    ) else (
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object System.Net.WebClient).DownloadFile('https://www.python.org/ftp/python/3.12.8/python-3.12.8-amd64.exe', '$env:TEMP\python_installer.exe')"
+    )
+    if exist "%TEMP%\python_installer.exe" (
+        echo [INFO] Instalando Python en segundo plano, por favor espere...
+        start /wait "" "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_pip=1
+        del "%TEMP%\python_installer.exe" 2>nul
+    )
+)
+
+for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3*" "%ProgramFiles(x86)%\Python3*") do (
+    if exist "%%D\python.exe" (
+        "%%D\python.exe" -c "import sys" >nul 2>nul
+        if not errorlevel 1 (
+            set "PYTHON_CMD=%%D\python.exe"
+            set "PATH=%%D;%%D\Scripts;!PATH!"
+            goto :python_found
+        )
+    )
+)
+
+py -3 -c "import sys" >nul 2>nul && set "PYTHON_CMD=py -3" && goto :python_found
+python -c "import sys" >nul 2>nul && set "PYTHON_CMD=python" && goto :python_found
+
 if "%PYTHON_CMD%"=="" (
     echo.
     echo ========================================================
-    echo  [X] ERROR: No se pudo completar la instalación de Python.
+    echo  [X] ERROR: No se pudo completar la instalacion automatica de Python.
     echo ========================================================
-    echo  Por favor instálalo manualmente desde: https://www.python.org/downloads/
-    echo  IMPORTANTE: Marca la casilla "Add Python to PATH" al instalar.
+    echo  Por favor instalalo manualmente desde: https://www.python.org/downloads/
+    echo  IMPORTANTE: Marca la casilla Add Python to PATH al instalar.
     echo ========================================================
     echo.
     pause
     exit /b 1
 )
 
+:python_found
+echo [OK] Python detectado: %PYTHON_CMD%
+echo.
+
 REM -----------------------------------------------------------------------------
-REM 2. VERIFICACIÓN DE PIP
+REM 2. VERIFICACION DE PIP
 REM -----------------------------------------------------------------------------
 %PYTHON_CMD% -m pip --version >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [ALERTA] pip no está disponible. Activando ensurepip...
+if errorlevel 1 (
+    echo [ALERTA] pip no esta disponible. Activando ensurepip...
     %PYTHON_CMD% -m ensurepip --default-pip
 )
 
 REM -----------------------------------------------------------------------------
-REM 3. LECTURA DINÁMICA DE VERSIÓN
+REM 3. LECTURA DINAMICA DE VERSION
 REM -----------------------------------------------------------------------------
 set JSBOT_VER=4.8.0
 for /f "delims=" %%V in ('%PYTHON_CMD% -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
@@ -122,29 +128,37 @@ echo ========================================================
 echo.
 
 REM -----------------------------------------------------------------------------
-REM 4. VERIFICACIÓN E INSTALACIÓN DE DEPENDENCIAS
+REM 4. VERIFICACION E INSTALACION DE DEPENDENCIAS
 REM -----------------------------------------------------------------------------
-%PYTHON_CMD% -c "import pandas, customtkinter, playwright, python_calamine, PIL, bs4, requests, rich, openpyxl, xlrd, odf" >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [INFO] Configurando dependencias del sistema por primera vez...
-    %PYTHON_CMD% -m pip install -r config\requirements.txt
-    if %errorlevel% neq 0 (
-        echo.
-        echo [X] Error al instalar dependencias. Revisa tu conexión a Internet.
-        pause
-        exit /b 1
-    )
-    echo [INFO] Verificando binarios del navegador Playwright (Chromium)...
+echo [INFO] Verificando dependencias del sistema...
+%PYTHON_CMD% -c "import pandas, customtkinter, CTkMessagebox, playwright, python_calamine, PIL, bs4, requests, rich, InquirerPy, openpyxl, xlrd, odf, odfdo, loguru" >nul 2>nul
+if not errorlevel 1 goto :check_playwright_browser
+
+echo [INFO] Configurando dependencias del sistema por primera vez...
+%PYTHON_CMD% -m pip install -r config\requirements.txt
+if errorlevel 1 (
+    echo.
+    echo [X] Error al instalar dependencias. Revisa tu conexion a Internet.
+    pause
+    exit /b 1
+)
+
+:check_playwright_browser
+REM Verificar si los binarios de Chromium para Playwright estan disponibles
+%PYTHON_CMD% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
+if errorlevel 1 (
+    echo [INFO] Descargando binarios del navegador Playwright Chromium...
     %PYTHON_CMD% -m playwright install chromium
 )
 
+:deps_ready
 REM -----------------------------------------------------------------------------
-REM 5. EJECUCIÓN DE JSBOT
+REM 5. EJECUCION DE JSBOT
 REM -----------------------------------------------------------------------------
-cls
+echo [INFO] Iniciando JsBOT...
 %PYTHON_CMD% main.py %*
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo.
-    echo [AVISO] La aplicación finalizó con código de error.
+    echo [AVISO] La aplicacion finalizo con codigo de advertencia o error.
     pause
 )

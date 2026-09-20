@@ -95,8 +95,8 @@ class TestReestructuracionArquitectura(unittest.TestCase):
         self.assertFalse((raiz / "setup.py").exists(), "setup.py no debe estar en la raíz")
 
         # 3. La versión debe ser única y centralizada en modulos/version.py
-        self.assertEqual(version.__version__, "4.8.0")
-        self.assertEqual(version.ETIQUETA_VERSION, "v4.8.0")
+        self.assertEqual(version.__version__, "4.10.0")
+        self.assertEqual(version.ETIQUETA_VERSION, "v4.10.0")
         
         # 4. Verificador de entorno debe resolver directamente config/requirements.txt
         self.assertTrue(os.path.exists(verificador_entorno.REQUIREMENTS_FILE))

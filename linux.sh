@@ -38,7 +38,7 @@ echo "========================================================"
 # 3. VERIFICACIÓN E INSTALACIÓN DE DEPENDENCIAS PYPI
 # -----------------------------------------------------------------------------
 echo "🔍 Verificando paquetes Python del proyecto..."
-if ! python3 -c "import pandas, playwright, python_calamine, PIL, openpyxl, customtkinter, InquirerPy, rich, bs4, requests" &> /dev/null; then
+if ! python3 -c "import pandas, customtkinter, CTkMessagebox, playwright, python_calamine, PIL, openpyxl, xlrd, odf, odfdo, InquirerPy, rich, bs4, requests, loguru" &> /dev/null; then
     echo "📦 Descargando librerías requeridas desde PyPI..."
     python3 -m pip install -r config/requirements.txt --break-system-packages
     if [ $? -ne 0 ]; then

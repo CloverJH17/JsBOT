@@ -27,6 +27,7 @@ import queue
 import webbrowser
 import configparser
 import unicodedata
+import calendar
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Union
@@ -97,7 +98,8 @@ try:
         procesar_archivo_participantes,
         procesar_archivo_texto,
         deduplicar_participantes,
-        abrir_archivo_asistido
+        abrir_archivo_asistido,
+        limpiar_fecha
     )
     from modulos.verificador_entorno import (
         detectar_sistema_operativo,
@@ -236,6 +238,12 @@ class JsBotGUI(ctk.CTk):
         self.archivo_seleccionado_servicios = tk.StringVar(value="Ningún archivo seleccionado")
         self.var_modo_visible_servicios = tk.BooleanVar(value=True)
         self.var_registro_tramite_servicios = tk.BooleanVar(value=True)
+
+        # Variables Tkinter para Planillas
+        self.archivo_seleccionado_planillas = tk.StringVar(value="Ningún archivo seleccionado")
+        self.participantes_cargados_planillas = []
+        self.datos_normalizados_planillas = []
+        self.reporte_deduplicacion_planillas = None
 
         # Variables de Credenciales InfoApp (Persistidas en config/config.ini)
         u_init, c_init = obtener_credenciales() if MODULOS_DISPONIBLES else ("", "")
@@ -1804,7 +1812,93 @@ class JsBotGUI(ctk.CTk):
         )
         btn_pegar.pack(side="right")
 
-        # Opciones con clarificación de trámite
+        # Fecha del Servicio InfoApp
+        self.fecha_container_servicios = ctk.CTkFrame(frame, fg_color="transparent")
+        self.fecha_container_servicios.pack(fill="x", padx=16, pady=(0, 8))
+
+        lbl_fecha_srv = ctk.CTkLabel(
+            self.fecha_container_servicios,
+            text="Fecha del Servicio a Asentar (AAAA-MM-DD):",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_fecha_srv.pack(anchor="w", pady=(0, 3))
+
+        fecha_input_row = ctk.CTkFrame(self.fecha_container_servicios, fg_color="transparent")
+        fecha_input_row.pack(fill="x")
+
+        hoy_str = datetime.now().strftime("%Y-%m-%d")
+        self.entry_fecha_servicios = ctk.CTkEntry(
+            fecha_input_row,
+            placeholder_text="AAAA-MM-DD (ej: 2026-03-15)",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_fecha_servicios.insert(0, hoy_str)
+        self.entry_fecha_servicios.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        btn_cal_srv = ctk.CTkButton(
+            fecha_input_row,
+            text="📅 Calendario",
+            width=100,
+            height=34,
+            fg_color="#3B8ED0",
+            hover_color="#1F6AA5",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=lambda: self._mostrar_selector_fecha(self.entry_fecha_servicios)
+        )
+        btn_cal_srv.pack(side="left", padx=(0, 8))
+
+        btn_hoy_srv = ctk.CTkButton(
+            fecha_input_row,
+            text="Hoy",
+            width=60,
+            height=34,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            font=ctk.CTkFont(size=11),
+            command=lambda: self._establecer_fecha_hoy(self.entry_fecha_servicios)
+        )
+        btn_hoy_srv.pack(side="right")
+
+        # Selector de Tipo de Actividad / Servicio InfoApp
+        self.tipo_container_servicios = ctk.CTkFrame(frame, fg_color="transparent")
+        self.tipo_container_servicios.pack(fill="x", padx=16, pady=(0, 8))
+
+        lbl_tipo_srv = ctk.CTkLabel(
+            self.tipo_container_servicios,
+            text="Tipo de Actividad / Servicio a Registrar en InfoApp:",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_tipo_srv.pack(anchor="w", pady=(0, 3))
+
+        cfg_serv = cargar_config_servicios() if MODULOS_DISPONIBLES else {}
+        catalogo_opciones = list(cfg_serv.get("catalogo_servicios", []))
+        if not catalogo_opciones:
+            catalogo_opciones = ["Actividades de educación o aprendizaje"]
+
+        def_servicio = cfg_serv.get("servicio_por_defecto", "Actividades de educación o aprendizaje")
+        if def_servicio not in catalogo_opciones:
+            def_servicio = catalogo_opciones[0]
+
+        self.menu_tipo_servicio = ctk.CTkOptionMenu(
+            self.tipo_container_servicios,
+            values=catalogo_opciones,
+            font=ctk.CTkFont(size=11),
+            dropdown_font=ctk.CTkFont(size=11),
+            dynamic_resizing=False,
+            height=34,
+            fg_color="#2B2B36",
+            button_color="#3A3A4A",
+            button_hover_color="#4B4B5E"
+        )
+        self.menu_tipo_servicio.set(def_servicio)
+        self.menu_tipo_servicio.pack(fill="x")
+
+        # Opciones
         opts_row = ctk.CTkFrame(frame, fg_color="transparent")
         opts_row.pack(fill="x", padx=16, pady=(0, 10))
 
@@ -1815,22 +1909,6 @@ class JsBotGUI(ctk.CTk):
             font=ctk.CTkFont(size=11)
         )
         chk_vis.pack(anchor="w", pady=(0, 4))
-
-        chk_tramite = ctk.CTkCheckBox(
-            opts_row,
-            text="Tipo de Atención: Trámite Comunitario / Asesoría (Desmarcado = Uso libre de equipo)",
-            variable=self.var_registro_tramite_servicios,
-            font=ctk.CTkFont(size=11)
-        )
-        chk_tramite.pack(anchor="w", pady=(0, 2))
-
-        lbl_aclaratoria = ctk.CTkLabel(
-            opts_row,
-            text="ℹ Marca esta opción si el usuario requirió apoyo en trámites del Estado (SAIME, Patria, CNE, etc.)",
-            font=ctk.CTkFont(size=10),
-            text_color="#8E8E98"
-        )
-        lbl_aclaratoria.pack(anchor="w", padx=(26, 0), pady=(0, 6))
 
         # Botón de Acción Servicios
         action_row = ctk.CTkFrame(frame, fg_color="transparent")
@@ -1850,14 +1928,14 @@ class JsBotGUI(ctk.CTk):
         return frame
 
     # -------------------------------------------------------------------------
-    # D. VISTA 4: REPORTES / ODS
+    # D. VISTA 4: PLANILLAS / ODS (GENERACIÓN DIRECTA Y UTILIDADES)
     # -------------------------------------------------------------------------
     def _crear_vista_reportes(self, padre) -> ctk.CTkFrame:
         frame = ctk.CTkFrame(padre, corner_radius=12, fg_color="#1E1E28")
         frame.grid_columnconfigure(0, weight=1)
 
         header = ctk.CTkFrame(frame, fg_color="transparent")
-        header.pack(fill="x", padx=16, pady=(12, 8))
+        header.pack(fill="x", padx=16, pady=(12, 6))
         lbl_title = self._crear_label_con_icono(
             header,
             text="Gestión de Planillas Oficiales y Reportes ODS",
@@ -1867,45 +1945,205 @@ class JsBotGUI(ctk.CTk):
         )
         lbl_title.pack(side="left")
 
-        info_card = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
-        info_card.pack(fill="x", padx=16, pady=(0, 12))
+        # 1. Ingesta con Chip de Descarte (Estilo Formación)
+        drop_frame_planillas = ctk.CTkFrame(frame, corner_radius=10, fg_color="#161620", border_width=2, border_color="#1F538D")
+        drop_frame_planillas.pack(fill="x", padx=16, pady=(4, 8))
 
-        lbl_desc = ctk.CTkLabel(
-            info_card,
-            text=(
-                "JsBOT genera planillas oficiales en formato OpenDocument (.ODS) compatibles con LibreOffice y Excel.\n"
-                "Inyecta automáticamente membretes, metadatos extraídos de InfoApp y listas normalizadas de participantes."
-            ),
-            font=ctk.CTkFont(size=11),
-            text_color="#C0C0C8",
-            justify="left"
+        drop_inner_p = ctk.CTkFrame(drop_frame_planillas, fg_color="transparent")
+        drop_inner_p.pack(fill="x", padx=12, pady=8)
+
+        self.btn_examinar_planillas = ctk.CTkButton(
+            drop_inner_p,
+            text="Examinar archivo (.xlsx, .ods, .csv)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=self._examinar_archivo_planillas
         )
-        lbl_desc.pack(anchor="w", padx=12, pady=10)
+        self.btn_examinar_planillas.pack(side="left", padx=(0, 12))
 
-        # Acciones directas
-        actions_grid = ctk.CTkFrame(frame, fg_color="transparent")
-        actions_grid.pack(fill="x", padx=16, pady=(0, 12))
+        self.chip_frame_planillas = ctk.CTkFrame(drop_inner_p, fg_color="#20202E", corner_radius=6, border_width=1, border_color="#2D2D42")
+        self.chip_frame_planillas.pack(side="left", fill="x", expand=True)
+
+        self.lbl_archivo_planillas = ctk.CTkLabel(
+            self.chip_frame_planillas,
+            textvariable=self.archivo_seleccionado_planillas,
+            font=ctk.CTkFont(size=11),
+            text_color="#8E8E98",
+            anchor="w"
+        )
+        self.lbl_archivo_planillas.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+
+        self.btn_descartar_planillas = ctk.CTkButton(
+            self.chip_frame_planillas,
+            text="✕",
+            width=22,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#C0392B",
+            hover_color="#962D22",
+            command=self._descartar_archivo_planillas
+        )
+
+        # 1.5 Tarjeta de Pre-vuelo (Resumen Inmediato ETL - Inicialmente oculta)
+        self.card_prevuelo_planillas = ctk.CTkFrame(
+            frame,
+            corner_radius=10,
+            fg_color="#161620",
+            border_width=1,
+            border_color="#292938"
+        )
+
+        card_inner_p = ctk.CTkFrame(self.card_prevuelo_planillas, fg_color="transparent")
+        card_inner_p.pack(fill="x", padx=14, pady=10)
+
+        prevuelo_left_p = ctk.CTkFrame(card_inner_p, fg_color="transparent")
+        prevuelo_left_p.pack(side="left", fill="x", expand=True)
+
+        top_met_p = ctk.CTkFrame(prevuelo_left_p, fg_color="transparent")
+        top_met_p.pack(anchor="w", fill="x")
+
+        self.lbl_prevuelo_planillas_total = ctk.CTkLabel(
+            top_met_p,
+            text="Total: 0 participantes",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#3B8ED0"
+        )
+        self.lbl_prevuelo_planillas_total.pack(side="left", padx=(0, 12))
+
+        self.lbl_prevuelo_planillas_estado = ctk.CTkLabel(
+            top_met_p,
+            text="● Estructura Válida (0 inconsistencias)",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#30D158"
+        )
+        self.lbl_prevuelo_planillas_estado.pack(side="left")
+
+        self.lbl_prevuelo_planillas_desglose = ctk.CTkLabel(
+            prevuelo_left_p,
+            text="0 Cedulados  |  0 Escolares  |  0 Menores S/C",
+            font=ctk.CTkFont(size=11),
+            text_color="#A1A1AA"
+        )
+        self.lbl_prevuelo_planillas_desglose.pack(anchor="w", pady=(2, 0))
+
+        self.btn_tabla_planillas = ctk.CTkButton(
+            card_inner_p,
+            text="👁 Ver Tabla de Datos",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=lambda: self._abrir_tabla_previsualizacion("Planillas")
+        )
+        self.btn_tabla_planillas.pack(side="right", padx=(10, 0))
+
+        # 2. Contenedor de Opciones / Metadatos de la Planilla
+        self.container_opciones_planillas = ctk.CTkFrame(frame, fg_color="transparent")
+        self.container_opciones_planillas.pack(fill="x", padx=16, pady=(0, 8))
+
+        lbl_id_url = ctk.CTkLabel(
+            self.container_opciones_planillas,
+            text="ID de Actividad o URL InfoApp (Opcional - Enter para institucional):",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#D1D1D6"
+        )
+        lbl_id_url.pack(anchor="w", pady=(0, 3))
+
+        row_cfg_planillas = ctk.CTkFrame(self.container_opciones_planillas, fg_color="transparent")
+        row_cfg_planillas.pack(fill="x")
+
+        self.entry_id_url_planillas = ctk.CTkEntry(
+            row_cfg_planillas,
+            placeholder_text="ID actividad (ej: 523948) o URL completa (dejar vacío para institucional)",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            border_width=2,
+            border_color="#3A3A4A"
+        )
+        self.entry_id_url_planillas.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        self.menu_formato_planillas = ctk.CTkOptionMenu(
+            row_cfg_planillas,
+            values=["OpenDocument (.ods)", "Microsoft Excel (.xlsx)", "Documento PDF (.pdf)"],
+            font=ctk.CTkFont(size=11),
+            dropdown_font=ctk.CTkFont(size=11),
+            dynamic_resizing=False,
+            width=175,
+            height=34,
+            fg_color="#2B2B36",
+            button_color="#3A3A4A",
+            button_hover_color="#4B4B5E"
+        )
+        self.menu_formato_planillas.set("OpenDocument (.ods)")
+        self.menu_formato_planillas.pack(side="left", padx=(0, 8))
+
+        btn_editar_ficha = ctk.CTkButton(
+            row_cfg_planillas,
+            text="✏️ Ficha Formativa",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=34,
+            width=140,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._mostrar_modal_editar_ficha_formativa
+        )
+        btn_editar_ficha.pack(side="right")
+
+        # 3. Botón de Acción Principal Generación
+        action_row_p = ctk.CTkFrame(frame, fg_color="transparent")
+        action_row_p.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.btn_iniciar_planillas = ctk.CTkButton(
+            action_row_p,
+            text="GENERAR PLANILLA OFICIAL",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=38,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=self._iniciar_generacion_planilla_directa
+        )
+        self.btn_iniciar_planillas.pack(fill="x")
+
+        # 4. Herramientas y Plantillas Base (Bloque Inferior)
+        tools_card = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
+        tools_card.pack(fill="x", padx=16, pady=(4, 10))
+
+        tools_inner = ctk.CTkFrame(tools_card, fg_color="transparent")
+        tools_inner.pack(fill="x", padx=12, pady=10)
+
+        lbl_tools_title = ctk.CTkLabel(
+            tools_inner,
+            text="Herramientas de Soporte y Plantilla Matriz",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#A1A1AA"
+        )
+        lbl_tools_title.pack(anchor="w", pady=(0, 6))
+
+        actions_grid = ctk.CTkFrame(tools_inner, fg_color="transparent")
+        actions_grid.pack(fill="x", pady=(0, 8))
         actions_grid.grid_columnconfigure((0, 1), weight=1)
 
         btn_carpeta = ctk.CTkButton(
             actions_grid,
             text="Abrir Carpeta de Planillas y Salidas",
-            font=ctk.CTkFont(size=12, weight="bold"),
-            height=40,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=34,
             command=self._abrir_directorio_salidas
         )
-        btn_carpeta.grid(row=0, column=0, padx=(0, 8), sticky="ew")
+        btn_carpeta.grid(row=0, column=0, padx=(0, 6), sticky="ew")
 
         btn_plantilla = ctk.CTkButton(
             actions_grid,
             text="Inspeccionar Plantilla Base ODS",
-            font=ctk.CTkFont(size=12, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#2B2B36",
             hover_color="#3A3A4A",
-            height=40,
+            height=34,
             command=self._abrir_plantilla_base
         )
-        btn_plantilla.grid(row=0, column=1, padx=(8, 0), sticky="ew")
+        btn_plantilla.grid(row=0, column=1, padx=(6, 0), sticky="ew")
 
         # Estado del archivo de respaldo
         csv_path = os.path.join(BASE_DIR, "backups", "estudiantes.csv")
@@ -1915,26 +2153,27 @@ class JsBotGUI(ctk.CTk):
                 csv_path = csv_fallback
         csv_existe = os.path.exists(csv_path)
 
-        csv_card = ctk.CTkFrame(frame, fg_color="#14141E", corner_radius=8)
-        csv_card.pack(fill="x", padx=16, pady=(0, 12))
+        csv_card = ctk.CTkFrame(tools_inner, fg_color="#14141E", corner_radius=6)
+        csv_card.pack(fill="x")
 
         lbl_csv = ctk.CTkLabel(
             csv_card,
             text=f"Respaldo local (estudiantes.csv): {'Disponible (Verificado)' if csv_existe else 'No generado aún'}",
-            font=ctk.CTkFont(size=11, weight="bold" if csv_existe else "normal"),
+            font=ctk.CTkFont(size=10, weight="bold" if csv_existe else "normal"),
             text_color="#30D158" if csv_existe else "#8E8E98"
         )
-        lbl_csv.pack(side="left", padx=12, pady=8)
+        lbl_csv.pack(side="left", padx=10, pady=6)
 
         if csv_existe:
             btn_ver_csv = ctk.CTkButton(
                 csv_card,
                 text="Ver CSV",
-                width=75,
-                height=26,
+                width=65,
+                height=24,
+                font=ctk.CTkFont(size=10),
                 command=lambda: abrir_archivo_o_directorio_sistema(csv_path)
             )
-            btn_ver_csv.pack(side="right", padx=12)
+            btn_ver_csv.pack(side="right", padx=10)
 
         return frame
 
@@ -3824,6 +4063,198 @@ class JsBotGUI(ctk.CTk):
         except Exception:
             pass
 
+    def _establecer_fecha_hoy(self, entry_widget):
+        """Asigna la fecha actual en formato YYYY-MM-DD al campo de texto indicado."""
+        if hasattr(entry_widget, "delete") and hasattr(entry_widget, "insert"):
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, datetime.now().strftime("%Y-%m-%d"))
+
+    def _mostrar_selector_fecha(self, entry_destino):
+        """
+        Despliega un calendario flotante modal para seleccionar una fecha en formato YYYY-MM-DD.
+        Totalmente nativo con CustomTkinter y calendar de Python estándar (sin dependencias externas).
+        """
+        try:
+            val_actual = entry_destino.get().strip() if hasattr(entry_destino, "get") else ""
+            año_act, mes_act, dia_act = None, None, None
+            if val_actual:
+                try:
+                    f_dt = datetime.strptime(val_actual, "%Y-%m-%d")
+                    año_act, mes_act, dia_act = f_dt.year, f_dt.month, f_dt.day
+                except Exception:
+                    pass
+
+            hoy = datetime.now()
+            if not año_act:
+                año_act, mes_act, dia_act = hoy.year, hoy.month, hoy.day
+
+            estado_cal = {
+                "año": año_act,
+                "mes": mes_act,
+                "dia_sel": dia_act
+            }
+
+            self.update_idletasks()
+            ancho = 340
+            alto = 380
+            pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho) // 2)
+            pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto) // 2)
+
+            modal = ctk.CTkToplevel(self)
+            modal.title("Seleccionar Fecha")
+            modal.geometry(f"{ancho}x{alto}+{pos_x}+{pos_y}")
+            modal.resizable(False, False)
+            modal.configure(fg_color="#181822")
+            modal.transient(self)
+            self.registrar_modal("selector_fecha", modal, grab=True)
+            modal.focus_set()
+
+            meses_nombres = [
+                "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+            ]
+
+            # Contenedor superior (Navegación Mes / Año)
+            f_nav = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0, height=48)
+            f_nav.pack(fill="x")
+
+            lbl_mes_año = ctk.CTkLabel(
+                f_nav,
+                text="",
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color="#FFFFFF"
+            )
+
+            # Contenedor para días de la semana y grilla
+            f_cal = ctk.CTkFrame(modal, fg_color="transparent")
+            f_cal.pack(fill="both", expand=True, padx=14, pady=10)
+
+            # Contenedor inferior (Acciones)
+            f_pie = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0, height=45)
+            f_pie.pack(fill="x", side="bottom")
+
+            def _seleccionar_y_cerrar(a, m, d):
+                fecha_str = f"{a:04d}-{m:02d}-{d:02d}"
+                if hasattr(entry_destino, "delete") and hasattr(entry_destino, "insert"):
+                    entry_destino.delete(0, tk.END)
+                    entry_destino.insert(0, fecha_str)
+                self.cerrar_modal(modal)
+
+            def _seleccionar_hoy():
+                _seleccionar_y_cerrar(hoy.year, hoy.month, hoy.day)
+
+            def _cambiar_mes(delta):
+                m = estado_cal["mes"] + delta
+                a = estado_cal["año"]
+                if m > 12:
+                    m = 1
+                    a += 1
+                elif m < 1:
+                    m = 12
+                    a -= 1
+                estado_cal["mes"] = m
+                estado_cal["año"] = a
+                _renderizar_calendario()
+
+            def _cambiar_año(delta):
+                estado_cal["año"] += delta
+                _renderizar_calendario()
+
+            # Botones de navegación
+            btn_prev_a = ctk.CTkButton(f_nav, text="«", width=26, height=28, fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=12, weight="bold"), command=lambda: _cambiar_año(-1))
+            btn_prev_a.pack(side="left", padx=(8, 2), pady=8)
+
+            btn_prev_m = ctk.CTkButton(f_nav, text="‹", width=26, height=28, fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=14, weight="bold"), command=lambda: _cambiar_mes(-1))
+            btn_prev_m.pack(side="left", padx=(0, 4), pady=8)
+
+            lbl_mes_año.pack(side="left", expand=True, pady=8)
+
+            btn_next_m = ctk.CTkButton(f_nav, text="›", width=26, height=28, fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=14, weight="bold"), command=lambda: _cambiar_mes(1))
+            btn_next_m.pack(side="right", padx=(0, 4), pady=8)
+
+            btn_next_a = ctk.CTkButton(f_nav, text="»", width=26, height=28, fg_color="transparent", hover_color="#2B2B36", font=ctk.CTkFont(size=12, weight="bold"), command=lambda: _cambiar_año(1))
+            btn_next_a.pack(side="right", padx=(2, 8), pady=8)
+
+            def _renderizar_calendario():
+                for widget in f_cal.winfo_children():
+                    widget.destroy()
+
+                a = estado_cal["año"]
+                m = estado_cal["mes"]
+                lbl_mes_año.configure(text=f"{meses_nombres[m]} {a}")
+
+                # Fila de días de la semana
+                dias_sem = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"]
+                for col_idx, d_nom in enumerate(dias_sem):
+                    color_d = "#3B8ED0" if col_idx < 5 else "#F39C12"
+                    lbl_d = ctk.CTkLabel(
+                        f_cal,
+                        text=d_nom,
+                        font=ctk.CTkFont(size=11, weight="bold"),
+                        text_color=color_d,
+                        width=38
+                    )
+                    lbl_d.grid(row=0, column=col_idx, padx=1, pady=(0, 4))
+
+                # Días del mes con calendar.monthcalendar
+                cal_matriz = calendar.monthcalendar(a, m)
+                for r_idx, semana in enumerate(cal_matriz):
+                    for c_idx, dia in enumerate(semana):
+                        if dia == 0:
+                            lbl_v = ctk.CTkLabel(f_cal, text="", width=38, height=28)
+                            lbl_v.grid(row=r_idx + 1, column=c_idx, padx=1, pady=1)
+                        else:
+                            es_hoy = (a == hoy.year and m == hoy.month and dia == hoy.day)
+                            es_sel = (a == estado_cal.get("año") and m == estado_cal.get("mes") and dia == estado_cal.get("dia_sel"))
+
+                            fg_col = "#2E7D32" if es_hoy else ("#3B8ED0" if es_sel else "transparent")
+                            hov_col = "#1B5E20" if es_hoy else "#2B2B36"
+                            txt_col = "#FFFFFF" if (es_hoy or es_sel) else "#D1D1D6"
+
+                            btn_dia = ctk.CTkButton(
+                                f_cal,
+                                text=str(dia),
+                                width=38,
+                                height=28,
+                                corner_radius=6,
+                                fg_color=fg_col,
+                                hover_color=hov_col,
+                                text_color=txt_col,
+                                font=ctk.CTkFont(size=11, weight="bold" if es_hoy else "normal"),
+                                command=lambda d=dia: _seleccionar_y_cerrar(a, m, d)
+                            )
+                            btn_dia.grid(row=r_idx + 1, column=c_idx, padx=1, pady=1)
+
+            _renderizar_calendario()
+
+            btn_hoy = ctk.CTkButton(
+                f_pie,
+                text="📅 Hoy",
+                width=80,
+                height=28,
+                fg_color="#2E7D32",
+                hover_color="#1B5E20",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                command=_seleccionar_hoy
+            )
+            btn_hoy.pack(side="left", padx=14, pady=8)
+
+            btn_cancelar = ctk.CTkButton(
+                f_pie,
+                text="Cancelar",
+                width=80,
+                height=28,
+                fg_color="#2B2B36",
+                hover_color="#3A3A4A",
+                font=ctk.CTkFont(size=11),
+                command=lambda: self.cerrar_modal(modal)
+            )
+            btn_cancelar.pack(side="right", padx=14, pady=8)
+
+        except Exception as e:
+            if hasattr(self, "_agregar_log"):
+                self._agregar_log(f"[AVISO] No se pudo abrir el selector de fecha: {e}")
+
     # =========================================================================
     # LÓGICA FUNCIONAL (EXAMINAR, DESCARTAR, URLS, ASINCRONISMO)
     # =========================================================================
@@ -3909,6 +4340,47 @@ class JsBotGUI(ctk.CTk):
             self.card_prevuelo_servicios.pack_forget()
         self._agregar_log("[ARCHIVO] Archivo de servicios deseleccionado.")
 
+    def _examinar_archivo_planillas(self):
+        ruta = filedialog.askopenfilename(
+            title="Seleccionar archivo de participantes para generar planilla",
+            filetypes=[("Hojas de cálculo", "*.xlsx *.xls *.ods *.csv"), ("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+        )
+        if not ruta:
+            return
+
+        ext = os.path.splitext(ruta)[1].lower()
+        if ext not in ('.xlsx', '.xls', '.ods', '.csv', '.txt'):
+            self._agregar_log(f"[ERROR] Formato de archivo no soportado: '{os.path.basename(ruta)}'")
+            self._mostrar_modal_mensaje(
+                titulo="Formato no compatible",
+                mensaje=f"El archivo '{os.path.basename(ruta)}' tiene un formato no compatible ({ext}).\n\nFormatos soportados: Excel (.xlsx, .xls), OpenDocument (.ods), CSV (.csv) y Texto (.txt).",
+                tipo="error"
+            )
+            return
+
+        self.archivo_actual_ruta = ruta
+        nombre = os.path.basename(ruta)
+        self.archivo_seleccionado_planillas.set(f"📄 {nombre}")
+        self.lbl_archivo_planillas.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
+        self.btn_descartar_planillas.pack(side="right", padx=(6, 4))
+
+        self._agregar_log(f"[ARCHIVO] Archivo para planillas seleccionado: {nombre}")
+        self._procesar_archivo_en_frio(ruta, seccion="Planillas")
+
+    def _descartar_archivo_planillas(self):
+        """Deselecciona el archivo de planillas, oculta la tarjeta de pre-vuelo y limpia datos."""
+        self.cerrar_modales_activos()
+        self.archivo_actual_ruta = ""
+        self.participantes_cargados_planillas = []
+        self.datos_normalizados_planillas = []
+        self.reporte_deduplicacion_planillas = None
+        self.archivo_seleccionado_planillas.set("Ningún archivo seleccionado")
+        self.lbl_archivo_planillas.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.btn_descartar_planillas.pack_forget()
+        if hasattr(self, "card_prevuelo_planillas") and self.card_prevuelo_planillas.winfo_manager() == "pack":
+            self.card_prevuelo_planillas.pack_forget()
+        self._agregar_log("[ARCHIVO] Archivo de planillas deseleccionado.")
+
     def _procesar_archivo_en_frio(self, ruta: str, seccion: str = "Formacion"):
         if not MODULOS_DISPONIBLES:
             self._agregar_log("[ERROR] Módulos de normalización no disponibles.")
@@ -3943,9 +4415,14 @@ class JsBotGUI(ctk.CTk):
                 participantes = res_dedup
                 reporte_dedup = {"duplicados_omitidos": 0, "nombres": []}
 
-            self.participantes_cargados = participantes
-            self.datos_normalizados_actuales = participantes
-            self.reporte_deduplicacion_actual = reporte_dedup
+            if seccion == "Planillas":
+                self.participantes_cargados_planillas = participantes
+                self.datos_normalizados_planillas = participantes
+                self.reporte_deduplicacion_planillas = reporte_dedup
+            else:
+                self.participantes_cargados = participantes
+                self.datos_normalizados_actuales = participantes
+                self.reporte_deduplicacion_actual = reporte_dedup
 
             dup_omitidos = reporte_dedup.get("duplicados_omitidos", 0)
             if dup_omitidos > 0:
@@ -4006,6 +4483,13 @@ class JsBotGUI(ctk.CTk):
                     self.lbl_prevuelo_servicios_estado.configure(text=estado_txt, text_color=estado_color)
                 if hasattr(self, "card_prevuelo_servicios") and self.card_prevuelo_servicios.winfo_manager() != "pack":
                     self.card_prevuelo_servicios.pack(fill="x", padx=16, pady=(0, 8), before=self.url_container_servicios)
+            elif seccion == "Planillas":
+                if hasattr(self, "lbl_prevuelo_planillas_total"):
+                    self.lbl_prevuelo_planillas_total.configure(text=f"Total: {total} participantes")
+                    self.lbl_prevuelo_planillas_desglose.configure(text=desglose_txt)
+                    self.lbl_prevuelo_planillas_estado.configure(text=estado_txt, text_color=estado_color)
+                if hasattr(self, "card_prevuelo_planillas") and self.card_prevuelo_planillas.winfo_manager() != "pack":
+                    self.card_prevuelo_planillas.pack(fill="x", padx=16, pady=(0, 8), before=self.container_opciones_planillas)
             else:
                 if hasattr(self, "lbl_prevuelo_formacion_total"):
                     self.lbl_prevuelo_formacion_total.configure(text=f"Total: {total} participantes")
@@ -4037,7 +4521,10 @@ class JsBotGUI(ctk.CTk):
 
     def _abrir_tabla_previsualizacion(self, titulo_fuente: str):
         """Abre ventana modal CTkToplevel para inspeccionar y auditar los datos normalizados en tabla."""
-        datos = self.datos_normalizados_actuales or self.participantes_cargados
+        if titulo_fuente == "Planillas":
+            datos = self.datos_normalizados_planillas or self.participantes_cargados_planillas
+        else:
+            datos = self.datos_normalizados_actuales or self.participantes_cargados
         if not datos:
             datos = [
                 {"nombre": "Eduardo", "apellido": "Pineda", "cedula": "36996120", "cedulado": "si", "edad": 15, "nacimiento": "2011-04-12", "telefono": "0412-1112233"},
@@ -4394,6 +4881,34 @@ class JsBotGUI(ctk.CTk):
             )
             return
 
+        # 3.1 Validar fecha del servicio ingresada o seleccionada
+        fecha_raw = self.entry_fecha_servicios.get().strip() if hasattr(self, "entry_fecha_servicios") else ""
+        if not fecha_raw:
+            fecha_srv = datetime.now().strftime("%Y-%m-%d")
+        else:
+            fecha_norm = limpiar_fecha(fecha_raw) if "limpiar_fecha" in globals() else fecha_raw
+            es_fecha_valida = False
+            if fecha_norm:
+                try:
+                    datetime.strptime(fecha_norm, "%Y-%m-%d")
+                    es_fecha_valida = True
+                    fecha_srv = fecha_norm
+                except Exception:
+                    es_fecha_valida = False
+
+            if not es_fecha_valida:
+                self._agregar_log(f"[ERROR] Fecha de servicio inválida: '{fecha_raw}'")
+                self._mostrar_modal_mensaje(
+                    titulo="Fecha de Servicio Inválida",
+                    mensaje=(
+                        f"La fecha ingresada '{fecha_raw}' no es válida.\n\n"
+                        "Por favor utiliza el formato AAAA-MM-DD (ej: 2026-03-15) "
+                        "o selecciona una fecha haciendo clic en el botón '📅 Calendario'."
+                    ),
+                    tipo="error"
+                )
+                return
+
         # 4. Iniciar ejecución en hilo seguro
         self.ejecutando_tarea = True
         self.btn_iniciar_servicios.configure(state="disabled", text="EJECUTANDO SERVICIOS...", fg_color="#1B5E20")
@@ -4402,12 +4917,21 @@ class JsBotGUI(ctk.CTk):
         self._iniciar_pulso_estado()
 
         cfg_serv_global = cargar_config_servicios() if MODULOS_DISPONIBLES else {}
-        if self.var_registro_tramite_servicios.get():
-            tipo_srv = cfg_serv_global.get("servicio_por_defecto", "Gestión en el Sistema de Protección Social Patria")
-        else:
-            tipo_srv = "Uso de equipo de computación e internet"
+        tipo_srv = ""
+        if hasattr(self, "menu_tipo_servicio"):
+            try:
+                tipo_srv = str(self.menu_tipo_servicio.get()).strip()
+            except Exception:
+                tipo_srv = ""
+        elif hasattr(self, "combo_tipo_servicio"):
+            try:
+                tipo_srv = str(self.combo_tipo_servicio.get()).strip()
+            except Exception:
+                tipo_srv = ""
 
-        fecha_srv = datetime.now().strftime("%Y-%m-%d")
+        if not tipo_srv:
+            tipo_srv = cfg_serv_global.get("servicio_por_defecto", "Actividades de educación o aprendizaje")
+
         ts = datetime.now().strftime("%Y-%m-%d_%H%M")
         log_dir = os.path.join(BASE_DIR, "logs")
         os.makedirs(log_dir, exist_ok=True)
@@ -4663,6 +5187,225 @@ class JsBotGUI(ctk.CTk):
                 self._agregar_log(f"[ADVERTENCIA] No se pudo abrir automáticamente: {plantilla}")
         else:
             self._agregar_log(f"[ADVERTENCIA] No se localizó la plantilla: {plantilla}")
+
+    def _iniciar_generacion_planilla_directa(self):
+        """Genera la planilla oficial multiformato de forma directa desde los datos cargados."""
+        participantes = self.participantes_cargados_planillas
+        if not participantes:
+            self._mostrar_modal_mensaje(
+                titulo="Archivo Requerido",
+                mensaje="Por favor examina y selecciona primero un archivo de participantes (.xlsx, .ods, .csv).",
+                tipo="aviso"
+            )
+            return
+
+        fmt_seleccionado = self.menu_formato_planillas.get() if hasattr(self, "menu_formato_planillas") else "OpenDocument (.ods)"
+        if "xlsx" in fmt_seleccionado.lower() or "excel" in fmt_seleccionado.lower():
+            formato = "xlsx"
+        elif "pdf" in fmt_seleccionado.lower():
+            formato = "pdf"
+        else:
+            formato = "ods"
+
+        id_o_url = self.entry_id_url_planillas.get().strip() if hasattr(self, "entry_id_url_planillas") else ""
+        id_act = ""
+        url_act = ""
+        if id_o_url:
+            if "http" in id_o_url.lower():
+                url_act = id_o_url
+                id_act = extraer_id_actividad(id_o_url) if "extraer_id_actividad" in globals() else ""
+            elif id_o_url.isdigit() or len(id_o_url) < 15:
+                id_act = id_o_url
+        if not id_act:
+            id_act = "general"
+
+        from modulos.generador_planilla import generar_planilla_multiformato
+        self._agregar_log(f"[PLANILLA] Generando planilla oficial ({formato.upper()}) para {len(participantes)} participantes...")
+
+        try:
+            ruta_generada = generar_planilla_multiformato(
+                participantes=participantes,
+                id_actividad=id_act,
+                url_actividad=url_act,
+                formato=formato
+            )
+            if ruta_generada and os.path.exists(ruta_generada):
+                self._agregar_log(f"[OK] Planilla oficial generada exitosamente en:\n   {ruta_generada}")
+                self._mostrar_modal_exito_planilla(ruta_generada)
+            else:
+                self._agregar_log("[ERROR] No se pudo generar el archivo de planilla.")
+                self._mostrar_modal_mensaje(
+                    titulo="Error de Generación",
+                    mensaje="No se pudo completar la generación del archivo de planilla.",
+                    tipo="error"
+                )
+        except Exception as e:
+            self._agregar_log(f"[ERROR] Incidencia generando planilla: {e}")
+            self._mostrar_modal_mensaje(
+                titulo="Error al Generar Planilla",
+                mensaje=f"Ocurrió un error durante la generación de la planilla:\n\n{e}",
+                tipo="error"
+            )
+
+    def _mostrar_modal_exito_planilla(self, ruta_archivo: str):
+        """Abre modal informativo al generar la planilla con botones para abrir el archivo o la carpeta."""
+        self.update_idletasks()
+        ancho_modal = 500
+        alto_modal = 220
+        pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho_modal) // 2)
+        pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto_modal) // 2)
+
+        modal = ctk.CTkToplevel(self)
+        modal.title("Planilla Oficial Generada")
+        modal.geometry(f"{ancho_modal}x{alto_modal}+{pos_x}+{pos_y}")
+        modal.minsize(460, 200)
+        modal.transient(self)
+        self.registrar_modal("exito_planilla", modal, grab=True)
+        modal.focus_set()
+
+        nom_arc = os.path.basename(ruta_archivo)
+        lbl_titulo = ctk.CTkLabel(
+            modal,
+            text="✅ ¡Planilla Oficial Generada con Éxito!",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#30D158"
+        )
+        lbl_titulo.pack(pady=(16, 6))
+
+        lbl_desc = ctk.CTkLabel(
+            modal,
+            text=f"El documento se ha guardado en:\n{nom_arc}",
+            font=ctk.CTkFont(size=11),
+            text_color="#C0C0C8"
+        )
+        lbl_desc.pack(padx=20, pady=(0, 16))
+
+        btn_row = ctk.CTkFrame(modal, fg_color="transparent")
+        btn_row.pack(fill="x", padx=20, pady=(0, 10))
+
+        btn_abrir_archivo = ctk.CTkButton(
+            btn_row,
+            text="👁 Abrir Planilla",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=34,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=lambda: abrir_archivo_o_directorio_sistema(ruta_archivo)
+        )
+        btn_abrir_archivo.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        btn_abrir_carpeta = ctk.CTkButton(
+            btn_row,
+            text="📂 Abrir Carpeta",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=self._abrir_directorio_salidas
+        )
+        btn_abrir_carpeta.pack(side="left", fill="x", expand=True, padx=(6, 6))
+
+        btn_cerrar = ctk.CTkButton(
+            btn_row,
+            text="Cerrar",
+            font=ctk.CTkFont(size=11),
+            height=34,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self.cerrar_modal(modal)
+        )
+        btn_cerrar.pack(side="left", padx=(6, 0))
+
+    def _mostrar_modal_editar_ficha_formativa(self):
+        """Abre modal CTkToplevel para ver y modificar interactivamente la Ficha Formativa (datos_actividad.json)."""
+        from modulos.config_manager import cargar_datos_actividad, guardar_datos_actividad
+        datos_actuales = cargar_datos_actividad()
+
+        self.update_idletasks()
+        ancho_modal = 540
+        alto_modal = 520
+        pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho_modal) // 2)
+        pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto_modal) // 2)
+
+        modal = ctk.CTkToplevel(self)
+        modal.title("Ficha Formativa y Metadatos Institucionales")
+        modal.geometry(f"{ancho_modal}x{alto_modal}+{pos_x}+{pos_y}")
+        modal.minsize(500, 480)
+        modal.transient(self)
+        self.registrar_modal("editar_ficha_formativa", modal, grab=True)
+        modal.focus_set()
+
+        modal.grid_columnconfigure(0, weight=1)
+        modal.grid_rowconfigure(1, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(modal, fg_color="#1E1E28", corner_radius=0)
+        header.grid(row=0, column=0, sticky="ew")
+        lbl_h = ctk.CTkLabel(
+            header,
+            text="✏️ Ficha Formativa y Metadatos Institucionales",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_h.pack(anchor="w", padx=16, pady=10)
+
+        # Form Scrollable
+        form_scroll = ctk.CTkScrollableFrame(modal, fg_color="#121218", corner_radius=8)
+        form_scroll.grid(row=1, column=0, sticky="nsew", padx=14, pady=8)
+        form_scroll.grid_columnconfigure(1, weight=1)
+
+        campos = [
+            ("Facilitador:", "nombre_facilitador", datos_actuales.get("nombre_facilitador", "")),
+            ("Cédula Facilitador:", "cedula_facilitador", datos_actuales.get("cedula_facilitador", "")),
+            ("Estado:", "estado", datos_actuales.get("estado", "Yaracuy")),
+            ("Infocentro:", "nombre_infocentro", datos_actuales.get("nombre_infocentro", "")),
+            ("Código Infocentro:", "codigo_infocentro", datos_actuales.get("codigo_infocentro", "")),
+            ("Módulo Formación:", "modulo", datos_actuales.get("modulo", "")),
+            ("Contenido:", "contenido", datos_actuales.get("contenido", "")),
+            ("Hora Inicio:", "hora_inicio", datos_actuales.get("hora_inicio", "9:00 am")),
+            ("Hora Fin:", "hora_fin", datos_actuales.get("hora_fin", "12:00 pm")),
+        ]
+
+        entradas = {}
+        for r_idx, (etiqueta, clave, valor) in enumerate(campos):
+            lbl = ctk.CTkLabel(form_scroll, text=etiqueta, font=ctk.CTkFont(size=11, weight="bold"), text_color="#C0C0C8", anchor="w")
+            lbl.grid(row=r_idx, column=0, padx=(8, 12), pady=5, sticky="w")
+            ent = ctk.CTkEntry(form_scroll, font=ctk.CTkFont(size=11), height=30)
+            ent.insert(0, valor)
+            ent.grid(row=r_idx, column=1, padx=(0, 8), pady=5, sticky="ew")
+            entradas[clave] = ent
+
+        # Footer Buttons
+        footer = ctk.CTkFrame(modal, fg_color="transparent")
+        footer.grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 10))
+
+        def _guardar_ficha():
+            nuevos = {clave: entradas[clave].get().strip() for clave in entradas}
+            guardar_datos_actividad(nuevos)
+            self._agregar_log("[OK] Ficha formativa institucional actualizada en config/datos_actividad.json.")
+            self.cerrar_modal(modal)
+
+        btn_guardar = ctk.CTkButton(
+            footer,
+            text="💾 Guardar Cambios",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=_guardar_ficha
+        )
+        btn_guardar.pack(side="right", padx=(8, 0))
+
+        btn_cancelar = ctk.CTkButton(
+            footer,
+            text="Cancelar",
+            font=ctk.CTkFont(size=11),
+            height=32,
+            fg_color="#2B2B36",
+            hover_color="#3A3A4A",
+            command=lambda: self.cerrar_modal(modal)
+        )
+        btn_cancelar.pack(side="right")
 
     def _agregar_log(self, mensaje: str):
         if threading.current_thread() is not threading.main_thread():

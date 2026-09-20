@@ -3,9 +3,15 @@
     "nombre_infocentro": "Infocentro UNEFA",
     "codigo_infocentro": "NRYAR24",
     "nombre_facilitador": "Jair Alejandro Hernández González",
-    "cedula_facilitador": "30.348.783",
-    "modulo": "Robótica",
-    "contenido": "Plan Vacacional",
-    "hora_inicio": "9:00 am",
-    "hora_fin": "12:00 pm"
+    "cedula_facilitador": "V-99999999",
+    "modulo": "Automatización Python",
+    "contenido": "Pruebas de Software",
+    "hora_inicio": "08:00",
+    "hora_fin": "12:00",
+    "facilitador": "Facilitador de Prueba",
+    "infocentro": "Infocentro Experimental",
+    "codigo": "TEST01",
+    "fecha_inicio": "2026-09-01",
+    "fecha_fin": "2026-09-15",
+    "total_horas": 40
 }

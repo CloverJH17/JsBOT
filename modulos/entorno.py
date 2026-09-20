@@ -56,6 +56,8 @@ ARCHIVO_PLANTILLA_ODS = CARPETA_CONFIG / "plantilla_base.ods"
 ARCHIVO_ESTADO_SESION = CARPETA_LOGS / "session_state.json"
 ARCHIVO_ESTADO_SESION_SERVICIOS = CARPETA_LOGS / "session_state_servicios.json"
 ARCHIVO_CONFIG_INI = CARPETA_CONFIG / "config.ini"
+ARCHIVO_CONFIG_SERVICIOS = CARPETA_CONFIG / "config_servicios.json"
+ARCHIVO_DATOS_ACTIVIDAD = CARPETA_CONFIG / "datos_actividad.json"
 ARCHIVO_DB = CARPETA_DATA / "jsbot.db"
 
 # Lista blanca de directorios estructurales autorizados

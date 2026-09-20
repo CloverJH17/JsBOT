@@ -1,10 +1,10 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.8.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.10.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
-[![Tests](https://img.shields.io/badge/Tests-391%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-404%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 [![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
@@ -53,9 +53,9 @@
 | **Diagnóstico** | Matriz de tarjetas en tiempo real (Python, SO, librerías, conectividad y navegador). |
 | **Credenciales** | Administración segura de usuario y contraseña para la plataforma InfoApp. |
 | **Formación** | Carga masiva de participantes en actividades y cursos formativos. |
-| **Servicios** | Carga automatizada de beneficiarios y registros de atención comunitaria. |
+| **Servicios** | Carga automatizada de beneficiarios con catálogo desplegable institucional ("Actividades de educación o aprendizaje"). |
 | **Reportes** | Auditoría ultra rápida (50x), balances operativos, inspector modal y exportación multiformato. |
-| **Planillas** | Generación de planillas formativas oficiales `.ods` y exportación desde InfoApp. |
+| **Planillas** | Generación directa multiformato (ODS, XLSX, PDF), pre-vuelo ETL y Ficha Formativa sin requerir RPA web. |
 | **Ajustes** | Calibración de timeouts de red (Login, AJAX, DOM) y conmutador visual de navegador. |
 | **Créditos** | Ficha técnica, licencias y autoría del proyecto. |
 
