@@ -67,23 +67,90 @@
 - **Python:** 3.10 o superior.
 - **Navegadores Soportados:** Google Chrome, Chromium o Mozilla Firefox (con sus respectivos webdrivers administrados automáticamente).
 
+### Instalación y Ejecución Rápida en Windows (PowerShell / CMD)
+
+Se recomienda instalar el proyecto dentro de la carpeta **Documentos** (`Documents`) de tu usuario para garantizar permisos de lectura/escritura completos y acceso rápido.
+
+#### 🔷 Opción 1: Desde PowerShell (Recomendado)
+
+**Comando en una sola línea (Copiar y Pegar):**
+Clona en Documentos, configura el entorno y abre el bot directamente en pantalla:
+```powershell
+cd $HOME\Documents; git clone https://github.com/CloverJH17/JsBOT.git; cd JsBOT; .\windows.bat
+```
+
+> **Paso a paso en PowerShell:**
+> ```powershell
+> # 1. Ir a la carpeta Documentos
+> cd $HOME\Documents
+> 
+> # 2. Clonar el repositorio y entrar a la carpeta
+> git clone https://github.com/CloverJH17/JsBOT.git
+> cd JsBOT
+> 
+> # 3. Instalar entorno y abrir el bot automáticamente
+> .\windows.bat
+> ```
+
+> [!NOTE]
+> **¿No tienes Git instalado en Windows?** Puedes descargarlo y abrirlo directamente ejecutando en PowerShell:
+> ```powershell
+> cd $HOME\Documents; Invoke-WebRequest "https://github.com/CloverJH17/JsBOT/archive/refs/heads/main.zip" -OutFile "JsBOT.zip"; Expand-Archive "JsBOT.zip" -DestinationPath .; Rename-Item "JsBOT-main" "JsBOT" -Force; Remove-Item "JsBOT.zip"; cd JsBOT; .\windows.bat
+> ```
+
+---
+
+#### ⬛ Opción 2: Desde Símbolo del Sistema (CMD)
+
+**Comando en una sola línea (Copiar y Pegar):**
+```cmd
+cd %USERPROFILE%\Documents && git clone https://github.com/CloverJH17/JsBOT.git && cd JsBOT && windows.bat
+```
+
+> **Paso a paso en CMD:**
+> ```cmd
+> :: 1. Ir a la carpeta Documentos
+> cd %USERPROFILE%\Documents
+> 
+> :: 2. Clonar el repositorio y entrar a la carpeta
+> git clone https://github.com/CloverJH17/JsBOT.git
+> cd JsBOT
+> 
+> :: 3. Instalar entorno y abrir el bot automáticamente
+> windows.bat
+> ```
+
+> [!TIP]
+> **¿Qué hace `windows.bat` automáticamente?**
+> - Detecta e instala Python de forma desatendida si no está instalado.
+> - Configura `pip` e instala todas las dependencias (`requirements.txt`).
+> - Descarga los binarios del navegador automatizado (Chromium de Playwright).
+> - **Inicia la interfaz gráfica de JsBOT de inmediato** sin requerir pasos manuales extra.
+
+---
+
+### 🚀 Formas de Ejecución Diaria en Windows
+
+Una vez realizada la instalación inicial, puedes abrir el bot en cualquier momento:
+
+- **Modo Estándar (Recomendado):** Haz doble clic sobre `windows.bat` o ejecuta desde terminal:
+  ```powershell
+  .\windows.bat
+  ```
+- **Modo Silencioso (Sin ventana de consola negra):** Haz doble clic sobre `JsBOT_Sin_Consola.vbs`. Ideal para crear un acceso directo en tu **Escritorio**.
+
+---
+
 ### Instalación Rápida en Linux (Canaima / Linux Mint / Ubuntu)
 ```bash
 # Clonar y entrar al repositorio
 git clone https://github.com/CloverJH17/JsBOT.git
 cd JsBOT
 
-# Asignar permisos y ejecutar (configura librerías automáticamente)
+# Asignar permisos y ejecutar (configura librerías automáticamente y abre el bot)
 chmod +x linux.sh
 ./linux.sh
 ```
-
-### Ejecución en Windows
-- **Modo Estándar (con terminal de apoyo):** Haz doble clic sobre `windows.bat` o ejecuta desde PowerShell / CMD:
-  ```dos
-  windows.bat
-  ```
-- **Modo Silencioso (sin consola emergente):** Haz doble clic sobre `JsBOT_Sin_Consola.vbs`.
 
 ---
 
@@ -103,40 +170,57 @@ python main.py --cli
 ## 📂 Estructura del Proyecto
 ```plaintext
 JsBOT/
-├── config/                  # Ajustes, credenciales, plantilla ODS e iconos PNG
-│   ├── assets/iconos/       # Iconografía vectorial de la interfaz
-│   ├── settings.json        # Configuración centralizada de timeouts y parámetros
-│   ├── requirements.txt     # Dependencias técnicas del proyecto
-│   ├── config.example.ini   # Plantilla limpia de credenciales
-│   └── plantilla_base.ods   # Plantilla base institucional
-├── modulos/                 # Núcleo modular del sistema RPA
-│   ├── auditor_reportes.py  # Auditoría, balances, Turbo HTTP y exportación multiformato
-│   ├── motor_export_auditoria.py # Motor de extracción nativa ultra rápida (aceleración 50x)
+├── config/                      # Ajustes, credenciales, plantillas e iconografía
+│   ├── assets/iconos/           # Iconografía vectorial y bitmap de la interfaz
+│   ├── settings.json            # Configuración centralizada de timeouts y parámetros
+│   ├── requirements.txt         # Dependencias técnicas del proyecto (PyPI)
+│   ├── config.example.ini       # Plantilla limpia de credenciales institucionales
+│   ├── config.ini               # Credenciales activas de usuario (ignorado por git)
+│   ├── config_servicios.json    # Catálogo institucional de servicios y trámites
+│   ├── datos_actividad.json     # Metadatos cacheados de actividad en curso
+│   └── plantilla_base.ods       # Plantilla base institucional para actas
+├── modulos/                     # Núcleo modular del sistema RPA
+│   ├── auditor_reportes.py      # Auditoría, balances, Turbo HTTP y exportación multiformato
+│   ├── automatizador_web.py     # Automatización Selenium/Playwright y control de sesión
+│   ├── config_manager.py        # Gestor de configuración y sincronización de settings.json
+│   ├── diagnostico_facilitador.py # Detección preventiva de actividades sin participantes
+│   ├── driver_factory.py        # Fábrica resiliente de controladores (Chrome/Firefox/Edge)
+│   ├── entorno.py               # Blindaje estricto de rutas, directorios y variables de entorno
+│   ├── generador_planilla.py    # Motor de exportación OpenDocument (.ods y .xlsx)
+│   ├── gestor_sesion.py         # Checkpoints ACID y bitácora atómica en SQLite
+│   ├── identidad_utils.py       # Saneamiento de cédulas SAIME, escolares y menores
+│   ├── interfaz_grafica.py      # Aplicación de escritorio nativa (CustomTkinter)
+│   ├── interfaz_usuario.py      # Interfaz de consola interactiva (Rich + InquirerPy)
+│   ├── motor_export_auditoria.py# Motor de extracción nativa ultra rápida (aceleración 50x)
+│   ├── normalizador_datos.py    # Motor ETL, normalización de cadenas y teléfonos
+│   ├── orquestador.py           # Despachador bimodal y control de ejecución
 │   ├── verificador_cargas_export.py # Verificador post-carga y anti-duplicados en tiempo real
-│   ├── diagnostico_facilitador.py # Diagnóstico preventivo de actividades sin participantes
-│   ├── automatizador_web.py # Automatización Selenium/Playwright y control de sesión
-│   ├── generador_planilla.py# Motor de exportación OpenDocument (.ods y .xlsx)
-│   ├── gestor_sesion.py     # Checkpoints ACID y bitácora atómica en SQLite
-│   ├── interfaz_grafica.py  # Aplicación de escritorio nativa (CustomTkinter)
-│   ├── interfaz_usuario.py  # Interfaz de consola interactiva (Rich + InquirerPy)
-│   ├── normalizador_datos.py# Motor ETL y normalización de identidades
-│   ├── orquestador.py       # Despachador bimodal y control de ejecución
-│   ├── verificador_entorno.py# Diagnóstico de librerías y conectividad
-│   ├── version.py           # Fuente única de versión del sistema
-│   └── entorno.py           # Blindaje estricto de rutas y directorios
-├── data/                    # Base de datos SQLite (jsbot.db) para telemetría y checkpoints
-├── docs/                    # Documentación arquitectónica, manuales e historial consolidado
-│   ├── arquitectura/        # Matriz y funciones de contexto
-│   ├── diagramas/           # Diagrama de flujo integral del sistema
-│   ├── manuales/            # Manual de funcionamiento técnico
-│   └── historial/           # version.txt consolidado
-├── Features/                # Entorno de pruebas y desarrollo de nuevos features
-├── tests/                   # Suite completa de tests unitarios, regresión y estrés
-├── main.py                  # Punto de entrada raíz unificado
-├── windows.bat              # Lanzador nativo para Windows
-├── JsBOT_Sin_Consola.vbs    # Lanzador silencioso sin ventana de terminal para Windows
-├── linux.sh                 # Lanzador resiliente para Canaima / Linux Mint
-└── README.md                # Documentación técnica oficial
+│   ├── verificador_entorno.py   # Diagnóstico de librerías y conectividad
+│   ├── version.py               # Fuente única de versión del sistema
+│   └── web_utils.py             # Utilidades HTTP, cabeceras y manejo seguro de red
+├── data/                        # Persistencia de base de datos y cookies de sesión
+│   ├── jsbot.db                 # Base de datos SQLite (telemetría, logs y checkpoints ACID)
+│   └── playwright_context/      # Almacenamiento persistente de sesión y estado web
+├── docs/                        # Documentación técnica, manuales y grafos
+│   ├── arquitectura/            # Matriz de funciones y arquitectura del sistema
+│   ├── diagramas/               # Diagramas de flujo integral y ciclo de vida
+│   ├── grafo_arquitectura_jsbot.html # Visor interactivo del grafo de dependencias (offline)
+│   ├── grafo_arquitectura_jsbot.png  # Esquema visual de la arquitectura
+│   ├── historial/               # Historial consolidado de versiones
+│   ├── manuales/                # Manuales de usuario y funcionamiento técnico
+│   ├── PROJECT.md               # Bitácora técnica de arquitectura y contratos de interfaz
+│   ├── REGLAS_IA.md             # Guías de codificación y estándares para asistentes IA
+│   └── version.txt              # Registro cronológico de cambios (Changelog)
+├── Planillas/                   # Directorio de salida para actas formativas generadas
+├── Reportes_Auditoria/          # Directorio de salida para reportes analíticos (.xlsx, .pdf, .ods, .csv)
+├── logs/                        # Bitácoras de eventos y registro de depuración
+├── scripts/                     # Scripts auxiliares para entornos Unix/Linux
+├── tests/                       # Suite completa de tests unitarios, regresión y estrés
+├── main.py                      # Punto de entrada raíz unificado (GUI / CLI)
+├── windows.bat                  # Instalador y lanzador nativo para Windows
+├── JsBOT_Sin_Consola.vbs        # Lanzador silencioso sin ventana de terminal para Windows
+├── linux.sh                     # Lanzador resiliente para Canaima / Debian / Mint
+└── README.md                    # Documentación técnica oficial
 ```
 
 ---
@@ -164,13 +248,62 @@ JsBOT cuenta con un grafo de conocimiento y memoria estructural relacional index
 
 * **Topología Indexada:** 1.148 nodos y 5.034 aristas relacionales (`CALLS`, `DEFINES`, `TESTS`, `IMPORTS`).
 * **Cero Código Muerto:** Arquitectura 100% cohesionada con desacoplamiento estricto entre presentación (GUI/CLI), lógica ETL (`normalizador_datos.py`), auditoría (`auditor_reportes.py`) y persistencia ACID (`gestor_sesion.py`).
-* **Visualización 3D Interactiva:** Mapa de constelación navegable en tiempo real a través del servidor web integrado en el puerto `9749`.
 
+Para explorar el grafo de dependencias en cualquier PC (incluso si se acaba de clonar el proyecto), dispones de dos opciones:
+
+### Opción 1: Visualización Inmediata (Nativa y 100% Offline)
+El proyecto ya incluye un visor interactivo pre-construido en [`docs/grafo_arquitectura_jsbot.html`](docs/grafo_arquitectura_jsbot.html). **No requiere instalar nada**:
+
+1. **Haz doble clic** sobre el archivo `docs/grafo_arquitectura_jsbot.html` para abrirlo en tu navegador favorito (Chrome, Edge o Firefox).
+2. O ábrelo directamente desde la terminal dentro de la carpeta del proyecto:
+   - **En Windows (PowerShell):**
+     ```powershell
+     Start-Process "docs\grafo_arquitectura_jsbot.html"
+     ```
+   - **En Windows (CMD):**
+     ```cmd
+     start docs\grafo_arquitectura_jsbot.html
+     ```
+   - **En Linux:**
+     ```bash
+     xdg-open docs/grafo_arquitectura_jsbot.html
+     ```
+
+---
+
+### Opción 2: Servidor 3D en Tiempo Real (Codebase Memory MCP)
+Para explorar la constelación 3D interactiva en vivo, indexar cambios en tiempo real o conectar el grafo con asistentes de IA:
+
+#### 1. Instalación del servidor
+Puedes instalar `codebase-memory-mcp` en la nueva máquina con cualquiera de estos métodos:
+
+- **Desde Python (Recomendado, usa el mismo entorno de JsBOT):**
+  ```bash
+  pip install codebase-memory-mcp
+  ```
+- **Desde Node.js (vía npm global):**
+  ```bash
+  npm install -g codebase-memory-mcp
+  ```
+- **En Linux / macOS (Instalador oficial con UI):**
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash -s -- --ui
+  ```
+
+#### 2. Indexación y lanzamiento del servidor
+Abre una terminal en la carpeta raíz del proyecto (`JsBOT`) y ejecuta:
 ```bash
-# Iniciar servidor y explorar el grafo 3D del proyecto
+# Iniciar servidor e indexación automática
 codebase-memory-mcp
-# Navegar a: http://localhost:9749
 ```
+*(O de forma directa sin instalación previa si cuentas con Node.js: `npx -y codebase-memory-mcp`)*
+
+#### 3. Abrir la constelación 3D
+Abre tu navegador y entra a:
+```text
+http://localhost:9749
+```
+*(Se desplegará el mapa 3D navegable de nodos y aristas con filtros por capas, trazado de rutas y buscador de símbolos).*
 
 ---
 
