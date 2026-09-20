@@ -1,0 +1,7 @@
+# Forzar CRLF para scripts de Windows (evita errores de parser en cmd.exe al descargar en ZIP)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.vbs text eol=crlf
+
+# Forzar LF para scripts de Linux/macOS
+*.sh text eol=lf
