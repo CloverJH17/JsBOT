@@ -38,3 +38,11 @@ backups/
 .idea/
 .agents/
 pruebas/
+
+# Archivos de asistentes IA y utilidades locales
+AGENTS.md
+GEMINI.md
+lanzar_chrome.bat
+
+# Entorno de pruebas y desarrollo
+Features/
