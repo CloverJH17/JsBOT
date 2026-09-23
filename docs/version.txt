@@ -6,6 +6,37 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v5.2.0] — 23 de Septiembre de 2026 (Integración de Capacidades Aisladas, Higiene UI y Verificación Post-Carga)
+--------------------------------------------------------------------------------
+• INTEGRACIÓN DE CAPACIDADES AISLADAS EN PRODUCCIÓN:
+  - Generación de Planillas Oficiales desde Actividad InfoApp (modulos/interfaz_grafica.py & modulos/generador_planilla.py): Incorporada tarjeta interactiva en pestaña Planillas para descargar y generar planillas .ods o .xlsx directamente a partir de un ID de actividad sin requerir archivo Excel previo.
+  - Diagnóstico Preventivo del Facilitador (modulos/interfaz_grafica.py & modulos/diagnostico_facilitador.py): Integrado botón "🩺 Diagnóstico" en el Inspector para evaluar la salud del reporte mensual, totalizar formaciones/productos y emitir alertas si existen actividades vacías (0 participantes).
+  - Verificación Post-Carga Automática en Servidor (modulos/automatizador_web.py & modulos/verificador_cargas_export.py): Comprobación inmediata por HTTP tras culminar el lote Playwright para certificar que el 100% de los participantes quedaron efectivamente registrados en InfoApp.
+  - Histórico de Participantes en SQLite (modulos/automatizador_web.py & modulos/gestor_sesion.py): Registro atómico en `inscritos_historico` de cada participante exitoso para auditoría y prevención de duplicados inter-actividades.
+  - Purga Automática de Logs (modulos/interfaz_grafica.py & modulos/gestor_sesion.py): Hilo asíncrono no bloqueante al inicio de la GUI que purga registros de telemetría mayores a 30 días.
+• HIGIENE DE UI Y RESOLUCIÓN DE BUGS:
+  - Erradicación de Datos Ficticios (modulos/interfaz_grafica.py): Sustitución de los 5 participantes de prueba en previsualización por un modal preventivo amigable si no hay datos cargados.
+  - Aclaratoria Arquitectónica de Auditoría (modulos/interfaz_grafica.py): Documentación explícita del modo consulta en memoria y supresión de la variable residual `formato_exp`.
+  - Corrección de Sede en Resumen de Facilitadores (modulos/auditor_reportes.py): Robustecimiento de la resolución de info_id considerando el filtro resuelto para evitar sedes vacías.
+• SUITE DE PRUEBAS UNITARIAS:
+  - tests/test_capacidades_integradas_v520.py: Pruebas unitarias y de integración que validan el modal sin datos, la verificación post-carga mockeada, el diagnóstico preventivo, la purga de logs y la persistencia del histórico.
+
+--------------------------------------------------------------------------------
+[v5.1.0] — 23 de Septiembre de 2026 (Blindaje de Seguridad, Desacoplamiento de Crawlers y Purga de Placebos)
+--------------------------------------------------------------------------------
+• BLINDAJE DE SEGURIDAD Y DESACOPLAMIENTO ARQUITECTÓNICO:
+  - Sanitización Estricta de Consultas SQL (motor_export_auditoria.py): Implementadas funciones sanitizar_texto_sql, validar_codigo_sql (con neutralización de comentarios SQL --) y validar_fecha_sql, eliminando riesgos de inyección SQL en consultas export.
+  - Erradicación de Inyección JavaScript (automatizador_web.py): Parametrización estricta de llamadas page.evaluate() mediante payloads JSON nativos de Playwright (script, payload) para fecha de nacimiento, participantes, cédulas y formularios de nuevos usuarios.
+  - Desacoplamiento de Rastreadores (auditor_reportes.py): Creación de consultar_actividades_infoapp_http_crawler y consultar_servicios_infoapp_http_crawler, eliminando la dependencia circular de fallback entre motor_export_auditoria y auditor_reportes.
+  - Clasificación Centralizada de Actividades: Unificación de lógica de categorización mediante obtener_tipo_clasificacion_actividad() consumida por exportadores ODS, Excel, PDF y vistas de usuario.
+  - Resiliencia de Sesión y Checkpoints (gestor_sesion.py): Respaldo automático desde SQLite si el archivo JSON de sesión no existe, con propagación de errores de disco (OSError) y erradicación de bloques de excepción silenciosa.
+  - Purga de Placebos de Configuración: Eliminación definitiva de opciones sin efecto operativo (start_maximized) en interfaz_grafica.py, config_manager.py y config/settings.json.
+  - Saneamiento Documental: Eliminación de archivos obsoletos de grafo estático (docs/grafo_arquitectura_jsbot.html y .png).
+• SUITE DE PRUEBAS UNITARIAS Y REGRESIÓN:
+  - tests/test_blindaje_refactor.py: 9 pruebas unitarias de blindaje (sanitizadores SQL, clasificación centralizada, crawlers desacoplados y recuperación SQLite).
+  - Suite completa expandida a 452 pruebas certificadas (100% aprobadas).
+
+--------------------------------------------------------------------------------
 [v5.0.0] — 23 de Septiembre de 2026 (Lanzamiento Mayor: Ecosistema One-Line, Integración al Sistema y Telemetría Cloud)
 --------------------------------------------------------------------------------
 • INSTALADORES DESATENDIDOS ONE-LINE (WINDOWS & LINUX):

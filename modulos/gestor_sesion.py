@@ -255,8 +255,8 @@ def limpiar_checkpoint_db(id_actividad: str = None, tipo: str = "formacion", db_
                 cursor.execute("DELETE FROM checkpoints WHERE tipo = ? AND id_actividad = ?;", (tipo, str(id_actividad)))
             else:
                 cursor.execute("DELETE FROM checkpoints WHERE tipo = ?;", (tipo,))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error al limpiar checkpoint en SQLite: {e}")
 
 def registrar_inscrito_historico_db(id_actividad: str, cedula: str, nombre: str, telefono: str, fecha_registro: str = None, db_path: str = None):
     """Registra una inscripción histórica en la base de datos."""
@@ -458,8 +458,8 @@ def guardar_estado_sesion(config: dict, participantes: list, indice_ultimo: int)
             tipo="formacion",
             datos_json=json.dumps(datos, ensure_ascii=False)
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error al guardar checkpoint de formación en SQLite: {e}")
 
     # Respaldo atómico en JSON
     temp_file = f"{SESSION_STATE_FILE}.tmp"
@@ -481,8 +481,8 @@ def leer_estado_sesion() -> dict:
                 ult = datos.get("indice_ultimo_procesado", 0)
                 if total > 0 and ult < total:
                     return datos
-        except Exception:
-            pass
+        except Exception as err:
+            logger.error(f"Error al leer checkpoint desde SQLite: {err}")
         return None
     try:
         with open(SESSION_STATE_FILE, "r", encoding="utf-8") as f:
@@ -491,21 +491,21 @@ def leer_estado_sesion() -> dict:
         ult = datos.get("indice_ultimo_procesado", 0)
         if total > 0 and ult < total:
             return datos
-    except Exception:
-        pass
+    except Exception as err:
+        logger.warning(f"Archivo JSON de checkpoint corrupto o ilegible: {err}")
     return None
 
 def limpiar_estado_sesion():
     """Elimina el checkpoint de formación tras completar con éxito la carga."""
     try:
         limpiar_checkpoint_db(tipo="formacion")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Aviso al limpiar checkpoint SQLite de formación: {e}")
     if os.path.exists(SESSION_STATE_FILE):
         try:
             os.remove(SESSION_STATE_FILE)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Aviso al eliminar archivo JSON de checkpoint: {e}")
 
 
 def inicializar_sesion_actividad() -> dict:
@@ -677,18 +677,15 @@ def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, per
             tipo="servicios",
             datos_json=json.dumps(datos, ensure_ascii=False)
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Error al guardar checkpoint de servicios en SQLite: {e}")
 
-    try:
-        temp_file = f"{SESSION_STATE_SERV_FILE}.tmp"
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(datos, f, indent=4, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(temp_file, SESSION_STATE_SERV_FILE)
-    except Exception:
-        pass
+    temp_file = f"{SESSION_STATE_SERV_FILE}.tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(datos, f, indent=4, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_file, SESSION_STATE_SERV_FILE)
 
 def leer_estado_sesion_servicios() -> dict:
     """Lee el checkpoint de servicios si existe."""
@@ -701,8 +698,8 @@ def leer_estado_sesion_servicios() -> dict:
                 idx = datos.get("indice_ultimo_procesado", 0)
                 if personas and idx < len(personas):
                     return datos
-        except Exception:
-            pass
+        except Exception as err:
+            logger.error(f"Error al leer checkpoint de servicios desde SQLite: {err}")
         return None
     try:
         with open(SESSION_STATE_SERV_FILE, "r", encoding="utf-8") as f:
@@ -711,21 +708,21 @@ def leer_estado_sesion_servicios() -> dict:
         idx = datos.get("indice_ultimo_procesado", 0)
         if personas and idx < len(personas):
             return datos
-    except Exception:
-        pass
+    except Exception as err:
+        logger.warning(f"Archivo JSON de checkpoint de servicios corrupto o ilegible: {err}")
     return None
 
 def limpiar_estado_sesion_servicios():
     """Elimina el checkpoint de servicios al concluir exitosamente."""
     try:
         limpiar_checkpoint_db(tipo="servicios")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Aviso al limpiar checkpoint SQLite de servicios: {e}")
     if os.path.exists(SESSION_STATE_SERV_FILE):
         try:
             os.remove(SESSION_STATE_SERV_FILE)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Aviso al eliminar archivo JSON de checkpoint de servicios: {e}")
 
 
 def generar_reporte_auditoria_servicios(config: dict, config_servicio: dict, personas_exitosas: list, fallidos: list) -> str:

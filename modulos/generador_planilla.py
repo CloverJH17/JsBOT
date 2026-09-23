@@ -857,6 +857,9 @@ def generar_planilla_desde_actividad_infoapp(session, id_activity: str, ruta_sal
             "telefono": p.get("telefono", ""),
             "correo": p.get("correo", "")
         })
+    if ruta_salida and os.path.isdir(ruta_salida):
+        ruta_salida = os.path.join(ruta_salida, f"Planilla_Actividad_{id_activity}.{formato}")
+
     url_actividad = f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=participants_list&id_activity={id_activity}"
     return generar_planilla_multiformato(parts_adaptados, id_actividad=str(id_activity), url_actividad=url_actividad, ruta_salida=ruta_salida, formato=formato)
 

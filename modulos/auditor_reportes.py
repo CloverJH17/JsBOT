@@ -37,6 +37,7 @@ CONFIG_PATH = str(entorno.ARCHIVO_CONFIG_INI)
 REPORTES_DIR = os.path.join(BASE_DIR, "Reportes_Auditoria")
 CACHE_INSPECTOR_PATH = os.path.join(str(entorno.CARPETA_LOGS), "ultima_busqueda_inspector.json")
 from modulos.identidad_utils import LISTA_ESTADOS_VENEZUELA
+from modulos.version import ETIQUETA_VERSION, __version__
 
 def guardar_cache_inspector(resultado: dict, ruta_archivo: str = None) -> str:
     """
@@ -424,26 +425,22 @@ def _generar_rango_dias_auditoria(start_at: str, finish_at: str) -> list:
     except Exception:
         return []
 
-def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
-                                       start_at: str, finish_at: str, callback_log=None) -> tuple:
-    """Extrae todas las actividades en view=report mediante exportación nativa directa con fallback concurrente."""
+def consultar_actividades_infoapp_http_crawler(session: requests.Session, info_id: str, uid: str, estado: str,
+                                               start_at: str, finish_at: str, callback_log=None) -> tuple:
+    """Extrae todas las actividades navegando concurrentemente por días o páginas HTML con BeautifulSoup."""
     def log(msg):
         if callback_log:
             callback_log(msg)
         else:
             print(msg)
 
-    # Intento 1: Motor de exportación nativa ultra rápido v4.8.0
+    # Asegurar pool suficiente para peticiones concurrentes
     try:
-        from modulos.motor_export_auditoria import consultar_actividades_infoapp_export
-        total_exp, acts_exp = consultar_actividades_infoapp_export(
-            session, info_id=info_id, uid=uid, estado=estado,
-            start_at=start_at, finish_at=finish_at, callback_log=callback_log
-        )
-        if total_exp > 0:
-            return total_exp, acts_exp
-    except Exception as err_exp:
-        log(f"⚠️ Nota de aceleración nativa: {err_exp}. Continuando con escaneo...")
+        adapter = requests.adapters.HTTPAdapter(pool_connections=25, pool_maxsize=25, max_retries=2)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+    except Exception:
+        pass
 
     # Si hay rango de fechas de hasta 90 días, particionar por día para evitar el bug de paginación del backend InfoApp
     dias = _generar_rango_dias_auditoria(start_at, finish_at)
@@ -554,26 +551,48 @@ def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, 
 
     return total_registros, todas_actividades
 
-def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
-                                     start_at: str, finish_at: str, callback_log=None) -> tuple:
-    """Extrae todos los servicios en view=services mediante exportación nativa directa con fallback concurrente."""
+def consultar_actividades_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
+                                       start_at: str, finish_at: str, callback_log=None) -> tuple:
+    """Extrae todas las actividades en view=report mediante exportación nativa directa con fallback al crawler."""
     def log(msg):
         if callback_log:
             callback_log(msg)
         else:
             print(msg)
 
-    # Intento 1: Motor de exportación nativa ultra rápido v4.8.0
+    # Intento 1: Motor de exportación nativa ultra rápido
     try:
-        from modulos.motor_export_auditoria import consultar_servicios_infoapp_export
-        total_exp, srvs_exp = consultar_servicios_infoapp_export(
+        from modulos.motor_export_auditoria import consultar_actividades_infoapp_export
+        total_exp, acts_exp = consultar_actividades_infoapp_export(
             session, info_id=info_id, uid=uid, estado=estado,
             start_at=start_at, finish_at=finish_at, callback_log=callback_log
         )
         if total_exp > 0:
-            return total_exp, srvs_exp
+            return total_exp, acts_exp
     except Exception as err_exp:
         log(f"⚠️ Nota de aceleración nativa: {err_exp}. Continuando con escaneo...")
+
+    return consultar_actividades_infoapp_http_crawler(
+        session, info_id=info_id, uid=uid, estado=estado,
+        start_at=start_at, finish_at=finish_at, callback_log=callback_log
+    )
+
+def consultar_servicios_infoapp_http_crawler(session: requests.Session, info_id: str, uid: str, estado: str,
+                                             start_at: str, finish_at: str, callback_log=None) -> tuple:
+    """Extrae todos los servicios navegando concurrentemente por días o páginas HTML con BeautifulSoup."""
+    def log(msg):
+        if callback_log:
+            callback_log(msg)
+        else:
+            print(msg)
+
+    # Asegurar pool suficiente para peticiones concurrentes
+    try:
+        adapter = requests.adapters.HTTPAdapter(pool_connections=25, pool_maxsize=25, max_retries=2)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+    except Exception:
+        pass
 
     dias = _generar_rango_dias_auditoria(start_at, finish_at)
     if dias and len(dias) <= 90:
@@ -673,6 +692,32 @@ def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, ui
         todos_servicios.extend(servicios_por_pag.get(p, []))
 
     return total_servicios, todos_servicios
+
+def consultar_servicios_infoapp_http(session: requests.Session, info_id: str, uid: str, estado: str,
+                                     start_at: str, finish_at: str, callback_log=None) -> tuple:
+    """Extrae todos los servicios en view=services mediante exportación nativa directa con fallback al crawler."""
+    def log(msg):
+        if callback_log:
+            callback_log(msg)
+        else:
+            print(msg)
+
+    # Intento 1: Motor de exportación nativa ultra rápido
+    try:
+        from modulos.motor_export_auditoria import consultar_servicios_infoapp_export
+        total_exp, srvs_exp = consultar_servicios_infoapp_export(
+            session, info_id=info_id, uid=uid, estado=estado,
+            start_at=start_at, finish_at=finish_at, callback_log=callback_log
+        )
+        if total_exp > 0:
+            return total_exp, srvs_exp
+    except Exception as err_exp:
+        log(f"⚠️ Nota de aceleración nativa: {err_exp}. Continuando con escaneo...")
+
+    return consultar_servicios_infoapp_http_crawler(
+        session, info_id=info_id, uid=uid, estado=estado,
+        start_at=start_at, finish_at=finish_at, callback_log=callback_log
+    )
 
 # =============================================================================
 # 3. MÉTODOS COMPATIBLES DE EXTRACCIÓN (PLAYWRIGHT FALLBACK)
@@ -864,6 +909,32 @@ def _parse_fecha_segura(f_str):
         except Exception:
             continue
     return None
+
+def obtener_tipo_clasificacion_actividad(act: dict) -> str:
+    """
+    Clasifica un registro de actividad como 'formacion', 'producto' o 'otra'
+    utilizando la función de dominio institucional clasificar_actividad_datos.
+    """
+    if not isinstance(act, dict):
+        return "otra"
+    tipo_existente = act.get("tipo_clasificacion")
+    if tipo_existente in ("formacion", "producto", "otra"):
+        return tipo_existente
+
+    from modulos.motor_export_auditoria import clasificar_actividad_datos
+    dims = str(act.get("dimensiones") or "")
+    line_action = str(act.get("linea_accion") or dims)
+    report_type = str(act.get("tipo_reporte") or dims)
+    taller = str(act.get("taller") or act.get("area") or dims)
+    title = str(act.get("titulo") or dims)
+    try:
+        prod_val = int(act.get("productos", 0) or 0)
+    except (ValueError, TypeError):
+        prod_val = 0
+
+    tipo = clasificar_actividad_datos(line_action, report_type, taller, title, prod_val)
+    act["tipo_clasificacion"] = tipo
+    return tipo
 
 
 def conciliar_balance_auditoria(resultado: dict, total_declarado_servidor: int = None) -> dict:
@@ -1212,13 +1283,8 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
 
     todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
     for act in todas_act:
-        dims_lower = str(act.get("dimensiones", "")).lower()
-        if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
-            tipo_desc = "Formación"
-        elif act.get("productos", 0) > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
-            tipo_desc = "Producto"
-        else:
-            tipo_desc = "Otras Actividades"
+        tipo_c = obtener_tipo_clasificacion_actividad(act)
+        tipo_desc = "Formación" if tipo_c == "formacion" else ("Producto" if tipo_c == "producto" else "Otras Actividades")
 
         r_a = TableRow()
         r_a.addElement(_celda(act.get("fecha", ""), st_cell_center))
@@ -1458,13 +1524,8 @@ def exportar_reporte_pdf(resultado: dict, ruta_destino: str = None) -> str:
     todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
     filas_act_html = []
     for idx, act in enumerate(todas_act[:150], start=1):
-        dims_lower = str(act.get("dimensiones", "")).lower()
-        if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
-            tipo_desc = "Formación"
-        elif act.get("productos", 0) > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
-            tipo_desc = "Producto"
-        else:
-            tipo_desc = "Otras"
+        tipo_c = obtener_tipo_clasificacion_actividad(act)
+        tipo_desc = "Formación" if tipo_c == "formacion" else ("Producto" if tipo_c == "producto" else "Otras")
 
         filas_act_html.append(
             f'<tr>'
@@ -1669,7 +1730,7 @@ def exportar_reporte_pdf(resultado: dict, ruta_destino: str = None) -> str:
   <div class="header-box">
     <div class="header-title">
       <h1>INFORME OFICIAL DE AUDITORÍA Y INSPECCIÓN ADMINISTRATIVA — JsBOT</h1>
-      <p>Generado el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")} | Motor de Auditoría Acelerado v4.14.0</p>
+      <p>Generado el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")} | Motor de Auditoría Acelerado {ETIQUETA_VERSION}</p>
     </div>
     <div>
       <span class="badge {badge_cls}">{html.escape(dictamen_cuadre)}</span>
@@ -2026,13 +2087,8 @@ def exportar_reporte_excel(resultado: dict, ruta_destino: str = None) -> str:
 
     todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
     for r_idx, act in enumerate(todas_act, start=2):
-        dims_lower = act.get("dimensiones", "").lower()
-        if "aprendizaje" in dims_lower or "robótica" in dims_lower or "taller" in dims_lower:
-            tipo_desc = "Formación"
-        elif act.get("productos", 0) > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower:
-            tipo_desc = "Producto"
-        else:
-            tipo_desc = "Otras Actividades"
+        tipo_c = obtener_tipo_clasificacion_actividad(act)
+        tipo_desc = "Formación" if tipo_c == "formacion" else ("Producto" if tipo_c == "producto" else "Otras Actividades")
 
         fila_act = [
             act.get("fecha", ""),
@@ -2360,14 +2416,13 @@ def ejecutar_auditoria(
         total_estudiantes = 0
 
         for act in lista_act:
-            dims_lower = (act.get("dimensiones") or "").lower()
+            tipo_c = obtener_tipo_clasificacion_actividad(act)
             p_cnt = act.get("participantes", 0)
-            prod_cnt = act.get("productos", 0)
 
-            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower:
+            if tipo_c == "formacion":
                 formaciones.append(act)
                 total_estudiantes += p_cnt
-            elif prod_cnt > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower:
+            elif tipo_c == "producto":
                 productos.append(act)
             else:
                 otras_actividades.append(act)
@@ -2390,7 +2445,7 @@ def ejecutar_auditoria(
                 resumen_facilitadores[clave_fac] = {
                     "uid": f_uid if (f_uid and f_uid != "S/D") else "S/D",
                     "nombre": resp_nom or (f"UID {f_uid}" if f_uid else "Sin Facilitador"),
-                    "info_id": act.get("info_id") or info_id,
+                    "info_id": act.get("info_id") or info_filtro or info_id or "S/D",
                     "formaciones": 0,
                     "estudiantes": 0,
                     "productos": 0,
@@ -2399,14 +2454,13 @@ def ejecutar_auditoria(
                     "servicios": 0
                 }
             
-            dims_lower = (act.get("dimensiones") or "").lower()
+            tipo_c = obtener_tipo_clasificacion_actividad(act)
             p_cnt = act.get("participantes", 0)
-            prod_cnt = act.get("productos", 0)
 
-            if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
+            if tipo_c == "formacion":
                 resumen_facilitadores[clave_fac]["formaciones"] += 1
                 resumen_facilitadores[clave_fac]["estudiantes"] += p_cnt
-            elif prod_cnt > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
+            elif tipo_c == "producto":
                 resumen_facilitadores[clave_fac]["productos"] += 1
             else:
                 resumen_facilitadores[clave_fac]["otras"] += 1

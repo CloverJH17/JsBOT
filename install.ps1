@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 ===============================================================================
-INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.0.0 (Microsoft Windows)
+INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.2.0 (Microsoft Windows)
 ===============================================================================
 Uso en PowerShell (1 sola línea):
 irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.ps1 | iex
@@ -12,7 +12,7 @@ irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "   JsBOT RPA v5.0.0 — Instalador Express Autónomo" -ForegroundColor Cyan
+Write-Host "   JsBOT RPA v5.2.0 — Instalador Express Autónomo" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -178,7 +178,7 @@ if ($PythonCmd) {
 
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Green
-Write-Host "   ¡JsBOT v5.0.0 instalado y configurado con éxito!" -ForegroundColor Green
+Write-Host "   ¡JsBOT v5.2.0 instalado y configurado con éxito!" -ForegroundColor Green
 Write-Host "   • Acceso creado en el Escritorio" -ForegroundColor Gray
 Write-Host "   • Acceso creado en el Menú de Inicio" -ForegroundColor Gray
 Write-Host "   • Comando 'jsbot' disponible en cualquier terminal" -ForegroundColor Gray

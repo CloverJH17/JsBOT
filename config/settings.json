@@ -1,6 +1,6 @@
 {
     "app": {
-        "version": "5.0.0",
+        "version": "5.2.0",
         "interfaz_predeterminada": "gui"
     },
     "telemetria": {
@@ -16,8 +16,7 @@
             "firefox",
             "chrome",
             "edge"
-        ],
-        "start_maximized": true
+        ]
     },
     "validation": {
         "default_phone": "0412-0000000",

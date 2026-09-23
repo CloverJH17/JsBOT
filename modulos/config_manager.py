@@ -26,8 +26,7 @@ DEFAULTS = {
         "base_login": "https://infoapp2.infocentro.gob.ve/admin/index.php"
     },
     "browser": {
-        "priority": ["chromium", "firefox", "webkit"],
-        "start_maximized": True
+        "priority": ["chromium", "firefox", "webkit"]
     },
     "validation": {
         "default_phone": "0412-0000000",

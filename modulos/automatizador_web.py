@@ -18,7 +18,11 @@ import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright, Page, BrowserContext
 
-from modulos.gestor_sesion import registrar_evento_log, guardar_estado_sesion
+from modulos.gestor_sesion import (
+    registrar_evento_log,
+    guardar_estado_sesion,
+    registrar_inscrito_historico_db
+)
 from modulos import config_manager as cm
 from modulos.driver_factory import obtener_contexto_playwright
 import modulos.entorno as entorno
@@ -251,32 +255,46 @@ def registrar_alumno_playwright(page: Page, alumno: dict, config: dict) -> tuple
         try:
             page.locator("#name").fill(nom_1)
         except Exception:
-            pass
+            page.evaluate("""(val) => {
+                const el = document.getElementById('name');
+                if (el) el.value = val;
+            }""", nom_1)
+
         if nom_2:
             try:
                 page.locator("#name_2").fill(nom_2)
             except Exception:
-                pass
+                page.evaluate("""(val) => {
+                    const el = document.getElementById('name_2');
+                    if (el) el.value = val;
+                }""", nom_2)
 
         try:
             page.locator("#lastname").fill(ape_1)
         except Exception:
-            pass
+            page.evaluate("""(val) => {
+                const el = document.getElementById('lastname');
+                if (el) el.value = val;
+            }""", ape_1)
+
         if ape_2:
             try:
                 page.locator("#lastname_2").fill(ape_2)
             except Exception:
-                pass
+                page.evaluate("""(val) => {
+                    const el = document.getElementById('lastname_2');
+                    if (el) el.value = val;
+                }""", ape_2)
 
         # Inyección de Fecha de Nacimiento
         if alumno.get('nacimiento'):
-            page.evaluate(f"""() => {{
+            page.evaluate("""(fn_val) => {
                 let fn = document.getElementById('user_f_nacimiento');
-                if (fn) {{
-                    fn.value = '{alumno['nacimiento']}';
-                    fn.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                }}
-            }}""")
+                if (fn) {
+                    fn.value = fn_val;
+                    fn.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }""", str(alumno['nacimiento']))
 
         # Teléfono
         try:
@@ -545,6 +563,15 @@ def ejecutar_carga_infoapp(
                         registrar_evento_log(config['archivo_log'], doc_str, nom_comp, "EXITOSO", detalle)
                         cargados_exitosos.append(alumno)
                         guardar_estado_sesion(config, participantes, i + 1)
+                        try:
+                            registrar_inscrito_historico_db(
+                                id_actividad=str(id_act or "general"),
+                                cedula=doc_str,
+                                nombre=nom_comp,
+                                telefono=str(alumno.get('telefono', ''))
+                            )
+                        except Exception:
+                            pass
                         _emitir_log(f"[OK] Alumno {i + 1}/{total}: {nom_comp} registrado en InfoApp.")
                         _emitir_progreso(i + 1, total, f"[OK] {nom_comp}")
                         cargado = True
@@ -581,6 +608,34 @@ def ejecutar_carga_infoapp(
                     else:
                         # Reintentar con sesión nueva
                         contexto_contenedor['page'] = None
+
+            # Verificación Post-Carga contra InfoApp por HTTP ultrarrápido
+            if cargados_exitosos and id_act:
+                try:
+                    lista_cedulas_verif = [
+                        str(a.get("cedula") or a.get("cedula_escolar") or a.get("dni") or "").strip()
+                        for a in cargados_exitosos
+                        if (a.get("cedula") or a.get("cedula_escolar") or a.get("dni"))
+                    ]
+                    if lista_cedulas_verif:
+                        _emitir_log(f"[VERIFICACIÓN] Comprobando {len(lista_cedulas_verif)} participantes en servidor InfoApp (Actividad #{id_act})...")
+                        import requests
+                        from modulos.verificador_cargas_export import verificar_participantes_actividad
+                        sess_verif = requests.Session()
+                        sess_verif.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                        if contexto_contenedor.get('context'):
+                            try:
+                                for ck in contexto_contenedor['context'].cookies():
+                                    sess_verif.cookies.set(ck['name'], ck['value'], domain=ck.get('domain', ''), path=ck.get('path', '/'))
+                            except Exception:
+                                pass
+                        res_v = verificar_participantes_actividad(sess_verif, str(id_act), lista_cedulas_verif)
+                        tot_c = res_v.get("confirmados_total", len(lista_cedulas_verif))
+                        tot_e = res_v.get("esperados_total", len(lista_cedulas_verif))
+                        porc = (tot_c / tot_e * 100.0) if tot_e > 0 else 100.0
+                        _emitir_log(f"✅ Verificación InfoApp en Servidor: {tot_c}/{tot_e} confirmados ({porc:.1f}%).")
+                except Exception as err_v:
+                    _emitir_log(f"[AVISO] Verificación post-carga InfoApp omitida: {err_v}")
 
     finally:
         for key in ('context', 'pw'):
@@ -660,46 +715,66 @@ def registrar_nuevo_usuario_perfil(page: Page, persona: dict, config_servicio: d
 
     situacion_laboral = 'No trabaja' if edad_num < 18 else 'Trabajo independiente'
 
-    page.evaluate(f"""
-        if (document.getElementById('user_nationality')) document.getElementById('user_nationality').value = '{nacionalidad}';
-        if (document.getElementById('user_has_document')) {{
-            document.getElementById('user_has_document').value = '{has_doc_val}';
-            document.getElementById('user_has_document').dispatchEvent(new Event('change', {{ bubbles: true }}));
-        }}
-        if ('{has_doc_val}' === 'Si') {{
-            if (document.getElementById('user_dni')) document.getElementById('user_dni').value = '{cedula_num}';
-        }} else {{
-            if (document.getElementById('parent_dni')) document.getElementById('parent_dni').value = '{parent_dni_val}';
-            if (document.getElementById('child_number')) document.getElementById('child_number').value = '{child_num_val}';
-            if (document.getElementById('parent_ref')) document.getElementById('parent_ref').value = '{parent_dni_val}{child_num_val}';
-        }}
-        if (document.getElementById('user_nombres')) document.getElementById('user_nombres').value = '{nom_1}';
+    payload_usuario = {
+        "nacionalidad": str(nacionalidad),
+        "has_doc_val": str(has_doc_val),
+        "cedula_num": str(cedula_num),
+        "parent_dni_val": str(parent_dni_val),
+        "child_num_val": str(child_num_val),
+        "nom_1": str(nom_1),
+        "nom_2": str(nom_2),
+        "ape_1": str(ape_1),
+        "ape_2": str(ape_2),
+        "telefono": str(telefono),
+        "correo_unico": str(correo_unico),
+        "genero_str": str(genero_str),
+        "f_nac": str(f_nac),
+        "estado_id": str(estado_id),
+        "direccion_def": str(direccion_def),
+        "nivel_academico": str(nivel_academico),
+        "situacion_laboral": str(situacion_laboral)
+    }
+
+    page.evaluate("""(d) => {
+        if (document.getElementById('user_nationality')) document.getElementById('user_nationality').value = d.nacionalidad;
+        if (document.getElementById('user_has_document')) {
+            document.getElementById('user_has_document').value = d.has_doc_val;
+            document.getElementById('user_has_document').dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (d.has_doc_val === 'Si') {
+            if (document.getElementById('user_dni')) document.getElementById('user_dni').value = d.cedula_num;
+        } else {
+            if (document.getElementById('parent_dni')) document.getElementById('parent_dni').value = d.parent_dni_val;
+            if (document.getElementById('child_number')) document.getElementById('child_number').value = d.child_num_val;
+            if (document.getElementById('parent_ref')) document.getElementById('parent_ref').value = d.parent_dni_val + d.child_num_val;
+        }
+        if (document.getElementById('user_nombres')) document.getElementById('user_nombres').value = d.nom_1;
         let n2 = document.querySelector("input[name='user_nombre_2']");
-        if (n2) n2.value = '{nom_2}';
+        if (n2) n2.value = d.nom_2;
         let ap1 = document.querySelector("input[name='user_apellidos']");
-        if (ap1) ap1.value = '{ape_1}';
+        if (ap1) ap1.value = d.ape_1;
         let ap2 = document.querySelector("input[name='user_apellido_2']");
-        if (ap2) ap2.value = '{ape_2}';
-        if (document.getElementById('user_telefono')) document.getElementById('user_telefono').value = '{telefono}';
-        if (document.getElementById('user_correo')) document.getElementById('user_correo').value = '{correo_unico}';
-        if (document.getElementById('user_genero')) document.getElementById('user_genero').value = '{genero_str}';
-        if (document.getElementById('user_f_nacimiento')) document.getElementById('user_f_nacimiento').value = '{f_nac}';
+        if (ap2) ap2.value = d.ape_2;
+        if (document.getElementById('user_telefono')) document.getElementById('user_telefono').value = d.telefono;
+        if (document.getElementById('user_correo')) document.getElementById('user_correo').value = d.correo_unico;
+        if (document.getElementById('user_genero')) document.getElementById('user_genero').value = d.genero_str;
+        if (document.getElementById('user_f_nacimiento')) document.getElementById('user_f_nacimiento').value = d.f_nac;
         if (document.getElementById('user_comunity_type')) document.getElementById('user_comunity_type').value = 'No aplica';
         if (document.getElementById('user_etnia')) document.getElementById('user_etnia').value = 'No aplica';
         if (document.getElementById('disability_type')) document.getElementById('disability_type').value = 'No aplica';
         let org = document.querySelector("select[name='user_pertenece_organizacion']");
         if (org) org.value = 'No aplica';
-        if (document.getElementById('estados')) {{
-            document.getElementById('estados').value = '{estado_id}';
-            document.getElementById('estados').dispatchEvent(new Event('change', {{ bubbles: true }}));
-        }}
+        if (document.getElementById('estados')) {
+            document.getElementById('estados').value = d.estado_id;
+            document.getElementById('estados').dispatchEvent(new Event('change', { bubbles: true }));
+        }
         let dir = document.querySelector("input[name='user_direccion']");
-        if (dir) dir.value = '{direccion_def}';
-        if (document.getElementById('user_nivel_academ')) document.getElementById('user_nivel_academ').value = '{nivel_academico}';
+        if (dir) dir.value = d.direccion_def;
+        if (document.getElementById('user_nivel_academ')) document.getElementById('user_nivel_academ').value = d.nivel_academico;
         if (document.getElementById('user_profesion')) document.getElementById('user_profesion').value = 'Sin títulos universitarios';
         if (document.getElementById('user_ocupacion')) document.getElementById('user_ocupacion').value = 'Estudiante';
-        if (document.getElementById('user_empleado')) document.getElementById('user_empleado').value = '{situacion_laboral}';
-    """)
+        if (document.getElementById('user_empleado')) document.getElementById('user_empleado').value = d.situacion_laboral;
+    }""", payload_usuario)
 
     esperar_desbloqueo_ajax(page)
 
@@ -755,12 +830,12 @@ def registrar_servicio_persona(page: Page, persona: dict, config_servicio: dict)
     try:
         page.locator("#user_has_document").select_option(doc_tipo)
     except Exception:
-        page.evaluate(f"() => {{ if(document.getElementById('user_has_document')) document.getElementById('user_has_document').value = '{doc_tipo}'; }}")
+        page.evaluate("""(v) => { if(document.getElementById('user_has_document')) document.getElementById('user_has_document').value = v; }""", str(doc_tipo))
 
     try:
         page.locator("#q_participante").fill(str(cedula_busc))
     except Exception:
-        page.evaluate(f"() => {{ if(document.getElementById('q_participante')) document.getElementById('q_participante').value = '{cedula_busc}'; }}")
+        page.evaluate("""(v) => { if(document.getElementById('q_participante')) document.getElementById('q_participante').value = v; }""", str(cedula_busc))
 
     page.evaluate("() => { if (typeof codigoAJAX === 'function') codigoAJAX(); }")
     esperar_desbloqueo_ajax(page, timeout=8)
@@ -790,12 +865,12 @@ def registrar_servicio_persona(page: Page, persona: dict, config_servicio: dict)
             try:
                 page.locator("#user_has_document").select_option(doc_tipo)
             except Exception:
-                page.evaluate(f"() => {{ if(document.getElementById('user_has_document')) document.getElementById('user_has_document').value = '{doc_tipo}'; }}")
+                page.evaluate("""(v) => { if(document.getElementById('user_has_document')) document.getElementById('user_has_document').value = v; }""", str(doc_tipo))
 
             try:
                 page.locator("#q_participante").fill(str(cedula_busc))
             except Exception:
-                page.evaluate(f"() => {{ if(document.getElementById('q_participante')) document.getElementById('q_participante').value = '{cedula_busc}'; }}")
+                page.evaluate("""(v) => { if(document.getElementById('q_participante')) document.getElementById('q_participante').value = v; }""", str(cedula_busc))
 
             page.evaluate("() => { if (typeof codigoAJAX === 'function') codigoAJAX(); }")
             esperar_desbloqueo_ajax(page, timeout=8)
@@ -816,19 +891,19 @@ def registrar_servicio_persona(page: Page, persona: dict, config_servicio: dict)
     tipo_srv = config_servicio.get('tipo_servicio', 'Gestión en el Sistema de Protección Social Patria')
     fecha_srv = config_servicio.get('fecha_servicio', datetime.now().strftime("%Y-%m-%d"))
 
-    page.evaluate(f"""() => {{
-        if (document.getElementById('user_tipo_servicio')) document.getElementById('user_tipo_servicio').value = "{tipo_srv}";
-        if (document.getElementById('tipo_servicio')) document.getElementById('tipo_servicio').value = "{tipo_srv}";
+    page.evaluate("""([srv, f_srv]) => {
+        if (document.getElementById('user_tipo_servicio')) document.getElementById('user_tipo_servicio').value = srv;
+        if (document.getElementById('tipo_servicio')) document.getElementById('tipo_servicio').value = srv;
         let f_inp = document.getElementById('user_fecha_servicio');
-        if (f_inp) {{
+        if (f_inp) {
             f_inp.type = 'date';
-            f_inp.value = '{fecha_srv}';
-            f_inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            f_inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        }}
+            f_inp.value = f_srv;
+            f_inp.dispatchEvent(new Event('change', { bubbles: true }));
+            f_inp.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         let f_alt = document.querySelector("input[name='user_fecha_servicio']");
-        if (f_alt && f_alt !== f_inp) {{ f_alt.value = '{fecha_srv}'; }}
-    }}""")
+        if (f_alt && f_alt !== f_inp) { f_alt.value = f_srv; }
+    }""", [str(tipo_srv), str(fecha_srv)])
 
     # 5. Enviar formulario del servicio
     limpiar_overlays(page)

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-TEST SUITE: INSTALADORES ONE-LINE Y TELEMETRÍA CLOUD (JsBOT v5.0.0)
+TEST SUITE: INSTALADORES ONE-LINE Y TELEMETRÍA CLOUD (JsBOT v5.1.0)
 ===============================================================================
 Pruebas unitarias para:
 1. Recolección de metadatos de sistema e identificación de máquina.
@@ -50,7 +50,7 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
             self.assertIn(campo, meta, f"El campo {campo} debe estar presente en los metadatos")
             self.assertIsNotNone(meta[campo], f"El campo {campo} no puede ser nulo")
         
-        self.assertEqual(meta["version_jsbot"], "v5.0.0")
+        self.assertEqual(meta["version_jsbot"], "v5.2.0")
 
     def test_identificador_maquina_estabilidad(self):
         """Valida que el identificador anónimo de máquina sea consistente y tenga formato hash."""
@@ -70,15 +70,15 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
             self.fail(f"La telemetría no debe arrojar excepciones ante fallas de red: {e}")
 
     def test_coherencia_version_triple_v5(self):
-        """Valida la coherencia estricta de versión v5.0.0 entre version.py, settings.json y docs."""
+        """Valida la coherencia estricta de versión v5.2.0 entre version.py, settings.json y docs."""
         # 1. version.py
-        self.assertEqual(__version__, "5.0.0")
+        self.assertEqual(__version__, "5.2.0")
         
         # 2. settings.json
         settings_path = os.path.join(BASE_DIR, "config", "settings.json")
         with open(settings_path, "r", encoding="utf-8") as f:
             settings = json.load(f)
-        self.assertEqual(settings["app"]["version"], "5.0.0")
+        self.assertEqual(settings["app"]["version"], "5.2.0")
         self.assertIn("telemetria", settings)
         self.assertTrue(settings["telemetria"]["activa"])
         
@@ -86,7 +86,7 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
         docs_path = os.path.join(BASE_DIR, "docs", "version.txt")
         with open(docs_path, "r", encoding="utf-8") as f:
             docs_content = f.read()
-        self.assertIn("[v5.0.0]", docs_content)
+        self.assertIn("[v5.2.0]", docs_content)
 
     def test_archivos_instaladores_existencia_y_estructura(self):
         """Valida la presencia y estructura esencial de los instaladores y desinstaladores."""
@@ -95,7 +95,7 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
         self.assertTrue(os.path.exists(ps1_path))
         with open(ps1_path, "r", encoding="utf-8") as f:
             ps1_content = f.read()
-        self.assertIn("JsBOT RPA v5.0.0", ps1_content)
+        self.assertIn("JsBOT RPA v5.2.0", ps1_content)
         self.assertIn("$InstallDir", ps1_content)
         self.assertIn("JsBOT.lnk", ps1_content)
         self.assertIn("jsbot.cmd", ps1_content)
@@ -105,7 +105,7 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
         self.assertTrue(os.path.exists(sh_path))
         with open(sh_path, "r", encoding="utf-8") as f:
             sh_content = f.read()
-        self.assertIn("JsBOT RPA v5.0.0", sh_content)
+        self.assertIn("JsBOT RPA v5.2.0", sh_content)
         self.assertIn("INSTALL_DIR", sh_content)
         self.assertIn("jsbot.desktop", sh_content)
         self.assertIn("~/.local/bin/jsbot", sh_content)

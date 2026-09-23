@@ -241,6 +241,8 @@ class JsBotGUI(ctk.CTk):
 
         # Variables Tkinter para Planillas
         self.archivo_seleccionado_planillas = tk.StringVar(value="Ningún archivo seleccionado")
+        self.var_id_actividad_planilla = tk.StringVar(value="")
+        self.var_formato_descarga_planilla = tk.StringVar(value="ods")
         self.participantes_cargados_planillas = []
         self.datos_normalizados_planillas = []
         self.reporte_deduplicacion_planillas = None
@@ -309,6 +311,12 @@ class JsBotGUI(ctk.CTk):
         # Comprobar si hay sesión previa interrumpida por apagón o corte de red
         if MODULOS_DISPONIBLES:
             self.after(300, self.comprobar_sesion_interrumpida_gui)
+            try:
+                import threading
+                from modulos.gestor_sesion import purgar_logs_antiguos_db
+                threading.Thread(target=purgar_logs_antiguos_db, kwargs={"dias_retencion": 30}, daemon=True).start()
+            except Exception:
+                pass
 
     # =========================================================================
     # GESTIÓN CENTRALIZADA DEL CICLO DE VIDA DE MODALES (CTkToplevel)
@@ -2196,6 +2204,57 @@ class JsBotGUI(ctk.CTk):
         )
         lbl_tools_title.pack(anchor="w", pady=(0, 6))
 
+        # Tarjeta: Generación Directa desde Actividad InfoApp
+        remote_card = ctk.CTkFrame(tools_inner, fg_color="#181824", corner_radius=8, border_width=1, border_color="#2D2D42")
+        remote_card.pack(fill="x", pady=(0, 10))
+
+        rc_header = ctk.CTkFrame(remote_card, fg_color="transparent")
+        rc_header.pack(fill="x", padx=10, pady=(8, 4))
+        lbl_rc_title = ctk.CTkLabel(
+            rc_header,
+            text="📥 Descargar Planilla Oficial desde ID de Actividad InfoApp",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_rc_title.pack(side="left")
+
+        rc_body = ctk.CTkFrame(remote_card, fg_color="transparent")
+        rc_body.pack(fill="x", padx=10, pady=(0, 8))
+
+        lbl_id_act = ctk.CTkLabel(rc_body, text="ID Actividad:", font=ctk.CTkFont(size=11), text_color="#C0C0C8")
+        lbl_id_act.pack(side="left", padx=(0, 6))
+
+        entry_id_act = ctk.CTkEntry(
+            rc_body,
+            textvariable=self.var_id_actividad_planilla,
+            placeholder_text="Ej: 528449",
+            width=120,
+            height=28,
+            font=ctk.CTkFont(size=11)
+        )
+        entry_id_act.pack(side="left", padx=(0, 8))
+
+        opt_fmt = ctk.CTkOptionMenu(
+            rc_body,
+            variable=self.var_formato_descarga_planilla,
+            values=["ods", "xlsx"],
+            width=80,
+            height=28,
+            font=ctk.CTkFont(size=10)
+        )
+        opt_fmt.pack(side="left", padx=(0, 8))
+
+        self.btn_descargar_planilla_act = ctk.CTkButton(
+            rc_body,
+            text="Descargar Planilla",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=28,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=self._descargar_planilla_desde_actividad_thread
+        )
+        self.btn_descargar_planilla_act.pack(side="left")
+
         actions_grid = ctk.CTkFrame(tools_inner, fg_color="transparent")
         actions_grid.pack(fill="x", pady=(0, 8))
         actions_grid.grid_columnconfigure((0, 1), weight=1)
@@ -2316,6 +2375,18 @@ class JsBotGUI(ctk.CTk):
             command=self._cargar_ultima_busqueda_cache
         )
         self.btn_cargar_cache.pack(side="right", padx=3)
+
+        self.btn_diagnostico_fac = ctk.CTkButton(
+            header,
+            text="🩺 Diagnóstico",
+            font=ctk.CTkFont(size=11),
+            width=95,
+            height=28,
+            fg_color="#1F538D",
+            hover_color="#14375E",
+            command=self._iniciar_diagnostico_facilitador_thread
+        )
+        self.btn_diagnostico_fac.pack(side="right", padx=3)
 
         # 2. Tarjeta de Criterios y Parámetros
         params_card = ctk.CTkFrame(frame, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
@@ -3005,10 +3076,17 @@ class JsBotGUI(ctk.CTk):
                     ctk.CTkLabel(row_f, text=str(idx), width=35, font=ctk.CTkFont(size=10), text_color="#8E8E98").pack(side="left", padx=2)
                     ctk.CTkLabel(row_f, text=str(item.get("fecha", "S/F")), width=85, font=ctk.CTkFont(size=10), text_color="#C0C0C8").pack(side="left", padx=2)
 
-                    dims = item.get("dimensiones", "").lower()
-                    if "aprendizaje" in dims or "robótica" in dims or "taller" in dims:
+                    tipo_item = item.get("tipo_clasificacion")
+                    if not tipo_item:
+                        try:
+                            from modulos.auditor_reportes import obtener_tipo_clasificacion_actividad
+                            tipo_item = obtener_tipo_clasificacion_actividad(item)
+                        except Exception:
+                            tipo_item = "otra"
+
+                    if tipo_item == "formacion":
                         t_lbl, t_fg, t_tc = "Formación", "#1E4D2B", "#2ECC71"
-                    elif item.get("productos", 0) > 0 or "contenido" in dims:
+                    elif tipo_item == "producto":
                         t_lbl, t_fg, t_tc = "Producto", "#1B3A57", "#3B8ED0"
                     else:
                         t_lbl, t_fg, t_tc = "Otras Act.", "#3D2B52", "#9B59B6"
@@ -3100,18 +3178,10 @@ class JsBotGUI(ctk.CTk):
         f_desde = self.var_fecha_desde_aud.get().strip()
         f_hasta = self.var_fecha_hasta_aud.get().strip()
         rol = self.var_rol_auditor.get()
-        formato = self.var_exportar_formato.get().lower()
-
-        if "consola" in formato or "pantalla" in formato:
-            formato_exp = "consola"
-        elif "ods" in formato or "libreoffice" in formato or "calc" in formato:
-            formato_exp = "ods"
-        elif "pdf" in formato:
-            formato_exp = "pdf"
-        elif "csv" in formato:
-            formato_exp = "csv"
-        else:
-            formato_exp = "excel"
+        # NOTA ARQUITECTÓNICA: La auditoría en UI se ejecuta siempre en modo consulta
+        # en memoria ("exportar_formato": "ninguno") para previsualizar los resultados en
+        # telemetría. La exportación física a disco (.ods, .xlsx, .pdf, .csv) se dispara bajo
+        # demanda mediante _exportar_reporte_dialogo para garantizar la selección interactiva de ruta y formato.
 
         try:
             datetime.strptime(f_desde, "%Y-%m-%d")
@@ -3450,6 +3520,137 @@ class JsBotGUI(ctk.CTk):
         """Carga los resultados de auditoría desde el caché ligero JSON."""
         return ar.cargar_cache_inspector(ruta_archivo)
 
+    def _descargar_planilla_desde_actividad_thread(self):
+        """Valida e inicia la descarga de planilla desde una actividad en InfoApp en segundo plano."""
+        id_act = self.var_id_actividad_planilla.get().strip()
+        if not id_act:
+            self._mostrar_modal_mensaje(
+                "Falta ID de Actividad",
+                "Por favor ingresa el ID numérico de la actividad en InfoApp (ej: 528449).",
+                tipo="aviso"
+            )
+            return
+
+        fmt = self.var_formato_descarga_planilla.get().lower().strip() or "ods"
+        if hasattr(self, "btn_descargar_planilla_act"):
+            self.btn_descargar_planilla_act.configure(state="disabled", text="⏳ Descargando...")
+
+        def _worker():
+            try:
+                import requests
+                from modulos.generador_planilla import generar_planilla_desde_actividad_infoapp
+                from modulos.auditor_reportes import iniciar_driver_auditoria, autenticar_infoapp
+
+                u, c = obtener_credenciales() if MODULOS_DISPONIBLES else ("", "")
+                if not u or not c:
+                    self.cola_eventos.put(("modal", ("Credenciales Requeridas", "Configura tu usuario y clave en la pestaña Credenciales.", "aviso")))
+                    return
+
+                self._agregar_log(f"📥 Conectando con InfoApp para descargar participantes de actividad #{id_act}...")
+                driver = iniciar_driver_auditoria(headless=True)
+                sess = requests.Session()
+                sess.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                try:
+                    autenticar_infoapp(driver, u, c)
+                    for ck in driver.get_cookies():
+                        sess.cookies.set(ck["name"], ck["value"], domain=ck.get("domain", ""), path=ck.get("path", "/"))
+                finally:
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+
+                carpeta_salida = str(entorno.CARPETA_PLANILLAS)
+                os.makedirs(carpeta_salida, exist_ok=True)
+                ruta_generada = generar_planilla_desde_actividad_infoapp(sess, id_act, ruta_salida=carpeta_salida, formato=fmt)
+
+                if ruta_generada and os.path.exists(ruta_generada):
+                    self._agregar_log(f"✅ Planilla oficial generada exitosamente: {os.path.basename(ruta_generada)}")
+                    self.cola_eventos.put(("toast", f"Planilla descargada: {os.path.basename(ruta_generada)}"))
+                    abrir_archivo_o_directorio_sistema(ruta_generada)
+                else:
+                    self.cola_eventos.put(("modal", ("Error al Generar", f"No se pudo descargar la planilla de la actividad #{id_act}.", "error")))
+            except Exception as err:
+                self._agregar_log(f"[-] Error descargando planilla: {err}")
+                self.cola_eventos.put(("modal", ("Fallo en Descarga", f"Error consultando actividad #{id_act}: {err}", "error")))
+            finally:
+                if hasattr(self, "btn_descargar_planilla_act"):
+                    self.after(0, lambda: self.btn_descargar_planilla_act.configure(state="normal", text="Descargar Planilla"))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _iniciar_diagnostico_facilitador_thread(self):
+        """Ejecuta el diagnóstico preventivo de actividades del facilitador en segundo plano."""
+        uid = self.var_criterio_uid.get().strip() or "1325"
+        f_ini = self.var_fecha_desde_aud.get().strip()
+        f_fin = self.var_fecha_hasta_aud.get().strip()
+
+        if hasattr(self, "btn_diagnostico_fac"):
+            self.btn_diagnostico_fac.configure(state="disabled", text="⏳ Evaluando...")
+        self._agregar_log_auditoria(f"Iniciando diagnóstico preventivo para Facilitador UID {uid} ({f_ini} al {f_fin})...")
+
+        def _worker():
+            try:
+                import requests
+                from modulos.diagnostico_facilitador import diagnosticar_actividades_facilitador
+                from modulos.auditor_reportes import iniciar_driver_auditoria, autenticar_infoapp
+
+                u, c = obtener_credenciales() if MODULOS_DISPONIBLES else ("", "")
+                if not u or not c:
+                    self.cola_eventos.put(("modal", ("Credenciales Requeridas", "Configura tu usuario y clave en la pestaña Credenciales.", "aviso")))
+                    return
+
+                driver = iniciar_driver_auditoria(headless=True)
+                sess = requests.Session()
+                sess.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                try:
+                    autenticar_infoapp(driver, u, c)
+                    for ck in driver.get_cookies():
+                        sess.cookies.set(ck["name"], ck["value"], domain=ck.get("domain", ""), path=ck.get("path", "/"))
+                finally:
+                    try:
+                        driver.quit()
+                    except Exception:
+                        pass
+
+                res = diagnosticar_actividades_facilitador(sess, uid, fecha_inicio=f_ini, fecha_fin=f_fin)
+                salud = res.get("salud_reporte", "excelente")
+                tot = res.get("total_actividades", 0)
+                formaciones = res.get("formaciones_total", 0)
+                productos = res.get("productos_total", 0)
+                otras = res.get("otras_total", 0)
+                conteo_sin = res.get("conteo_sin_participantes", 0)
+                alertas = res.get("alertas", [])
+
+                self._agregar_log_auditoria("=" * 60)
+                self._agregar_log_auditoria(f"🩺 RESULTADO DIAGNÓSTICO PREVENTIVO — UID {uid}")
+                self._agregar_log_auditoria(f"📊 Actividades: {tot} (Formaciones: {formaciones} | Productos: {productos} | Otras: {otras})")
+                self._agregar_log_auditoria(f"⚠️ Actividades con 0 participantes: {conteo_sin}")
+                self._agregar_log_auditoria(f"🛡️ Salud del reporte: {salud.upper()}")
+                for al in alertas:
+                    self._agregar_log_auditoria(f"👉 ALERTA: {al}")
+                self._agregar_log_auditoria("=" * 60)
+
+                if conteo_sin > 0:
+                    msg = (
+                        f"Se encontraron {conteo_sin} actividad(es) con 0 participantes registrados.\n\n"
+                        f"• Total Actividades: {tot}\n"
+                        f"• Formaciones: {formaciones}\n"
+                        f"• Productos: {productos}\n\n"
+                        "Asegúrate de cargar las listas de asistencia antes del cierre mensual."
+                    )
+                    self.cola_eventos.put(("modal", ("Atención Requerida en Reporte", msg, "aviso")))
+                else:
+                    self.cola_eventos.put(("toast", f"Diagnóstico OK: {tot} actividades verificadas (Salud Excelente)."))
+            except Exception as e:
+                self._agregar_log_auditoria(f"[-] Error en diagnóstico preventivo: {e}")
+                self.cola_eventos.put(("modal", ("Error de Diagnóstico", f"No se pudo completar el diagnóstico: {e}", "error")))
+            finally:
+                if hasattr(self, "btn_diagnostico_fac"):
+                    self.after(0, lambda: self.btn_diagnostico_fac.configure(state="normal", text="🩺 Diagnóstico"))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def _mostrar_modal_confirmacion(self, titulo: str, mensaje: str, callback_si=None, callback_no=None):
         """
         Despliega un diálogo modal de confirmación con CTkToplevel y botones Sí / Cancelar,
@@ -3759,18 +3960,7 @@ class JsBotGUI(ctk.CTk):
             command=lambda v: self._al_modificar_parametro()
         )
         combo_nav.pack(side="right")
-
-        row_max = ctk.CTkFrame(card_browser, fg_color="transparent")
-        row_max.pack(fill="x", padx=12, pady=2)
-        sw_max = ctk.CTkSwitch(
-            row_max,
-            text="Iniciar navegador maximizado",
-            variable=self.var_start_maximized,
-            font=ctk.CTkFont(size=10),
-            command=self._al_modificar_parametro
-        )
-        sw_max.pack(side="left")
-        ctk.CTkLabel(card_browser, text="", height=2).pack()
+        ctk.CTkLabel(card_browser, text="", height=4).pack()
 
         # 3. BLOQUE: Opciones de Captura y Logs
         card_logs = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
@@ -3929,8 +4119,7 @@ class JsBotGUI(ctk.CTk):
                 "element_wait_seconds": int(self.var_element_timeout.get())
             },
             "browser": {
-                "priority": prioridad,
-                "start_maximized": bool(self.var_start_maximized.get())
+                "priority": prioridad
             },
             "validation": {
                 "default_phone": str(self.var_default_phone.get()).strip() or "0412-0000000",
@@ -4662,13 +4851,13 @@ class JsBotGUI(ctk.CTk):
         else:
             datos = self.datos_normalizados_actuales or self.participantes_cargados
         if not datos:
-            datos = [
-                {"nombre": "Eduardo", "apellido": "Pineda", "cedula": "36996120", "cedulado": "si", "edad": 15, "nacimiento": "2011-04-12", "telefono": "0412-1112233"},
-                {"nombre": "Marcela", "apellido": "Villegas", "cedula_escolar": "11607579666", "cedulado": "escolar", "edad": 10, "nacimiento": "2016-07-20", "telefono": "0414-9998877"},
-                {"nombre": "Damián", "apellido": "Gutiérrez", "cedula": "35890123", "cedulado": "si", "edad": 16, "nacimiento": "2010-02-18", "telefono": "0424-5554433"},
-                {"nombre": "Sofía", "apellido": "Hernández", "cedula_padre": "18456123", "cedulado": "escolar", "edad": 8, "nacimiento": "2018-09-05", "telefono": "0416-2223344"},
-                {"nombre": "Lucas", "apellido": "Camacho", "cedula": "34112980", "cedulado": "si", "edad": 17, "nacimiento": "2009-11-30", "telefono": "0412-7776655"},
-            ]
+            self._mostrar_modal_mensaje(
+                "Sin Participantes",
+                "No hay participantes o datos normalizados cargados para previsualizar.\n"
+                "Por favor seleccione y procese primero un archivo válido.",
+                tipo="aviso"
+            )
+            return
 
         self.update_idletasks()
         ancho_modal = 850

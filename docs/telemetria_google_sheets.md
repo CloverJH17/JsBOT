@@ -1,6 +1,6 @@
 # Guía de Conexión: Telemetría de JsBOT en Google Sheets (Drive)
 
-Esta guía explica cómo recibir en tiempo real las notificaciones de instalación, arranque y uso de **JsBOT v5.0.0** en una hoja de cálculo estética y organizada en tu Google Drive personal o institucional.
+Esta guía explica cómo recibir en tiempo real las notificaciones de instalación, arranque y uso de **JsBOT v5.1.0** en una hoja de cálculo estética y organizada en tu Google Drive personal o institucional.
 
 ---
 
@@ -49,7 +49,7 @@ function doPost(e) {
     var equipo = data.equipo || "Desconocido";
     var usuario = data.usuario || "Desconocido";
     var so = data.sistema_operativo || "Desconocido";
-    var version = data.version_jsbot || "v5.0.0";
+    var version = data.version_jsbot || "v5.1.0";
     var tipoEvento = (data.tipo_evento || "INICIO").toUpperCase();
     var detalle = data.detalle || "Operación estándar";
 

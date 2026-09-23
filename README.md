@@ -1,10 +1,10 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.0.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.2.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
-[![Tests](https://img.shields.io/badge/Tests-404%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-452%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 [![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
@@ -177,11 +177,9 @@ JsBOT/
 ├── data/                        # Persistencia de base de datos y cookies de sesión
 │   ├── jsbot.db                 # Base de datos SQLite (telemetría, logs y checkpoints ACID)
 │   └── playwright_context/      # Almacenamiento persistente de sesión y estado web
-├── docs/                        # Documentación técnica, manuales y grafos
+├── docs/                        # Documentación técnica y manuales
 │   ├── arquitectura/            # Matriz de funciones y arquitectura del sistema
 │   ├── diagramas/               # Diagramas de flujo integral y ciclo de vida
-│   ├── grafo_arquitectura_jsbot.html # Visor interactivo del grafo de dependencias (offline)
-│   ├── grafo_arquitectura_jsbot.png  # Esquema visual de la arquitectura
 │   ├── historial/               # Historial consolidado de versiones
 │   ├── manuales/                # Manuales de usuario y funcionamiento técnico
 │   ├── PROJECT.md               # Bitácora técnica de arquitectura y contratos de interfaz
@@ -225,29 +223,7 @@ JsBOT cuenta con un grafo de conocimiento y memoria estructural relacional index
 * **Topología Indexada:** 1.148 nodos y 5.034 aristas relacionales (`CALLS`, `DEFINES`, `TESTS`, `IMPORTS`).
 * **Cero Código Muerto:** Arquitectura 100% cohesionada con desacoplamiento estricto entre presentación (GUI/CLI), lógica ETL (`normalizador_datos.py`), auditoría (`auditor_reportes.py`) y persistencia ACID (`gestor_sesion.py`).
 
-Para explorar el grafo de dependencias en cualquier PC (incluso si se acaba de clonar el proyecto), dispones de dos opciones:
-
-### Opción 1: Visualización Inmediata (Nativa y 100% Offline)
-El proyecto ya incluye un visor interactivo pre-construido en [`docs/grafo_arquitectura_jsbot.html`](docs/grafo_arquitectura_jsbot.html). **No requiere instalar nada**:
-
-1. **Haz doble clic** sobre el archivo `docs/grafo_arquitectura_jsbot.html` para abrirlo en tu navegador favorito (Chrome, Edge o Firefox).
-2. O ábrelo directamente desde la terminal dentro de la carpeta del proyecto:
-   - **En Windows (PowerShell):**
-     ```powershell
-     Start-Process "docs\grafo_arquitectura_jsbot.html"
-     ```
-   - **En Windows (CMD):**
-     ```cmd
-     start docs\grafo_arquitectura_jsbot.html
-     ```
-   - **En Linux:**
-     ```bash
-     xdg-open docs/grafo_arquitectura_jsbot.html
-     ```
-
----
-
-### Opción 2: Servidor 3D en Tiempo Real (Codebase Memory MCP)
+### Servidor 3D en Tiempo Real (Codebase Memory MCP)
 Para explorar la constelación 3D interactiva en vivo, indexar cambios en tiempo real o conectar el grafo con asistentes de IA:
 
 #### 1. Instalación del servidor

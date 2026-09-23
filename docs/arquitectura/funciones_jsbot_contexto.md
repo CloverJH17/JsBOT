@@ -1,7 +1,7 @@
-# JSBOT v4.9.0 — Catálogo Integral y Contexto Técnico para IA
+# JSBOT v5.1.0 — Catálogo Integral y Contexto Técnico para IA
 
 > **Documento de Contexto de Arquitectura, Flujos de Usuario y Motor Backend**  
-> **Versión Actual**: `v4.9.0`  
+> **Versión Actual**: `v5.1.0`  
 > **Entorno de Ejecución**: Windows / Canaima GNU/Linux (Python 3.10+)  
 > **Frameworks**: CustomTkinter, Playwright, Requests / Session HTTP, Odfdo, Openpyxl, BeautifulSoup4, SQLite3.
 
@@ -27,6 +27,7 @@ flowchart TD
         ODS["generador_planilla.py (ODS/XLSX Generator)"]
         DIA["diagnostico_facilitador.py (Health Scanner)"]
         SES["gestor_sesion.py (SQLite State & Recovery)"]
+        TEL["telemetria.py (Cloud Telemetry)"]
     end
 
     subgraph Infrastructure ["Infraestructura & Configuración"]
@@ -38,6 +39,7 @@ flowchart TD
 
     subgraph Target ["Destino Externo"]
         INFOAPP["InfoApp Web Application"]
+        GSHEETS["Google Sheets Telemetry App"]
     end
 
     UI_Layer --> Core_Engines
@@ -45,6 +47,7 @@ flowchart TD
     AUT --> INFOAPP
     EXP --> INFOAPP
     VER --> INFOAPP
+    TEL --> GSHEETS
 ```
 
 ---
@@ -156,7 +159,7 @@ flowchart TD
   * **"🛠️ Servicios"**: Tabla interactiva de atenciones y servicios comunitarios.
   * **"👥 Facilitadores"**: Tabla consolidada de rendimiento por facilitador con métricas clave.
 * **Exportación de Resultados**:
-  * **"💾 Exportar Reporte..."** (`_accion_exportar_reporte_dialogo`): Permite exportar a **Excel (.xlsx)**, **LibreOffice Writer (.odt)**, **PDF (.pdf)**, **CSV (.csv)** o consola de texto.
+  * **"💾 Exportar Reporte..."** (`_accion_exportar_reporte_dialogo`): Permite exportar a **Excel (.xlsx)**, **LibreOffice Calc (.ods de 4 hojas)**, **PDF (.pdf tabular UTF-8)**, **CSV (.csv)** o consola de texto.
   * **"📊 Abrir Reporte"** / **"📂 Reportes"**: Apertura inmediata del documento generado y su carpeta.
 
 ---
@@ -166,7 +169,7 @@ flowchart TD
 * **Controles Persistentes** (`config/settings.json` gestionado por `config_manager.py`):
   * Sliders de Timeout: Login (5–30s), AJAX (5–30s), Elementos DOM (5–30s).
   * Preferencia de Navegador: `chromium`, `firefox`, `webkit`.
-  * Switches: Iniciar maximizado, capturas de pantalla automáticas en error, logs detallados de normalización en disco.
+  * Switches: Capturas de pantalla automáticas en error, logs detallados de normalización en disco (placebos como 'start_maximized' purgados).
   * Valor por defecto: Teléfono institucional para menores de edad sin documento.
   * Botones: *"Guardar Cambios"* y *"Restaurar Valores por Defecto"*.
 
@@ -188,58 +191,75 @@ jsbot/
 │   ├── settings.json                # Parámetros operativos y timeouts
 │   └── plantilla_base.ods           # Plantilla oficial ODS para asistencias
 ├── modulos/
-│   ├── version.py                   # Fuente única de verdad de versión (v4.8.0)
+│   ├── version.py                   # Fuente única de verdad de versión (v5.1.0)
 │   ├── entorno.py                   # Creación de carpetas y verificación de sistema
 │   ├── config_manager.py            # Gestor de lectura/escritura de configuración
 │   ├── driver_factory.py            # Constructor y administrador de Playwright
 │   ├── web_utils.py                 # Login, overlays y utilidades web
-│   ├── automatizador_web.py         # Automatización de formularios Playwright
-│   ├── motor_export_auditoria.py    # Motor nativo CSV ultra-rápido (v4.8.0)
-│   ├── verificador_cargas_export.py # Verificación instantánea post-carga (v4.8.0)
-│   ├── diagnostico_facilitador.py   # Escáner de salud de facilitadores (v4.8.0)
-│   ├── normalizador_datos.py        # Pipeline ETL, deduplicación y parsing
-│   ├── generador_planilla.py        # Generador de planillas ODS/XLSX (v4.8.0)
-│   ├── gestor_sesion.py             # Checkpointing SQLite y reportes Excel
-│   ├── auditor_reportes.py          # Motor de auditoría, balances y exportación
-│   └── interfaz_grafica.py          # Interfaz gráfica CustomTkinter completa
-└── tests/                           # Suite de pruebas unitarias y de integración
+│   ├── automatizador_web.py         # Automatización Playwright con evaluate parametrizado (v5.1.0)
+│   ├── motor_export_auditoria.py    # Motor nativo CSV ultra-rápido con sanitización SQL (v5.1.0)
+│   ├── verificador_cargas_export.py # Verificación instantánea post-carga (v5.1.0)
+│   ├── diagnostico_facilitador.py   # Escáner de salud de facilitadores (v5.1.0)
+│   ├── normalizador_datos.py        # Pipeline ETL, deduplicación y parsing (v5.1.0)
+│   ├── generador_planilla.py        # Generador de planillas ODS/XLSX (v5.1.0)
+│   ├── gestor_sesion.py             # Checkpointing SQLite, respaldo resiliente y logs (v5.1.0)
+│   ├── auditor_reportes.py          # Auditoría, crawlers desacoplados y exportador ODS/PDF (v5.1.0)
+│   ├── telemetria.py                # Telemetría en segundo plano hacia Google Sheets (v5.1.0)
+│   └── interfaz_grafica.py          # Interfaz gráfica CustomTkinter completa (v5.1.0)
+└── tests/                           # Suite de 452 pruebas unitarias y de integración
 ```
 
 ### 🔬 Descripción Detallada de Motores Backend
 
-#### 1. `motor_export_auditoria.py` (v4.8.0)
+#### 1. `motor_export_auditoria.py` (v5.1.0)
 * **Endpoints de InfoApp**:
   * Actividades: `./pdf/csv_pdo.php?param_csv=SELECT ... FROM reports INNER JOIN participants_list ... &param_sql=true&DB_name=reports` (Delimitador `|`, 46 columnas).
   * Servicios: `./pdf/csv_pdo.php?param_csv=SELECT * from services_users ... &param_sql=true&DB_name=services_users` (Delimitador `|`, 30 columnas).
   * Participantes de Actividad: `../core/app/view/exportxlsx_2.php?param=SELECT * from participants_list where id_activity=... &param_sql=true&filename=participants_list` (33 columnas).
+* **Blindaje SQL**: Sanitización estricta de parámetros con `sanitizar_texto_sql`, `validar_codigo_sql` (que neutraliza comentarios `--`) y `validar_fecha_sql`, cerrando cualquier vector de inyección SQL.
 * **Mecanismo Híbrido**: Captura el CSV masivo y complementa desde la vista HTML página 1 para recuperar actividades en borrador o con 0 participantes (ocultas por el `INNER JOIN` de la base de datos).
-* **Fallback**: Si la llamada CSV falla por timeout o sesión expirada, se conmuta transparentemente a `consultar_actividades_infoapp_http_crawler`.
+* **Fallback Desacoplado**: Si la llamada CSV falla por timeout o sesión expirada, delega limpiamente en `consultar_actividades_infoapp_http_crawler` o `consultar_servicios_infoapp_http_crawler` sin recursión circular.
 
-#### 2. `verificador_cargas_export.py` (v4.8.0)
+#### 2. `auditor_reportes.py` (v5.1.0)
+* **Rastreadores Puros**: Funciones desacopladas `consultar_actividades_infoapp_http_crawler` y `consultar_servicios_infoapp_http_crawler` con `HTTPAdapter` y pool de conexiones resiliente (25 sockets, max_retries=2).
+* **Clasificación Unificada**: Función `obtener_tipo_clasificacion_actividad()` que normaliza la taxonomía formativa institucional (Formaciones, Productos, Otras Actividades) consumida idénticamente por ODS, Excel, PDF y GUI.
+* **Conciliación Antagónica**: 7 verificaciones independientes de balance (cuadre de doble partida, control de duplicados y detección de fechas extemporáneas).
+* **Exportador ODS Oficial**: 4 pestañas idénticas al estándar institucional Excel generadas mediante motor nativo OpenDocument.
+
+#### 3. `verificador_cargas_export.py` (v5.1.0)
 * **Funciones Principales**:
   * `verificar_participantes_actividad(session, base_url, id_activity, lista_cedulas)`: Compara una lista de cédulas cargadas contra la base real de la actividad en 0.5s.
   * `obtener_participantes_existentes_actividad(session, base_url, id_activity)`: Extrae cédulas ya registradas para prevenir duplicaciones.
   * `verificar_servicios_cargados_hoy(session, base_url, id_infocentro, fecha)`: Valida qué servicios quedaron asentados en InfoApp.
 
-#### 3. `diagnostico_facilitador.py` (v4.8.0)
+#### 4. `diagnostico_facilitador.py` (v5.1.0)
 * **Función**: `diagnosticar_actividades_facilitador(session, base_url, uid, fecha_inicio, fecha_fin)`.
 * **Detección**:
   * Actividades en borrador (0 participantes).
   * Inconsistencias entre fecha de inicio y fin.
   * Actividades de formación clasificadas incorrectamente como "Otras".
 
-#### 4. `generador_planilla.py` (v4.8.0)
+#### 5. `generador_planilla.py` (v5.1.0)
 * **Funciones**:
   * `generar_planilla_oficial(participantes, metadatos, ruta_salida, formato)`: Llena la plantilla ODS preservando estilos y fórmulas institucionales.
   * `generar_planilla_desde_actividad_infoapp(session, base_url, id_activity, ruta_salida, formato)`: Consulta InfoApp vía `exportxlsx_2.php`, mapea las 33 columnas de cada estudiante a la estructura estándar y genera el `.ods` o `.xlsx`.
 
-#### 5. `automatizador_web.py` & `web_utils.py`
+#### 6. `automatizador_web.py` & `web_utils.py` (v5.1.0)
+* **Blindaje DOM & Evaluate**: Ejecución de código en página mediante `page.evaluate(script, payload)` parametrizado estrictamente con tipos seguros JSON, eliminando interpolaciones directas de cadenas JS.
 * **Gestión de Formularios Playwright**:
   * `registrar_alumno_playwright`: Manipulación precisa de selects dinámicos (Nacionalidad, Género, Nivel de Instrucción, Estado, Municipio, Parroquia) con esperas explícitas y detección de diálogos modales.
   * `limpiar_overlays`: Eliminación de modales atascados o spinners AJAX en el DOM de InfoApp.
   * `realizar_login_infoapp`: Autenticación con detección inteligente de credenciales incorrectas, redirecciones o sesiones duplicadas.
 
-#### 6. `normalizador_datos.py`
+#### 7. `gestor_sesion.py` (v5.1.0)
+* **Resiliencia de Sesión y SQLite**: Respaldo automático desde SQLite si `session_state.json` no existe en disco.
+* **Propagación de Fallos I/O**: Los errores de disco (`OSError`) se propagan limpiamente en `os.replace` para activar la detección en suites de caos y recuperación.
+* **Trazabilidad sin Pass Silenciosos**: Registro estructurado en loggers ante contingencias en lugar de bloques silenciosos `except: pass`.
+
+#### 8. `telemetria.py` (v5.1.0)
+* **Telemetría Cloud No Bloqueante**: Despacho multihilo asíncrono con timeout de 3.5s hacia Google Apps Script (Web App), recolectando métricas anonimizadas por hash SHA-256 de máquina para eventos de instalación, apertura y desinstalación.
+
+#### 9. `normalizador_datos.py` (v5.1.0)
 * **Limpieza de Datos**:
   * Limpieza estricta de C.I., teléfonos venezolanos (0414, 0424, 0412, 0416, 0426, 0254), correos y nombres propios.
   * Deduplicación con detección de colisiones de cédula y diferentes nombres.

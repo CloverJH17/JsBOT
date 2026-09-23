@@ -29,6 +29,31 @@ def limpiar_campo_csv(val: str) -> str:
         s = s[1:-1].strip()
     return s
 
+def sanitizar_texto_sql(val: str) -> str:
+    """Escapa comillas simples y remueve caracteres de inyección para SQL seguro."""
+    if not val:
+        return ""
+    # Escapar comilla simple duplicándola y eliminar caracteres de control
+    s = str(val).replace("'", "''").replace(";", "").replace("--", "")
+    return s.strip()
+
+def validar_codigo_sql(val: str) -> str:
+    """Valida y limpia identificadores alfanuméricos como UID o Info ID."""
+    if not val:
+        return ""
+    # Eliminar comentarios SQL primero y luego dejar solo alfanuméricos, guiones y guiones bajos
+    s = re.sub(r'--+', '', str(val))
+    return re.sub(r'[^a-zA-Z0-9_\-]', '', s).strip()
+
+def validar_fecha_sql(val: str) -> str:
+    """Valida y extrae formato de fecha seguro YYYY-MM-DD."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+        return s
+    return re.sub(r'[^0-9\-]', '', s)[:10]
+
 def clasificar_actividad_datos(line_action: str, report_type: str, taller: str, title: str, prod_val: int) -> str:
     """
     Clasificación matemática y cualitativa oficial de actividades de Infocentro:
@@ -268,17 +293,19 @@ def consultar_actividades_infoapp_export(
     
     where_parts = []
     if estado:
-        where_parts.append(f"estate LIKE '%{estado}%'")
+        where_parts.append(f"estate LIKE '%{sanitizar_texto_sql(estado)}%'")
     if info_id:
-        where_parts.append(f"code_info = '{info_id}'")
+        where_parts.append(f"code_info = '{validar_codigo_sql(info_id)}'")
     if uid:
-        where_parts.append(f"user_id = '{uid}'")
-    if start_at and finish_at:
-        where_parts.append(f"(date_ini >= '{start_at}' AND date_ini <= '{finish_at}')")
-    elif start_at:
-        where_parts.append(f"date_ini >= '{start_at}'")
-    elif finish_at:
-        where_parts.append(f"date_ini <= '{finish_at}'")
+        where_parts.append(f"user_id = '{validar_codigo_sql(uid)}'")
+    f_ini = validar_fecha_sql(start_at)
+    f_fin = validar_fecha_sql(finish_at)
+    if f_ini and f_fin:
+        where_parts.append(f"(date_ini >= '{f_ini}' AND date_ini <= '{f_fin}')")
+    elif f_ini:
+        where_parts.append(f"date_ini >= '{f_ini}'")
+    elif f_fin:
+        where_parts.append(f"date_ini <= '{f_fin}'")
         
     where_sql = " AND ".join(where_parts) if where_parts else "1=1"
     sql = f"SELECT * FROM reports WHERE {where_sql} ORDER BY date_ini DESC"
@@ -331,17 +358,19 @@ def consultar_servicios_infoapp_export(
     
     where_parts = []
     if estado:
-        where_parts.append(f"user_estado LIKE '%{estado}%'")
+        where_parts.append(f"user_estado LIKE '%{sanitizar_texto_sql(estado)}%'")
     if info_id:
-        where_parts.append(f"user_info_cod = '{info_id}'")
+        where_parts.append(f"user_info_cod = '{validar_codigo_sql(info_id)}'")
     if uid:
-        where_parts.append(f"user_id = '{uid}'")
-    if start_at and finish_at:
-        where_parts.append(f"(user_fecha_servicio >= '{start_at}' AND user_fecha_servicio <= '{finish_at}')")
-    elif start_at:
-        where_parts.append(f"user_fecha_servicio >= '{start_at}'")
-    elif finish_at:
-        where_parts.append(f"user_fecha_servicio <= '{finish_at}'")
+        where_parts.append(f"user_id = '{validar_codigo_sql(uid)}'")
+    f_ini = validar_fecha_sql(start_at)
+    f_fin = validar_fecha_sql(finish_at)
+    if f_ini and f_fin:
+        where_parts.append(f"(user_fecha_servicio >= '{f_ini}' AND user_fecha_servicio <= '{f_fin}')")
+    elif f_ini:
+        where_parts.append(f"user_fecha_servicio >= '{f_ini}'")
+    elif f_fin:
+        where_parts.append(f"user_fecha_servicio <= '{f_fin}'")
         
     where_sql = " AND ".join(where_parts) if where_parts else "1=1"
     sql = f"SELECT * FROM services_users WHERE {where_sql} ORDER BY user_fecha_servicio DESC"

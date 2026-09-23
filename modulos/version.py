@@ -16,7 +16,7 @@ docs/version.txt y docs/historial/version.txt.
 ===============================================================================
 """
 
-__version__ = "5.0.0"
+__version__ = "5.2.0"
 __author__ = "Jair Alejandro Hernandez Gonzalez"
 NOMBRE_APP = "JsBOT (Robotic Process Automation)"
 ETIQUETA_VERSION = f"v{__version__}"

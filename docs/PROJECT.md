@@ -1,4 +1,4 @@
-# Project: JsBOT v4.9.0 Robustness & UI Architecture
+# Project: JsBOT v5.1.0 Architecture & Robustness Specification
 
 ## Architecture
 - **GUI Engine**: CustomTkinter on top of Tkinter / Tcl.
@@ -6,7 +6,9 @@
 - **Modal Lifecycle**: Centralized tracking in `self.modales_activos: dict[str, ctk.CTkToplevel]`. Every modal registers a `"WM_DELETE_WINDOW"` protocol, releases grabs safely, and cleans up upon dismissal, view change, or session reset.
 - **View Navigation**: Canonical view registry and accent-insensitive normalization (`normalizar_clave_vista`). Frame switching operates on unique widget instances (`set(self.vistas.values())`) preventing self-ungriding bugs.
 - **Canaima GNU/Linux Shielding**: Early injection of `os.environ.setdefault("LIBGL_ALWAYS_SOFTWARE", "1")` before graphics/Tk imports, plus headless/X11 display fallback detection (`verificar_display_linux()`).
-- **Codebase Memory Graph**: Relational AST knowledge graph (1.148 nodes, 5.034 edges) for instant structural navigation, call tracing, and zero dead-code validation.
+- **Turbo Export Engine & Secure Crawlers**: High-throughput extraction via `motor_export_auditoria.py` with sanitized SQL parameters and uncoupled HTTP crawlers in `auditor_reportes.py`.
+- **Security & Parameterized Automation**: DOM interactions in `automatizador_web.py` use parameterized `page.evaluate(script, payload)` eliminating JavaScript injection vulnerabilities.
+- **ACID Session Recovery**: Two-tier session recovery via SQLite (`data/jsbot.db`) and atomic JSON checkpoints, propagating `OSError` on disk write failures.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source | Status |
@@ -26,6 +28,13 @@
 | 13 | Headless Display Detection | Graceful `DISPLAY`/`WAYLAND_DISPLAY` check in Linux before GUI startup | M4 | Survey (R4) | DONE |
 | 14 | 65 GUI Audit Tests Verification | Run `pytest tests/test_auditoria_completa_ui_ux.py` verifying 65/65 tests pass | M5 | Acceptance Criteria | DONE |
 | 15 | Global Test Suite & Regression Guard | Verify full test suite passes with zero regressions | M5 | Acceptance Criteria | DONE |
+| 16 | SQL Sanitization & Injection Defense | Strict `sanitizar_texto_sql`, `validar_codigo_sql` (with `--` comment stripping), and `validar_fecha_sql` | M6 | Security Refactor | DONE |
+| 17 | JavaScript Injection Elimination | Strict parameterized `page.evaluate(script, payload)` across all dynamic DOM inputs | M6 | Security Refactor | DONE |
+| 18 | Crawler & Export Decoupling | Decouple `consultar_actividades_infoapp_http_crawler` and `consultar_servicios_infoapp_http_crawler` eliminating circular fallback | M6 | Architecture | DONE |
+| 19 | Centralized Activity Classification | Unified `obtener_tipo_clasificacion_actividad` consumed across ODS, XLSX, PDF, and GUI views | M6 | Architecture | DONE |
+| 20 | SQLite Recovery & Exception Logging | Replace silent passes with SQLite recovery fallback and detailed logging in session manager | M6 | Architecture | DONE |
+| 21 | Placebo Config Purge | Eradicate non-functional configuration switches (`start_maximized`) across UI and JSON settings | M6 | Architecture | DONE |
+| 22 | Cloud Telemetry & One-Line Deployers | Multi-platform unattended deployment (`install.ps1`, `install.sh`) and Google Apps Script telemetry | M7 | Operations | DONE |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status | Key Verification Output |
@@ -35,6 +44,8 @@
 | 3 | M3: View Navigation & Normalization (R3) | Canonical navigation aliases, accent normalization (`normalizar_clave_vista`), identity-based frame switching | M1 | DONE | Unicode NFKD accent normalization passed; self-ungriding eliminated; canonical aliases functioning |
 | 4 | M4: Canaima GNU/Linux Compatibility (R4) | Early `LIBGL_ALWAYS_SOFTWARE=1` injection, `DISPLAY` checking in `modulos/entorno.py` and `main.py` | None | DONE | Early injection verified in main.py, entorno.py, interfaz_grafica.py; display check verified |
 | 5 | M5: Acceptance & Full Suite Regression Verification | Run all 65 audit tests in `tests/test_auditoria_completa_ui_ux.py` + full test suite, verify no regressions | M1, M2, M3, M4 | DONE | 391/391 comprehensive unit, stress, and GUI tests passed (100%); 0 regressions; Forensic Audit CLEAN |
+| 6 | M6: Security Hardening & Crawler Decoupling | SQL parameter sanitization, safe JS evaluate payloads, decoupled crawlers, centralized classification, SQLite fallback, placebo purge | M1-M5 | DONE | 9 new unit tests in `test_blindaje_refactor.py`; 452/452 tests passed (100%) |
+| 7 | M7: One-Line Deployers & Cloud Telemetry | Unattended install/uninstall scripts (`.ps1`, `.sh`), desktop/menu integration, cloud telemetry to Google Sheets | M1-M6 | DONE | `test_instaladores_y_telemetria.py` passing; verified SemVer v5.1.0 consistency |
 
 ## Interface Contracts
 ### Modal Registry ↔ `JsBotGUI`
@@ -73,10 +84,34 @@ def cambiar_seccion(self, seccion: str) -> None
 def _cambiar_seccion(self, seccion: str) -> None
 ```
 
+### SQL Sanitization & Crawler Contracts
+```python
+# Sanitizers in motor_export_auditoria.py:
+def sanitizar_texto_sql(valor: str) -> str
+def validar_codigo_sql(valor: str) -> str
+def validar_fecha_sql(valor: str) -> str
+
+# Decoupled Pure Crawlers in auditor_reportes.py:
+def consultar_actividades_infoapp_http_crawler(session, base_url, criterio, valor, fecha_inicio, fecha_fin, page_timeout=20) -> list[dict]
+def consultar_servicios_infoapp_http_crawler(session, base_url, criterio, valor, fecha_inicio, fecha_fin, page_timeout=20) -> list[dict]
+
+# Centralized Classification:
+def obtener_tipo_clasificacion_actividad(tipo_raw: str, area_formacion_raw: str = "", nombre_taller_raw: str = "") -> str
+```
+
 ## Code Layout
 - `modulos/interfaz_grafica.py`: Primary GUI code (modal lifecycle, queue polling, navigation dispatch, view frames).
 - `modulos/config_manager.py`: Configuration and settings persistence (`settings.json`).
-- `modulos/auditor_reportes.py`: Inspector logic, cache persistence, and export functions.
+- `modulos/auditor_reportes.py`: Inspector logic, pure crawlers, cache persistence, and export functions.
+- `modulos/motor_export_auditoria.py`: Accelerated SQL export engine with strict query sanitization and crawler fallback.
+- `modulos/automatizador_web.py`: Web automation with parameterized `page.evaluate()` and DOM error recovery.
+- `modulos/gestor_sesion.py`: SQLite session persistence, checkpoint management, and audit Excel export.
+- `modulos/normalizador_datos.py`: ETL pipeline, participant deduplication, and field sanitization.
+- `modulos/generador_planilla.py`: ODS and XLSX official document generator.
+- `modulos/verificador_cargas_export.py`: Instant post-upload verification and duplicate prevention.
+- `modulos/diagnostico_facilitador.py`: Proactive facilitator activity health scanner.
+- `modulos/telemetria.py`: Asynchronous cloud telemetry to Google Sheets.
 - `modulos/entorno.py`: Environment verification, `LIBGL_ALWAYS_SOFTWARE=1` configuration, and display checks.
 - `main.py`: Main application entry point with Canaima software rendering guard.
+- `tests/test_blindaje_refactor.py`: 9-test unit suite verifying SQL sanitization, JS safety, and uncoupled crawlers.
 - `tests/test_auditoria_completa_ui_ux.py`: 65-test comprehensive GUI audit suite.

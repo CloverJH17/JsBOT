@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ===============================================================================
-# INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.0.0 (Canaima / Debian / Linux)
+# INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.2.0 (Canaima / Debian / Linux)
 # ===============================================================================
 # Uso en Terminal (1 sola línea):
 # curl -sSL https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.sh | bash
@@ -9,7 +9,7 @@
 set -e
 
 echo -e "\033[1;36m========================================================\033[0m"
-echo -e "\033[1;36m   JsBOT RPA v5.0.0 — Instalador Express Autónomo       \033[0m"
+echo -e "\033[1;36m   JsBOT RPA v5.2.0 — Instalador Express Autónomo       \033[0m"
 echo -e "\033[1;36m========================================================\033[0m"
 echo ""
 
@@ -145,7 +145,7 @@ python3 -c "import sys; sys.path.insert(0, '$INSTALL_DIR'); from modulos.telemet
 
 echo ""
 echo -e "\033[1;32m========================================================\033[0m"
-echo -e "\033[1;32m   ¡JsBOT v5.0.0 instalado y configurado con éxito!     \033[0m"
+echo -e "\033[1;32m   ¡JsBOT v5.2.0 instalado y configurado con éxito!     \033[0m"
 echo -e "\033[1;37m   • Acceso creado en el Menú de Aplicaciones          \033[0m"
 echo -e "\033[1;37m   • Acceso creado en el Escritorio                    \033[0m"
 echo -e "\033[1;37m   • Comando 'jsbot' disponible en cualquier terminal  \033[0m"
