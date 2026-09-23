@@ -65,27 +65,14 @@ def capturar_pantalla_error(page, doc_str: str):
 
 def iniciar_contexto_playwright(user_data_dir: str = None, headless: bool = False, navegador: str = "chromium"):
     """
-    Inicia un contexto persistente con Playwright que mantiene
-    cookies de sesión, caché y credenciales de InfoApp en data/playwright_context.
+    Inicia un contexto persistente con Playwright delegando a la factoría central.
+    Garantiza compatibilidad con Microsoft Edge nativo, Google Chrome y auto-fallback en cascada.
     """
-    if user_data_dir is None:
-        user_data_dir = str(entorno.CARPETA_DATA / "playwright_context")
-    os.makedirs(user_data_dir, exist_ok=True)
-
-    pw = sync_playwright().start()
-    browser_type = getattr(pw, navegador, pw.chromium)
-
-    args = ["--start-maximized"]
-    if sys.platform.startswith("linux"):
-        args.extend(["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"])
-
-    context = browser_type.launch_persistent_context(
-        user_data_dir=user_data_dir,
+    return obtener_contexto_playwright(
         headless=headless,
-        args=args,
-        no_viewport=True
+        navegador=navegador,
+        user_data_dir=user_data_dir,
     )
-    return pw, context
 
 
 def realizar_login(page: Page, config: dict):

@@ -5,7 +5,7 @@ title JsBOT RPA — Verificador de Entorno
 cd /d "%~dp0"
 
 echo ========================================================
-echo   JsBOT RPA — Entorno Microsoft Windows
+echo    JsBOT RPA — Entorno Microsoft Windows
 echo ========================================================
 echo.
 
@@ -13,29 +13,34 @@ REM ----------------------------------------------------------------------------
 REM 1. DETECCION E INSTALACION DE PYTHON
 REM -----------------------------------------------------------------------------
 echo [INFO] Verificando interprete de Python...
-set "PYTHON_CMD="
+set "PYTHON_EXE="
+set "PYTHON_ARGS="
 
 py -3 -c "import sys" >nul 2>nul
 if not errorlevel 1 (
-    set "PYTHON_CMD=py -3"
+    set "PYTHON_EXE=py"
+    set "PYTHON_ARGS=-3"
     goto :python_found
 )
 
 python -c "import sys" >nul 2>nul
 if not errorlevel 1 (
-    set "PYTHON_CMD=python"
+    set "PYTHON_EXE=python"
+    set "PYTHON_ARGS="
     goto :python_found
 )
 
 py -c "import sys" >nul 2>nul
 if not errorlevel 1 (
-    set "PYTHON_CMD=py"
+    set "PYTHON_EXE=py"
+    set "PYTHON_ARGS="
     goto :python_found
 )
 
 python3 -c "import sys" >nul 2>nul
 if not errorlevel 1 (
-    set "PYTHON_CMD=python3"
+    set "PYTHON_EXE=python3"
+    set "PYTHON_ARGS="
     goto :python_found
 )
 
@@ -43,7 +48,8 @@ for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3
     if exist "%%D\python.exe" (
         "%%D\python.exe" -c "import sys" >nul 2>nul
         if not errorlevel 1 (
-            set "PYTHON_CMD=%%D\python.exe"
+            set "PYTHON_EXE=%%D\python.exe"
+            set "PYTHON_ARGS="
             set "PATH=%%D;%%D\Scripts;!PATH!"
             goto :python_found
         )
@@ -80,17 +86,18 @@ for /d %%D in ("%LocalAppData%\Programs\Python\Python3*" "%ProgramFiles%\Python3
     if exist "%%D\python.exe" (
         "%%D\python.exe" -c "import sys" >nul 2>nul
         if not errorlevel 1 (
-            set "PYTHON_CMD=%%D\python.exe"
+            set "PYTHON_EXE=%%D\python.exe"
+            set "PYTHON_ARGS="
             set "PATH=%%D;%%D\Scripts;!PATH!"
             goto :python_found
         )
     )
 )
 
-py -3 -c "import sys" >nul 2>nul && set "PYTHON_CMD=py -3" && goto :python_found
-python -c "import sys" >nul 2>nul && set "PYTHON_CMD=python" && goto :python_found
+py -3 -c "import sys" >nul 2>nul && set "PYTHON_EXE=py" && set "PYTHON_ARGS=-3" && goto :python_found
+python -c "import sys" >nul 2>nul && set "PYTHON_EXE=python" && set "PYTHON_ARGS=" && goto :python_found
 
-if "%PYTHON_CMD%"=="" (
+if "%PYTHON_EXE%"=="" (
     echo.
     echo ========================================================
     echo  [X] ERROR: No se pudo completar la instalacion automatica de Python.
@@ -104,26 +111,30 @@ if "%PYTHON_CMD%"=="" (
 )
 
 :python_found
-echo [OK] Python detectado: %PYTHON_CMD%
+if "%PYTHON_ARGS%"=="" (
+    echo [OK] Python detectado: "%PYTHON_EXE%"
+) else (
+    echo [OK] Python detectado: "%PYTHON_EXE%" %PYTHON_ARGS%
+)
 echo.
 
 REM -----------------------------------------------------------------------------
 REM 2. VERIFICACION DE PIP
 REM -----------------------------------------------------------------------------
-%PYTHON_CMD% -m pip --version >nul 2>nul
+"%PYTHON_EXE%" %PYTHON_ARGS% -m pip --version >nul 2>nul
 if errorlevel 1 (
     echo [ALERTA] pip no esta disponible. Activando ensurepip...
-    %PYTHON_CMD% -m ensurepip --default-pip
+    "%PYTHON_EXE%" %PYTHON_ARGS% -m ensurepip --default-pip
 )
 
 REM -----------------------------------------------------------------------------
 REM 3. LECTURA DINAMICA DE VERSION
 REM -----------------------------------------------------------------------------
 set JSBOT_VER=4.10.0
-for /f "delims=" %%V in ('%PYTHON_CMD% -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
+for /f "delims=" %%V in ('"%PYTHON_EXE%" %PYTHON_ARGS% -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
 title JsBOT v%JSBOT_VER% — Verificador de Entorno
 echo ========================================================
-echo   JsBOT v%JSBOT_VER% — Entorno Microsoft Windows
+echo    JsBOT v%JSBOT_VER% — Entorno Microsoft Windows
 echo ========================================================
 echo.
 
@@ -131,11 +142,11 @@ REM ----------------------------------------------------------------------------
 REM 4. VERIFICACION E INSTALACION DE DEPENDENCIAS
 REM -----------------------------------------------------------------------------
 echo [INFO] Verificando dependencias del sistema...
-%PYTHON_CMD% -c "import pandas, customtkinter, CTkMessagebox, playwright, python_calamine, PIL, bs4, requests, rich, InquirerPy, openpyxl, xlrd, odf, odfdo, loguru" >nul 2>nul
+"%PYTHON_EXE%" %PYTHON_ARGS% -c "import pandas, customtkinter, CTkMessagebox, playwright, python_calamine, PIL, bs4, requests, rich, InquirerPy, openpyxl, xlrd, odf, odfdo, loguru" >nul 2>nul
 if not errorlevel 1 goto :check_playwright_browser
 
 echo [INFO] Configurando dependencias del sistema por primera vez...
-%PYTHON_CMD% -m pip install -r config\requirements.txt
+"%PYTHON_EXE%" %PYTHON_ARGS% -m pip install -r "%~dp0config\requirements.txt"
 if errorlevel 1 (
     echo.
     echo [X] Error al instalar dependencias. Revisa tu conexion a Internet.
@@ -145,10 +156,29 @@ if errorlevel 1 (
 
 :check_playwright_browser
 REM Verificar si los binarios de Chromium para Playwright estan disponibles
-%PYTHON_CMD% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
+"%PYTHON_EXE%" %PYTHON_ARGS% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
 if errorlevel 1 (
     echo [INFO] Descargando binarios del navegador Playwright Chromium...
-    %PYTHON_CMD% -m playwright install chromium
+    "%PYTHON_EXE%" %PYTHON_ARGS% -m playwright install chromium
+    REM Si la instalacion oficial falla por timeout de red (30s), activar fallback resiliente con curl
+    "%PYTHON_EXE%" %PYTHON_ARGS% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
+    if errorlevel 1 (
+        echo [AVISO] La descarga estandar de Playwright fallo o supero el tiempo limite.
+        echo [INFO] Activando descarga resiliente de Chromium con curl (sin limite de tiempo)...
+        set "PW_DEST=%LocalAppData%\ms-playwright\chromium-1243"
+        mkdir "!PW_DEST!" 2>nul
+        curl.exe -# -L -o "%TEMP%\chrome-win64.zip" "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip"
+        if exist "%TEMP%\chrome-win64.zip" (
+            echo [INFO] Descomprimiendo binarios del navegador...
+            tar.exe -xf "%TEMP%\chrome-win64.zip" -C "!PW_DEST!"
+            type nul > "!PW_DEST!\INSTALLATION_COMPLETE"
+            type nul > "!PW_DEST!\DEPENDENCIES_VALIDATED"
+            del "%TEMP%\chrome-win64.zip" 2>nul
+            echo [OK] Chromium configurado correctamente via fallback.
+        ) else (
+            echo [ALERTA] No se pudo completar la descarga automatica de Chromium.
+        )
+    )
 )
 
 :deps_ready
@@ -156,7 +186,7 @@ REM ----------------------------------------------------------------------------
 REM 5. EJECUCION DE JSBOT
 REM -----------------------------------------------------------------------------
 echo [INFO] Iniciando JsBOT...
-%PYTHON_CMD% main.py %*
+"%PYTHON_EXE%" %PYTHON_ARGS% "%~dp0main.py" %*
 if errorlevel 1 (
     echo.
     echo [AVISO] La aplicacion finalizo con codigo de advertencia o error.
