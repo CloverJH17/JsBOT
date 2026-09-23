@@ -1,7 +1,11 @@
 {
     "app": {
-        "version": "4.14.0",
+        "version": "5.0.0",
         "interfaz_predeterminada": "gui"
+    },
+    "telemetria": {
+        "activa": true,
+        "google_sheets_url": ""
     },
     "urls": {
         "base_login": "https://infoapp2.infocentro.gob.ve/admin/index.php"

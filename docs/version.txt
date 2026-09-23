@@ -6,6 +6,29 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v5.0.0] — 23 de Septiembre de 2026 (Lanzamiento Mayor: Ecosistema One-Line, Integración al Sistema y Telemetría Cloud)
+--------------------------------------------------------------------------------
+• INSTALADORES DESATENDIDOS ONE-LINE (WINDOWS & LINUX):
+  - install.ps1: Desplegador y configurador autónomo para Windows vía PowerShell (irm .../install.ps1 | iex) en %LocalAppData%\JsBOT.
+    * Detección y aprovisionamiento automático de Python 3.12 y Git/Zip fallback.
+    * Integración nativa al Sistema Operativo: Creación automática de accesos directos con icono oficial en Escritorio y Menú Inicio.
+    * Comando global 'jsbot' registrado en el PATH del usuario para invocación desde cualquier terminal CMD o PowerShell.
+  - install.sh: Desplegador y configurador autónomo para Canaima GNU/Linux, Debian y Ubuntu (curl -sSL .../install.sh | bash) en ~/.local/share/JsBOT.
+    * Verificación y aprovisionamiento de paquetes base del sistema con pkexec/sudo.
+    * Integración nativa XDG: Generación de archivo jsbot.desktop en menú de aplicaciones y en el Escritorio.
+    * Enlace simbólico en ~/.local/bin/jsbot para ejecución terminal global.
+• TELEMETRÍA CLOUD Y MONITOREO EN TIEMPO REAL (modulos/telemetria.py):
+  - Arquitectura no bloqueante multihilo (threading.Thread) con timeout estricto de 3.5s y degradación silenciosa sin conexión.
+  - Generación de identificador único anonimizado por hash de máquina (SHA-256 de MAC y Hostname).
+  - Integración nativa con Google Sheets mediante Google Apps Script (Web App doPost) documentada en docs/telemetria_google_sheets.md.
+  - Registro automático con formato visual, bordes y paleta cromática por tipo de evento (INSTALACIÓN, INICIO, DESINSTALACIÓN).
+• DESINSTALADORES LIMPIOS (uninstall.ps1 & uninstall.sh):
+  - Procedimiento de desinstalación segura con opción de respaldo de carpetas de trabajo (Planillas/ y Reportes_Auditoria/).
+  - Purgado atómico de accesos directos, entradas de menú, comandos de terminal y directorios del programa.
+• SUITE DE PRUEBAS UNITARIAS:
+  - Creación de tests/test_instaladores_y_telemetria.py para validar la integridad del payload de telemetría, tolerancia a fallos offline y coherencia SemVer.
+
+--------------------------------------------------------------------------------
 [v4.14.0] — 23 de Septiembre de 2026 (Reporte ODS de 4 Hojas Idéntico a Excel, PDF Tabular UTF-8, Conciliación Antagónica y Sustitución de ODT)
 --------------------------------------------------------------------------------
 • MÓDULO DE AUDITORÍA (modulos/auditor_reportes.py):

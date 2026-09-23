@@ -32,4 +32,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 from modulos.orquestador import iniciar_sistema
 
 if __name__ == "__main__":
+    try:
+        from modulos.telemetria import registrar_evento_inicio
+        modo = "CLI" if any(arg in sys.argv[1:] for arg in ("--cli", "-c", "--consola", "--terminal")) else "GUI"
+        registrar_evento_inicio(modo)
+    except Exception:
+        pass
+
     iniciar_sistema(sys.argv[1:])

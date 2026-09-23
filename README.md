@@ -1,4 +1,4 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v4.10.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.0.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
@@ -61,96 +61,72 @@
 
 ---
 
-## 🚀 Requisitos e Instalación
+## 🚀 Instalación y Despliegue Express (One-Line)
 
-### Requisitos Base
-- **Python:** 3.10 o superior.
-- **Navegadores Soportados:** Google Chrome, Chromium o Mozilla Firefox (con sus respectivos webdrivers administrados automáticamente).
+JsBOT cuenta con instaladores autónomos desatendidos en una sola línea que configuran el entorno, instalan dependencias, crean accesos directos en el **Escritorio y Menú Inicio**, y registran el comando global `jsbot` en tu terminal.
 
-### Instalación y Ejecución Rápida en Windows (PowerShell / CMD)
-
-Se recomienda instalar el proyecto dentro de la carpeta **Documentos** (`Documents`) de tu usuario para garantizar permisos de lectura/escritura completos y acceso rápido.
-
-#### 🔷 Opción 1: Desde PowerShell (Recomendado)
-
-**Comando en una sola línea (Copiar y Pegar):**
-Clona en Documentos, configura el entorno y abre el bot directamente en pantalla:
+### 🔷 En Windows (PowerShell)
+Abre PowerShell y pega el siguiente comando:
 ```powershell
-cd $HOME\Documents; git clone https://github.com/CloverJH17/JsBOT.git; cd JsBOT; .\windows.bat
+irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.ps1 | iex
 ```
-
-> **Paso a paso en PowerShell:**
-> ```powershell
-> # 1. Ir a la carpeta Documentos
-> cd $HOME\Documents
-> 
-> # 2. Clonar el repositorio y entrar a la carpeta
-> git clone https://github.com/CloverJH17/JsBOT.git
-> cd JsBOT
-> 
-> # 3. Instalar entorno y abrir el bot automáticamente
-> .\windows.bat
-> ```
-
-> [!NOTE]
-> **¿No tienes Git instalado en Windows?** Puedes descargarlo y abrirlo directamente ejecutando en PowerShell:
-> ```powershell
-> cd $HOME\Documents; Invoke-WebRequest "https://github.com/CloverJH17/JsBOT/archive/refs/heads/main.zip" -OutFile "JsBOT.zip"; Expand-Archive "JsBOT.zip" -DestinationPath .; Rename-Item "JsBOT-main" "JsBOT" -Force; Remove-Item "JsBOT.zip"; cd JsBOT; .\windows.bat
-> ```
-
----
-
-#### ⬛ Opción 2: Desde Símbolo del Sistema (CMD)
-
-**Comando en una sola línea (Copiar y Pegar):**
-```cmd
-cd %USERPROFILE%\Documents && git clone https://github.com/CloverJH17/JsBOT.git && cd JsBOT && windows.bat
-```
-
-> **Paso a paso en CMD:**
-> ```cmd
-> :: 1. Ir a la carpeta Documentos
-> cd %USERPROFILE%\Documents
-> 
-> :: 2. Clonar el repositorio y entrar a la carpeta
-> git clone https://github.com/CloverJH17/JsBOT.git
-> cd JsBOT
-> 
-> :: 3. Instalar entorno y abrir el bot automáticamente
-> windows.bat
-> ```
 
 > [!TIP]
-> **¿Qué hace `windows.bat` automáticamente?**
-> - Detecta e instala Python de forma desatendida si no está instalado.
-> - Configura `pip` e instala todas las dependencias (`requirements.txt`).
-> - Descarga los binarios del navegador automatizado (Chromium de Playwright).
-> - **Inicia la interfaz gráfica de JsBOT de inmediato** sin requerir pasos manuales extra.
+> **¿Qué hace el instalador en Windows?**
+> - Instala Python 3.12 automáticamente si no está presente en el equipo.
+> - Configura el programa en `%LocalAppData%\JsBOT`.
+> - Sincroniza todas las librerías (`requirements.txt`) y el navegador Playwright.
+> - **Crea el acceso directo con icono oficial en tu Escritorio y en el Menú de Inicio**.
+> - Registra el comando global `jsbot` para que puedas abrir el bot desde cualquier consola.
+> - Inicia la aplicación de inmediato.
 
 ---
 
-### 🚀 Formas de Ejecución Diaria en Windows
-
-Una vez realizada la instalación inicial, puedes abrir el bot en cualquier momento:
-
-- **Modo Estándar (Recomendado):** Haz doble clic sobre `windows.bat` o ejecuta desde terminal:
-  ```powershell
-  .\windows.bat
-  ```
-- **Modo Silencioso (Sin ventana de consola negra):** Haz doble clic sobre `JsBOT_Sin_Consola.vbs`. Ideal para crear un acceso directo en tu **Escritorio**.
-
----
-
-### Instalación Rápida en Linux (Canaima / Linux Mint / Ubuntu)
+### 🐧 En Linux (Canaima / Debian / Ubuntu)
+Abre tu terminal y ejecuta:
 ```bash
-# Clonar y entrar al repositorio
-git clone https://github.com/CloverJH17/JsBOT.git
-cd JsBOT
-
-# Asignar permisos y ejecutar (configura librerías automáticamente y abre el bot)
-chmod +x linux.sh
-./linux.sh
+curl -sSL https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.sh | bash
 ```
+
+> [!TIP]
+> **¿Qué hace el instalador en Linux?**
+> - Verifica y asegura paquetes base (`python3`, `pip`, `tkinter`, `venv`).
+> - Configura el programa en `~/.local/share/JsBOT`.
+> - Instala las librerías requeridas y navegadores de automatización.
+> - **Crea el lanzador `.desktop` en el Menú de Aplicaciones y en tu Escritorio**.
+> - Enlaza el comando global `~/.local/bin/jsbot` para invocarlo desde cualquier terminal.
+> - Inicia la aplicación de inmediato.
+
+---
+
+### 🚀 Formas de Uso Diario
+
+Una vez instalado, puedes abrir **JsBOT** de cualquiera de estas formas:
+
+1. **Desde el Escritorio o Menú:** Haz clic en el icono oficial de **JsBOT RPA** en tu Escritorio o búscalo en el Menú de Inicio / Aplicaciones.
+2. **Desde cualquier Terminal:**
+   ```bash
+   jsbot          # Abre la interfaz gráfica (GUI)
+   jsbot --cli    # Abre en modo consola interactivo
+   ```
+3. **Modo Portable Tradicional:**
+   - En Windows: Ejecuta `.\windows.bat` o `JsBOT_Sin_Consola.vbs`.
+   - En Linux: Ejecuta `bash linux.sh`.
+
+---
+
+### 🗑️ Desinstalación Limpia
+
+Si deseas retirar JsBOT de tu equipo de forma 100% limpia:
+* **En Windows (PowerShell):**
+  ```powershell
+  irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/uninstall.ps1 | iex
+  ```
+* **En Linux (Terminal):**
+  ```bash
+  curl -sSL https://raw.githubusercontent.com/CloverJH17/JsBOT/main/uninstall.sh | bash
+  ```
+*(El desinstalador te consultará si deseas conservar una copia de seguridad de tus Planillas y Reportes locales generados antes de eliminar el programa).*
 
 ---
 
