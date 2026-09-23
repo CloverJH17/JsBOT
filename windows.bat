@@ -130,7 +130,7 @@ if errorlevel 1 (
 REM -----------------------------------------------------------------------------
 REM 3. LECTURA DINAMICA DE VERSION
 REM -----------------------------------------------------------------------------
-set JSBOT_VER=4.10.0
+set JSBOT_VER=4.10.1
 for /f "delims=" %%V in ('"%PYTHON_EXE%" %PYTHON_ARGS% -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
 title JsBOT v%JSBOT_VER% — Verificador de Entorno
 echo ========================================================

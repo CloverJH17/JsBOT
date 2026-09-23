@@ -1,9 +1,23 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 19 de Septiembre de 2026
+Fecha Última   : 23 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v4.10.1] — 23 de Septiembre de 2026 (Cascada Resiliente de Navegadores, Blindaje de Lanzador Windows y Tolerancia a Fallos)
+--------------------------------------------------------------------------------
+• FACTORÍA RESILIENTE DE NAVEGADORES (CASCADA INTELIGENTE):
+  - Implementación de cascada estricta multi-navegador en modulos/driver_factory.py:
+    1. Navegador preferido -> 2. Google Chrome -> 3. Mozilla Firefox -> 4. Chromium -> 5. Microsoft Edge.
+  - Conmutación automática ante ausencia de binarios Playwright (ej. falta de firefox-1543), eliminando excepciones críticas y permitiendo operar con cualquier navegador disponible en el sistema.
+  - Unificación completa del motor Playwright: modulos/automatizador_web.py delega en obtener_contexto_playwright, dotando a Formación y Servicios de la misma resiliencia que Auditoría.
+• BLINDAJE DE LANZADOR WINDOWS (windows.bat):
+  - Soporte de rutas con espacios: separación estricta de PYTHON_EXE y PYTHON_ARGS con entrecomillado robusto para nombres de usuario con espacios (ej. "PC INFOCENTRO").
+  - Mecanismo de rescate contra timeouts de red (30s) en Playwright: descarga desatendida vía curl.exe y tar.exe sin límite de tiempo y creación de flags de validación.
+• SUITE DE PRUEBAS DE REGRESIÓN:
+  - Creación de tests/test_driver_factory_cascada.py con 8 pruebas unitarias que validan el orden de la cascada, mapeo de navegadores y tolerancia a fallos en tiempo de ejecución.
 
 --------------------------------------------------------------------------------
 [v4.10.0] — 19 de Septiembre de 2026 (Generación Directa de Planillas Multiformato, Ficha Formativa GUI y Selector Dinámico de Servicios)
