@@ -1,6 +1,6 @@
 {
     "app": {
-        "version": "4.10.2",
+        "version": "4.11.0",
         "interfaz_predeterminada": "gui"
     },
     "urls": {
@@ -8,9 +8,8 @@
     },
     "browser": {
         "priority": [
-            "chrome",
             "firefox",
-            "chromium",
+            "chrome",
             "edge"
         ],
         "start_maximized": true

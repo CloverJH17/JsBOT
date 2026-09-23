@@ -1578,16 +1578,41 @@ class JsBotGUI(ctk.CTk):
         )
         self.lbl_prevuelo_formacion_desglose.pack(anchor="w", pady=(2, 0))
 
+        self.btn_recargar_formacion = ctk.CTkButton(
+            card_inner_f,
+            text="↻ Recargar",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=85,
+            fg_color="#2C3E50",
+            hover_color="#1A252F",
+            command=lambda: self._accion_recargar_archivo("Formación")
+        )
+        self.btn_recargar_formacion.pack(side="right", padx=(6, 0))
+
+        self.btn_excel_formacion = ctk.CTkButton(
+            card_inner_f,
+            text="✎ Abrir en Excel",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=110,
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Formación")
+        )
+        self.btn_excel_formacion.pack(side="right", padx=(6, 0))
+
         self.btn_tabla_formacion = ctk.CTkButton(
             card_inner_f,
-            text="👁 Ver Tabla de Datos",
+            text="👁 Ver Tabla",
             font=ctk.CTkFont(size=11, weight="bold"),
-            height=32,
+            height=30,
+            width=100,
             fg_color="#1f538d",
             hover_color="#14375e",
             command=lambda: self._abrir_tabla_previsualizacion("Formación")
         )
-        self.btn_tabla_formacion.pack(side="right", padx=(10, 0))
+        self.btn_tabla_formacion.pack(side="right", padx=(6, 0))
 
         # 2. URL InfoApp
         self.url_container_formacion = ctk.CTkFrame(frame, fg_color="transparent")
@@ -1764,16 +1789,41 @@ class JsBotGUI(ctk.CTk):
         )
         self.lbl_prevuelo_servicios_desglose.pack(anchor="w", pady=(2, 0))
 
+        self.btn_recargar_servicios = ctk.CTkButton(
+            card_inner_s,
+            text="↻ Recargar",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=85,
+            fg_color="#2C3E50",
+            hover_color="#1A252F",
+            command=lambda: self._accion_recargar_archivo("Servicios")
+        )
+        self.btn_recargar_servicios.pack(side="right", padx=(6, 0))
+
+        self.btn_excel_servicios = ctk.CTkButton(
+            card_inner_s,
+            text="✎ Abrir en Excel",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=110,
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Servicios")
+        )
+        self.btn_excel_servicios.pack(side="right", padx=(6, 0))
+
         self.btn_tabla_servicios = ctk.CTkButton(
             card_inner_s,
-            text="👁 Ver Tabla de Datos",
+            text="👁 Ver Tabla",
             font=ctk.CTkFont(size=11, weight="bold"),
-            height=32,
+            height=30,
+            width=100,
             fg_color="#2E7D32",
             hover_color="#1B5E20",
             command=lambda: self._abrir_tabla_previsualizacion("Servicios")
         )
-        self.btn_tabla_servicios.pack(side="right", padx=(10, 0))
+        self.btn_tabla_servicios.pack(side="right", padx=(6, 0))
 
         # URL de Servicio InfoApp
         self.url_container_servicios = ctk.CTkFrame(frame, fg_color="transparent")
@@ -2028,16 +2078,41 @@ class JsBotGUI(ctk.CTk):
         )
         self.lbl_prevuelo_planillas_desglose.pack(anchor="w", pady=(2, 0))
 
+        self.btn_recargar_planillas = ctk.CTkButton(
+            card_inner_p,
+            text="↻ Recargar",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=85,
+            fg_color="#2C3E50",
+            hover_color="#1A252F",
+            command=lambda: self._accion_recargar_archivo("Planillas")
+        )
+        self.btn_recargar_planillas.pack(side="right", padx=(6, 0))
+
+        self.btn_excel_planillas = ctk.CTkButton(
+            card_inner_p,
+            text="✎ Abrir en Excel",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=30,
+            width=110,
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Planillas")
+        )
+        self.btn_excel_planillas.pack(side="right", padx=(6, 0))
+
         self.btn_tabla_planillas = ctk.CTkButton(
             card_inner_p,
-            text="👁 Ver Tabla de Datos",
+            text="👁 Ver Tabla",
             font=ctk.CTkFont(size=11, weight="bold"),
-            height=32,
+            height=30,
+            width=100,
             fg_color="#1F538D",
             hover_color="#14375E",
             command=lambda: self._abrir_tabla_previsualizacion("Planillas")
         )
-        self.btn_tabla_planillas.pack(side="right", padx=(10, 0))
+        self.btn_tabla_planillas.pack(side="right", padx=(6, 0))
 
         # 2. Contenedor de Opciones / Metadatos de la Planilla
         self.container_opciones_planillas = ctk.CTkFrame(frame, fg_color="transparent")
@@ -4258,6 +4333,53 @@ class JsBotGUI(ctk.CTk):
     # =========================================================================
     # LÓGICA FUNCIONAL (EXAMINAR, DESCARTAR, URLS, ASINCRONISMO)
     # =========================================================================
+    def _obtener_ruta_seccion(self, seccion: str) -> str:
+        """Determina la ruta del archivo activo correspondiente a la sección consultada."""
+        sec = str(seccion or "").lower()
+        if "servicio" in sec:
+            return getattr(self, "archivo_ruta_servicios", "") or getattr(self, "archivo_actual_ruta", "")
+        elif "planilla" in sec:
+            return getattr(self, "archivo_ruta_planillas", "") or getattr(self, "archivo_actual_ruta", "")
+        else:
+            return getattr(self, "archivo_ruta_formacion", "") or getattr(self, "archivo_actual_ruta", "")
+
+    def _accion_abrir_archivo_excel(self, seccion: str):
+        """Abre el archivo activo en el editor predeterminado de hojas de cálculo del sistema."""
+        ruta = self._obtener_ruta_seccion(seccion)
+        if not ruta or not os.path.exists(ruta):
+            self._agregar_log(f"[AVISO] No hay ningún archivo seleccionado para abrir en {seccion}.")
+            self._mostrar_modal_mensaje(
+                titulo="Archivo no seleccionado",
+                mensaje="No se encontró ningún archivo activo para abrir.\nPor favor examina y selecciona un archivo primero.",
+                tipo="warning"
+            )
+            return
+
+        self._agregar_log(f"[ARCHIVO] Solicitando apertura asistida en Excel/Calc: {os.path.basename(ruta)}")
+        abierto = abrir_archivo_asistido(ruta)
+        if abierto:
+            self._agregar_log(f"[OK] Archivo abierto en la suite ofimática predeterminada.")
+            self._agregar_log(f"[INFO] Puedes modificar y guardar cambios (Ctrl+G). Luego pulsa 'Recargar' para actualizar.")
+        else:
+            self._agregar_log(f"[AVISO] No se detectó suite ofimática asociada. Ruta: {ruta}")
+            self._mostrar_modal_mensaje(
+                titulo="Apertura Manual Requerida",
+                mensaje=f"No se detectó Excel ni LibreOffice asociado automáticamente.\nPuedes abrir y editar manualmente el archivo en:\n\n{ruta}",
+                tipo="info"
+            )
+
+    def _accion_recargar_archivo(self, seccion: str):
+        """Recarga y re-normaliza en caliente el archivo activo de la sección."""
+        ruta = self._obtener_ruta_seccion(seccion)
+        if not ruta or not os.path.exists(ruta):
+            self._agregar_log(f"[AVISO] No hay ningún archivo cargado para recargar en {seccion}.")
+            return
+
+        sec_norm = "Servicios" if "servicio" in str(seccion).lower() else ("Planillas" if "planilla" in str(seccion).lower() else "Formacion")
+        self._agregar_log(f"[ARCHIVO] ↻ Recargando datos actualizados de '{os.path.basename(ruta)}'...")
+        self._procesar_archivo_en_frio(ruta, seccion=sec_norm)
+        self._agregar_log(f"[OK] ↻ Datos recargados y sincronizados exitosamente.")
+
     def _examinar_archivo_formacion(self):
         ruta = filedialog.askopenfilename(
             title="Seleccionar archivo de estudiantes / formación",
@@ -4277,6 +4399,7 @@ class JsBotGUI(ctk.CTk):
             return
 
         self.archivo_actual_ruta = ruta
+        self.archivo_ruta_formacion = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_formacion.set(f"📄 {nombre}")
         self.lbl_archivo_formacion.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
@@ -4289,6 +4412,7 @@ class JsBotGUI(ctk.CTk):
         """Deselecciona el archivo de formación, oculta la tarjeta de pre-vuelo y limpia datos."""
         self.cerrar_modales_activos()
         self.archivo_actual_ruta = ""
+        self.archivo_ruta_formacion = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
         self.reporte_deduplicacion_actual = None
@@ -4318,6 +4442,7 @@ class JsBotGUI(ctk.CTk):
             return
 
         self.archivo_actual_ruta = ruta
+        self.archivo_ruta_servicios = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_servicios.set(f"📄 {nombre}")
         self.lbl_archivo_servicios.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
@@ -4330,6 +4455,7 @@ class JsBotGUI(ctk.CTk):
         """Deselecciona el archivo de servicios, oculta la tarjeta de pre-vuelo y limpia datos."""
         self.cerrar_modales_activos()
         self.archivo_actual_ruta = ""
+        self.archivo_ruta_servicios = ""
         self.participantes_cargados = []
         self.datos_normalizados_actuales = []
         self.reporte_deduplicacion_actual = None
@@ -4359,6 +4485,7 @@ class JsBotGUI(ctk.CTk):
             return
 
         self.archivo_actual_ruta = ruta
+        self.archivo_ruta_planillas = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_planillas.set(f"📄 {nombre}")
         self.lbl_archivo_planillas.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
@@ -4371,6 +4498,7 @@ class JsBotGUI(ctk.CTk):
         """Deselecciona el archivo de planillas, oculta la tarjeta de pre-vuelo y limpia datos."""
         self.cerrar_modales_activos()
         self.archivo_actual_ruta = ""
+        self.archivo_ruta_planillas = ""
         self.participantes_cargados_planillas = []
         self.datos_normalizados_planillas = []
         self.reporte_deduplicacion_planillas = None
@@ -4446,7 +4574,9 @@ class JsBotGUI(ctk.CTk):
                     menores_sin_doc += 1
 
                 # Validación de consistencia estructural
-                tiene_nombre = bool(p.get('nombre') and p.get('apellido'))
+                nom_p = str(p.get('nombre', '') or '').strip()
+                ape_p = str(p.get('apellido', '') or '').strip()
+                tiene_nombre = bool((nom_p and ape_p) or (len(f"{nom_p} {ape_p}".strip()) >= 3 and not p.get('solo_cedula', False)))
                 tiene_doc = bool(p.get('cedula') or p.get('cedula_escolar') or p.get('cedula_padre'))
                 if not (tiene_nombre and tiene_doc):
                     inconsistencias += 1
@@ -4653,7 +4783,9 @@ class JsBotGUI(ctk.CTk):
             tlf_str = p.get('telefono') or "No reg."
 
             tiene_doc = bool(ced or ced_esc or ced_pad)
-            tiene_nombre = bool(p.get('nombre') and p.get('apellido'))
+            nom_p = str(p.get('nombre', '') or '').strip()
+            ape_p = str(p.get('apellido', '') or '').strip()
+            tiene_nombre = bool((nom_p and ape_p) or (len(f"{nom_p} {ape_p}".strip()) >= 3 and not p.get('solo_cedula', False)))
             if tiene_nombre and tiene_doc:
                 diag_str = "[OK] Listo"
                 diag_color = "#30D158"
@@ -4691,17 +4823,46 @@ class JsBotGUI(ctk.CTk):
         )
         lbl_resumen.pack(side="left")
 
+        def _recargar_desde_modal():
+            self._accion_recargar_archivo(titulo_fuente)
+            self.cerrar_modal(modal)
+            self._abrir_tabla_previsualizacion(titulo_fuente)
+
         btn_cerrar = ctk.CTkButton(
             footer_inner,
             text="Cerrar y Continuar",
-            width=140,
+            width=135,
             height=30,
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color="#1f538d",
             hover_color="#14375e",
             command=lambda: self.cerrar_modal(modal)
         )
-        btn_cerrar.pack(side="right")
+        btn_cerrar.pack(side="right", padx=(6, 0))
+
+        btn_excel_modal = ctk.CTkButton(
+            footer_inner,
+            text="✎ Abrir en Excel",
+            width=120,
+            height=30,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel(titulo_fuente)
+        )
+        btn_excel_modal.pack(side="right", padx=(6, 0))
+
+        btn_recargar_modal = ctk.CTkButton(
+            footer_inner,
+            text="↻ Recargar",
+            width=90,
+            height=30,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#2C3E50",
+            hover_color="#1A252F",
+            command=_recargar_desde_modal
+        )
+        btn_recargar_modal.pack(side="right", padx=(6, 0))
 
     def _pegar_portapapeles_url(self, entry_widget: ctk.CTkEntry):
         try:

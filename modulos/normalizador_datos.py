@@ -27,8 +27,10 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-def abrir_archivo_asistido(ruta_archivo: str) -> None:
-    """Intenta abrir el archivo con la app nativa; si no hay suite, guía al usuario."""
+def abrir_archivo_asistido(ruta_archivo: str) -> bool:
+    """Intenta abrir el archivo con la app nativa; si no hay suite, guía al usuario.
+    Retorna True si el archivo fue abierto exitosamente con la aplicación nativa, False en caso contrario.
+    """
     abierto = False
     try:
         if sys.platform == "win32":
@@ -53,6 +55,8 @@ def abrir_archivo_asistido(ruta_archivo: str) -> None:
                 input("\nPresiona [Enter] cuando hayas terminado de corregir y guardar el archivo...")
             except Exception:
                 pass
+
+    return abierto
 
 try:
     import tkinter as tk
@@ -850,13 +854,12 @@ def procesar_archivo(ruta_archivo: str, hoja_especifica: str = None) -> list:
             raw_nom = ""
             raw_ape = ""
 
-            if 'nombre' in mapa_cols and 'apellido' in mapa_cols:
+            if 'nombre' in mapa_cols and 'apellido' in mapa_cols and mapa_cols['nombre'] != mapa_cols['apellido']:
                 raw_nom = formatear_nombre_propio(limpiar_texto(get_val('nombre')))
                 raw_ape = formatear_nombre_propio(limpiar_texto(get_val('apellido')))
-            elif 'nombre' in mapa_cols:
-                raw_nom = formatear_nombre_propio(limpiar_texto(get_val('nombre')))
-            elif 'nombre_y_apellido' in mapa_cols:
-                nom_completo = limpiar_texto(get_val('nombre_y_apellido'))
+            elif 'nombre_y_apellido' in mapa_cols or ('nombre' in mapa_cols and 'apellido' not in mapa_cols):
+                col_key = 'nombre_y_apellido' if 'nombre_y_apellido' in mapa_cols else 'nombre'
+                nom_completo = limpiar_texto(get_val(col_key))
                 if nom_completo:
                     partes = nom_completo.split()
                     if len(partes) >= 4:
@@ -867,6 +870,10 @@ def procesar_archivo(ruta_archivo: str, hoja_especifica: str = None) -> list:
                         raw_ape = formatear_nombre_propio(" ".join(partes[1:]))
                     else:
                         raw_nom = formatear_nombre_propio(nom_completo)
+            elif 'nombre' in mapa_cols:
+                raw_nom = formatear_nombre_propio(limpiar_texto(get_val('nombre')))
+            elif 'apellido' in mapa_cols:
+                raw_ape = formatear_nombre_propio(limpiar_texto(get_val('apellido')))
 
             nom_full = f"{raw_nom} {raw_ape}".lower().strip()
 

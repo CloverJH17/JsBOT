@@ -27,20 +27,20 @@ class TestSuiteV480(unittest.TestCase):
 
     def test_01_consistencia_version_v480(self):
         """Verifica que la versión 4.10.0 esté perfectamente sincronizada."""
-        self.assertEqual(ver.__version__, "4.10.0")
-        self.assertEqual(ver.ETIQUETA_VERSION, "v4.10.0")
+        current_v = ver.__version__
+        self.assertEqual(ver.ETIQUETA_VERSION, f"v{current_v}")
         
         # settings.json
         settings_path = str(entorno.ARCHIVO_SETTINGS)
         with open(settings_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        self.assertEqual(cfg.get("app", {}).get("version"), "4.10.0")
+        self.assertEqual(cfg.get("app", {}).get("version"), current_v)
         
         # version.txt
         version_txt_path = Path(entorno.RAIZ_PROYECTO) / "docs" / "version.txt"
         with open(version_txt_path, "r", encoding="utf-8") as f:
             txt = f.read()
-        self.assertIn("[v4.10.0]", txt)
+        self.assertIn(f"[v{current_v}]", txt)
 
     @patch("requests.Session.get")
     def test_02_obtener_participantes_existentes_actividad(self, mock_get):

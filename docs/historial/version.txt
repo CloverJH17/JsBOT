@@ -6,6 +6,19 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.11.0] — 23 de Septiembre de 2026 (Partición Inteligente de Nombres Combinados, Apertura Asistida en Excel y Recarga en GUI)
+--------------------------------------------------------------------------------
+• NORMALIZADOR DE DATOS Y EXTRACCIÓN ETL (modulos/normalizador_datos.py):
+  - Priorización y división inteligente de columnas combinadas ('Nombres y Apellidos'): distribuye limpiamente entre nombre y apellido, erradicando cadenas vacías en participantes válidos.
+  - Mitigación en inyección InfoApp: garantiza que usuarios nuevos reciban su apellido real en userform_new en lugar del valor comodín 'Infocentro'.
+• MEJORAS UX / UI INTERACTIVA EN INTERFAZ GRÁFICA (modulos/interfaz_grafica.py):
+  - Eliminación de falsos positivos en auditoría estructural (auditar_integridad_lote): reconoce participantes válidos con nombres compuestos completos en una sola columna.
+  - Nuevos controles de edición asistida: integración de botones directos "Abrir en Excel / Calc" (abrir_archivo_asistido) y "Recargar Datos" en las tarjetas de prevuelo (Formación, Servicios, Planillas) y en la ventana modal de previsualización.
+  - Flujo de trabajo en caliente: el usuario puede abrir su archivo, modificar inconsistencias, guardar en Excel y recargar en la GUI sin tener que volver a examinar el archivo.
+• SUITE DE PRUEBAS UNITARIAS:
+  - Creación de tests/test_normalizador_nombres_y_gui_edicion.py con 6 pruebas que certifican la partición de 2, 3 y 4 palabras, integridad sin inconsistencias y resolución de rutas de apertura.
+
+--------------------------------------------------------------------------------
 [v4.10.2] — 23 de Septiembre de 2026 (Saneamiento Sintáctico en windows.bat y Flujo Lineal de Dependencias)
 --------------------------------------------------------------------------------
 • CORRECCIÓN SINTÁCTICA EN LANZADOR WINDOWS (windows.bat):
