@@ -984,11 +984,12 @@ def conciliar_balance_auditoria(resultado: dict, total_declarado_servidor: int =
 def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
     """
     Genera un libro oficial OpenDocument Spreadsheet (.ods) para LibreOffice Calc
-    con exactamente la misma estructura de 4 pestañas que el reporte de Excel:
-    1. 'Resumen por Facilitador' (con subtotales por sede y total general consolidado).
-    2. 'Actividades' (todas las actividades y sus 11 atributos institucionales).
-    3. 'Servicios' (todas las atenciones y sus 8 atributos institucionales).
-    4. 'Resumen Ejecutivo' (metadatos, balance antagónico y matriz consolidada de KPIs).
+    con la misma identidad gráfica, paleta de colores institucional y estructura
+    de 4 pestañas que el reporte de Excel:
+    1. 'Resumen por Facilitador' (con cabecera azul, subtotales por sede, banners combinados y total general).
+    2. 'Actividades' (todas las actividades y sus 11 atributos institucionales con bordes y cabeceras).
+    3. 'Servicios' (todas las atenciones y sus 8 atributos institucionales formateados).
+    4. 'Resumen Ejecutivo' (título institucional, metadatos, dictamen de balance y matriz de KPIs).
     """
     os.makedirs(REPORTES_DIR, exist_ok=True)
     if not ruta_destino:
@@ -996,13 +997,122 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
         crit_tag = f"{resultado.get('criterio_tipo', 'audit')}_{resultado.get('criterio_valor', 'report')}".replace(" ", "_")
         ruta_destino = os.path.join(REPORTES_DIR, f"Auditoria_{crit_tag}_{ts}.ods")
 
-    import pandas as pd
+    from odf.opendocument import OpenDocumentSpreadsheet
+    from odf.style import (
+        Style, TableColumnProperties, TableCellProperties,
+        TextProperties, ParagraphProperties
+    )
+    from odf.table import Table, TableColumn, TableRow, TableCell, CoveredTableCell
+    from odf.text import P
 
+    doc = OpenDocumentSpreadsheet()
+
+    # ---------------------------------------------------------
+    # 1. Definición de la Paleta de Estilos Institucionales ODF
+    # ---------------------------------------------------------
+    st_header = Style(name='HeaderStyle', family='table-cell')
+    st_header.addElement(TableCellProperties(backgroundcolor='#1F4E78', border='0.05pt solid #D9D9D9'))
+    st_header.addElement(TextProperties(color='#FFFFFF', fontweight='bold', fontname='Calibri', fontsize='11pt'))
+    st_header.addElement(ParagraphProperties(textalign='center'))
+    doc.automaticstyles.addElement(st_header)
+
+    st_sede = Style(name='SedeStyle', family='table-cell')
+    st_sede.addElement(TableCellProperties(backgroundcolor='#D9E1F2', border='0.05pt solid #D9D9D9'))
+    st_sede.addElement(TextProperties(color='#1F4E78', fontweight='bold', fontname='Calibri', fontsize='11pt'))
+    st_sede.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_sede)
+
+    st_sub_left = Style(name='SubLeft', family='table-cell')
+    st_sub_left.addElement(TableCellProperties(backgroundcolor='#F2F2F2', bordertop='0.05pt solid #1F4E78', borderbottom='0.1pt double #1F4E78', borderleft='0.05pt solid #D9D9D9', borderright='0.05pt solid #D9D9D9'))
+    st_sub_left.addElement(TextProperties(fontweight='bold', fontname='Calibri', fontsize='10pt'))
+    st_sub_left.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_sub_left)
+
+    st_sub_center = Style(name='SubCenter', family='table-cell')
+    st_sub_center.addElement(TableCellProperties(backgroundcolor='#F2F2F2', bordertop='0.05pt solid #1F4E78', borderbottom='0.1pt double #1F4E78', borderleft='0.05pt solid #D9D9D9', borderright='0.05pt solid #D9D9D9'))
+    st_sub_center.addElement(TextProperties(fontweight='bold', fontname='Calibri', fontsize='10pt'))
+    st_sub_center.addElement(ParagraphProperties(textalign='center'))
+    doc.automaticstyles.addElement(st_sub_center)
+
+    st_tot_left = Style(name='TotLeft', family='table-cell')
+    st_tot_left.addElement(TableCellProperties(backgroundcolor='#E2EFDA', bordertop='0.05pt solid #1F4E78', borderbottom='0.15pt double #1F4E78', borderleft='0.05pt solid #D9D9D9', borderright='0.05pt solid #D9D9D9'))
+    st_tot_left.addElement(TextProperties(fontweight='bold', fontname='Calibri', fontsize='10pt'))
+    st_tot_left.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_tot_left)
+
+    st_tot_center = Style(name='TotCenter', family='table-cell')
+    st_tot_center.addElement(TableCellProperties(backgroundcolor='#E2EFDA', bordertop='0.05pt solid #1F4E78', borderbottom='0.15pt double #1F4E78', borderleft='0.05pt solid #D9D9D9', borderright='0.05pt solid #D9D9D9'))
+    st_tot_center.addElement(TextProperties(fontweight='bold', fontname='Calibri', fontsize='10pt'))
+    st_tot_center.addElement(ParagraphProperties(textalign='center'))
+    doc.automaticstyles.addElement(st_tot_center)
+
+    st_cell_left = Style(name='CellLeft', family='table-cell')
+    st_cell_left.addElement(TableCellProperties(border='0.05pt solid #D9D9D9'))
+    st_cell_left.addElement(TextProperties(fontname='Calibri', fontsize='10pt'))
+    st_cell_left.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_cell_left)
+
+    st_cell_center = Style(name='CellCenter', family='table-cell')
+    st_cell_center.addElement(TableCellProperties(border='0.05pt solid #D9D9D9'))
+    st_cell_center.addElement(TextProperties(fontname='Calibri', fontsize='10pt'))
+    st_cell_center.addElement(ParagraphProperties(textalign='center'))
+    doc.automaticstyles.addElement(st_cell_center)
+
+    st_title_res = Style(name='TitleRes', family='table-cell')
+    st_title_res.addElement(TableCellProperties(border='none'))
+    st_title_res.addElement(TextProperties(color='#1F4E78', fontweight='bold', fontname='Calibri', fontsize='14pt'))
+    st_title_res.addElement(ParagraphProperties(textalign='center'))
+    doc.automaticstyles.addElement(st_title_res)
+
+    st_meta_k = Style(name='MetaKey', family='table-cell')
+    st_meta_k.addElement(TableCellProperties(border='none'))
+    st_meta_k.addElement(TextProperties(fontweight='bold', fontname='Calibri', fontsize='10pt'))
+    st_meta_k.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_meta_k)
+
+    st_meta_v = Style(name='MetaVal', family='table-cell')
+    st_meta_v.addElement(TableCellProperties(border='none'))
+    st_meta_v.addElement(TextProperties(fontname='Calibri', fontsize='10pt'))
+    st_meta_v.addElement(ParagraphProperties(textalign='left'))
+    doc.automaticstyles.addElement(st_meta_v)
+
+    def _celda(valor, estilo, align='left'):
+        if valor is None:
+            valor = ""
+        if isinstance(valor, (int, float)) and not isinstance(valor, bool):
+            c = TableCell(stylename=estilo, valuetype='float', value=str(valor))
+            c.addElement(P(text=str(valor)))
+            return c
+        else:
+            v_str = str(valor)
+            c = TableCell(stylename=estilo, valuetype='string')
+            c.addElement(P(text=v_str))
+            return c
+
+    def _aplicar_columnas(tabla, lista_anchos, prefix):
+        for j, w in enumerate(lista_anchos):
+            cs = Style(name=f"col_{prefix}_{j}", family="table-column")
+            cs.addElement(TableColumnProperties(columnwidth=f"{w:.2f}cm"))
+            doc.automaticstyles.addElement(cs)
+            tabla.addElement(TableColumn(stylename=cs))
+
+    # ---------------------------------------------------------
     # Hoja 1: Resumen por Facilitador
+    # ---------------------------------------------------------
+    t_fac = Table(name='Resumen por Facilitador')
     headers_fac = [
         "UID", "Facilitador / Responsable", "Formaciones",
         "Estudiantes", "Productos", "Otras Actividades", "Servicios", "Total Act."
     ]
+    anchos_fac = [2.8, 8.5, 3.2, 3.2, 3.0, 3.8, 3.0, 3.0]
+    _aplicar_columnas(t_fac, anchos_fac, "fac")
+
+    # Cabecera Hoja 1
+    r_head = TableRow()
+    for h in headers_fac:
+        r_head.addElement(_celda(h, st_header, 'center'))
+    t_fac.addElement(r_head)
+
     res_facs = resultado.get("resumen_facilitadores", {})
     sedes_dict = {}
     for f_uid, f_data in res_facs.items():
@@ -1011,25 +1121,18 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
             sedes_dict[sede] = []
         sedes_dict[sede].append((f_uid, f_data))
 
-    filas_fac = []
-    tot_gral_form = 0
-    tot_gral_est = 0
-    tot_gral_prod = 0
-    tot_gral_otr = 0
-    tot_gral_serv = 0
-    tot_gral_act = 0
+    tot_gral_form = tot_gral_est = tot_gral_prod = tot_gral_otr = tot_gral_serv = tot_gral_act = 0
 
     for codigo_sede, lista_f in sedes_dict.items():
-        filas_fac.append({
-            "UID": f"🏢 INFOCENTRO: {codigo_sede}",
-            "Facilitador / Responsable": "",
-            "Formaciones": "",
-            "Estudiantes": "",
-            "Productos": "",
-            "Otras Actividades": "",
-            "Servicios": "",
-            "Total Act.": ""
-        })
+        # Fila de sede combinada A:H
+        r_sede = TableRow()
+        c_sede = TableCell(stylename=st_sede, numbercolumnsspanned=8, valuetype='string')
+        c_sede.addElement(P(text=f"🏢 INFOCENTRO: {codigo_sede}"))
+        r_sede.addElement(c_sede)
+        for _ in range(7):
+            r_sede.addElement(CoveredTableCell())
+        t_fac.addElement(r_sede)
+
         sub_form = sub_est = sub_prod = sub_otr = sub_serv = sub_act = 0
         for f_uid, f_data in lista_f:
             f_act = f_data.get("total_act", 0)
@@ -1046,16 +1149,16 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
             sub_serv += f_srv
             sub_act += f_act
 
-            filas_fac.append({
-                "UID": f_uid,
-                "Facilitador / Responsable": f_data.get("nombre", f"UID {f_uid}"),
-                "Formaciones": f_frm,
-                "Estudiantes": f_est,
-                "Productos": f_prd,
-                "Otras Actividades": f_otr,
-                "Servicios": f_srv,
-                "Total Act.": f_act
-            })
+            r_f = TableRow()
+            r_f.addElement(_celda(f_uid, st_cell_center))
+            r_f.addElement(_celda(f_data.get("nombre", f"UID {f_uid}"), st_cell_left))
+            r_f.addElement(_celda(f_frm, st_cell_center))
+            r_f.addElement(_celda(f_est, st_cell_center))
+            r_f.addElement(_celda(f_prd, st_cell_center))
+            r_f.addElement(_celda(f_otr, st_cell_center))
+            r_f.addElement(_celda(f_srv, st_cell_center))
+            r_f.addElement(_celda(f_act, st_cell_center))
+            t_fac.addElement(r_f)
 
         tot_gral_form += sub_form
         tot_gral_est += sub_est
@@ -1064,37 +1167,50 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
         tot_gral_serv += sub_serv
         tot_gral_act += sub_act
 
-        filas_fac.append({
-            "UID": "",
-            "Facilitador / Responsable": f"Subtotal {codigo_sede}",
-            "Formaciones": sub_form,
-            "Estudiantes": sub_est,
-            "Productos": sub_prod,
-            "Otras Actividades": sub_otr,
-            "Servicios": sub_serv,
-            "Total Act.": sub_act
-        })
+        # Fila Subtotal
+        r_sub = TableRow()
+        r_sub.addElement(_celda("", st_sub_left))
+        r_sub.addElement(_celda(f"Subtotal {codigo_sede}", st_sub_left))
+        r_sub.addElement(_celda(sub_form, st_sub_center))
+        r_sub.addElement(_celda(sub_est, st_sub_center))
+        r_sub.addElement(_celda(sub_prod, st_sub_center))
+        r_sub.addElement(_celda(sub_otr, st_sub_center))
+        r_sub.addElement(_celda(sub_serv, st_sub_center))
+        r_sub.addElement(_celda(sub_act, st_sub_center))
+        t_fac.addElement(r_sub)
 
-    filas_fac.append({
-        "UID": "",
-        "Facilitador / Responsable": "TOTAL GENERAL CONSOLIDADO",
-        "Formaciones": tot_gral_form,
-        "Estudiantes": tot_gral_est,
-        "Productos": tot_gral_prod,
-        "Otras Actividades": tot_gral_otr,
-        "Servicios": tot_gral_serv,
-        "Total Act.": tot_gral_act
-    })
-    df_fac = pd.DataFrame(filas_fac, columns=headers_fac)
+    # Fila Total General Consolidado
+    r_tot = TableRow()
+    r_tot.addElement(_celda("", st_tot_left))
+    r_tot.addElement(_celda("TOTAL GENERAL CONSOLIDADO", st_tot_left))
+    r_tot.addElement(_celda(tot_gral_form, st_tot_center))
+    r_tot.addElement(_celda(tot_gral_est, st_tot_center))
+    r_tot.addElement(_celda(tot_gral_prod, st_tot_center))
+    r_tot.addElement(_celda(tot_gral_otr, st_tot_center))
+    r_tot.addElement(_celda(tot_gral_serv, st_tot_center))
+    r_tot.addElement(_celda(tot_gral_act, st_tot_center))
+    t_fac.addElement(r_tot)
 
+    doc.spreadsheet.addElement(t_fac)
+
+    # ---------------------------------------------------------
     # Hoja 2: Actividades
+    # ---------------------------------------------------------
+    t_act = Table(name='Actividades')
     headers_act = [
         "Fecha", "ID InfoApp", "UID", "Infocentro", "Tipo Actividad",
         "Área Formativa", "Taller Específico", "Título Pedagógico",
         "Responsable", "Participantes", "Productos"
     ]
+    anchos_act = [3.0, 2.8, 2.5, 3.0, 3.5, 4.5, 6.0, 7.5, 6.0, 3.0, 3.0]
+    _aplicar_columnas(t_act, anchos_act, "act")
+
+    r_act_head = TableRow()
+    for h in headers_act:
+        r_act_head.addElement(_celda(h, st_header, 'center'))
+    t_act.addElement(r_act_head)
+
     todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
-    filas_act = []
     for act in todas_act:
         dims_lower = str(act.get("dimensiones", "")).lower()
         if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
@@ -1104,75 +1220,128 @@ def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
         else:
             tipo_desc = "Otras Actividades"
 
-        filas_act.append({
-            "Fecha": act.get("fecha", ""),
-            "ID InfoApp": act.get("id") or act.get("id_activity", ""),
-            "UID": act.get("uid", ""),
-            "Infocentro": act.get("info_id", ""),
-            "Tipo Actividad": tipo_desc,
-            "Área Formativa": act.get("area", ""),
-            "Taller Específico": act.get("taller", ""),
-            "Título Pedagógico": act.get("titulo", ""),
-            "Responsable": act.get("responsable", ""),
-            "Participantes": act.get("participantes", 0),
-            "Productos": act.get("productos", 0)
-        })
-    df_act = pd.DataFrame(filas_act, columns=headers_act)
+        r_a = TableRow()
+        r_a.addElement(_celda(act.get("fecha", ""), st_cell_center))
+        r_a.addElement(_celda(act.get("id") or act.get("id_activity", ""), st_cell_center))
+        r_a.addElement(_celda(act.get("uid", ""), st_cell_center))
+        r_a.addElement(_celda(act.get("info_id", ""), st_cell_center))
+        r_a.addElement(_celda(tipo_desc, st_cell_center))
+        r_a.addElement(_celda(act.get("area", ""), st_cell_left))
+        r_a.addElement(_celda(act.get("taller", ""), st_cell_left))
+        r_a.addElement(_celda(act.get("titulo", ""), st_cell_left))
+        r_a.addElement(_celda(act.get("responsable", ""), st_cell_left))
+        r_a.addElement(_celda(act.get("participantes", 0), st_cell_center))
+        r_a.addElement(_celda(act.get("productos", 0), st_cell_center))
+        t_act.addElement(r_a)
 
+    doc.spreadsheet.addElement(t_act)
+
+    # ---------------------------------------------------------
     # Hoja 3: Servicios
+    # ---------------------------------------------------------
+    t_srv = Table(name='Servicios')
     headers_serv = [
         "Fecha", "UID", "Infocentro", "Servicio / Trámite",
         "Cédula", "ID Usuario", "Nombre del Usuario", "Profesión / Ocupación"
     ]
-    servicios_list = resultado.get("servicios", [])
-    filas_serv = []
-    for serv in servicios_list:
-        filas_serv.append({
-            "Fecha": serv.get("fecha", ""),
-            "UID": serv.get("uid", ""),
-            "Infocentro": serv.get("info_id", ""),
-            "Servicio / Trámite": serv.get("servicio", ""),
-            "Cédula": serv.get("cedula", ""),
-            "ID Usuario": serv.get("id_usuario", ""),
-            "Nombre del Usuario": serv.get("usuario", ""),
-            "Profesión / Ocupación": serv.get("profesion", "")
-        })
-    df_serv = pd.DataFrame(filas_serv, columns=headers_serv)
+    anchos_srv = [3.0, 2.5, 3.0, 6.0, 3.5, 3.0, 6.0, 5.0]
+    _aplicar_columnas(t_srv, anchos_srv, "srv")
 
+    r_srv_head = TableRow()
+    for h in headers_serv:
+        r_srv_head.addElement(_celda(h, st_header, 'center'))
+    t_srv.addElement(r_srv_head)
+
+    servicios_list = resultado.get("servicios", [])
+    for serv in servicios_list:
+        r_s = TableRow()
+        r_s.addElement(_celda(serv.get("fecha", ""), st_cell_center))
+        r_s.addElement(_celda(serv.get("uid", ""), st_cell_center))
+        r_s.addElement(_celda(serv.get("info_id", ""), st_cell_center))
+        r_s.addElement(_celda(serv.get("servicio", ""), st_cell_left))
+        r_s.addElement(_celda(serv.get("cedula", ""), st_cell_center))
+        r_s.addElement(_celda(serv.get("id_usuario", ""), st_cell_center))
+        r_s.addElement(_celda(serv.get("usuario", ""), st_cell_left))
+        r_s.addElement(_celda(serv.get("profesion", ""), st_cell_left))
+        t_srv.addElement(r_s)
+
+    doc.spreadsheet.addElement(t_srv)
+
+    # ---------------------------------------------------------
     # Hoja 4: Resumen Ejecutivo
+    # ---------------------------------------------------------
+    t_res = Table(name='Resumen Ejecutivo')
+    anchos_res = [8.5, 9.0, 4.0, 4.0, 4.0]
+    _aplicar_columnas(t_res, anchos_res, "res")
+
+    # Título A1:E1 combinado
+    r_tit = TableRow()
+    c_tit = TableCell(stylename=st_title_res, numbercolumnsspanned=5, valuetype='string')
+    c_tit.addElement(P(text="INFORME OFICIAL DE AUDITORÍA Y INSPECCIÓN — JsBOT"))
+    r_tit.addElement(c_tit)
+    for _ in range(4):
+        r_tit.addElement(CoveredTableCell())
+    t_res.addElement(r_tit)
+
+    # Fila vacía
+    t_res.addElement(TableRow())
+
     conciliacion = resultado.get("conciliacion") or conciliar_balance_auditoria(resultado)
     estado_cuadre = conciliacion.get("dictamen", "CUADRE EXACTO (100%)" if resultado.get("cuadre_perfecto") else "DISCREPANCIA DETECTADA")
-    filas_resumen = [
-        {"Métrica / Parámetro": "INFORME OFICIAL DE AUDITORÍA Y INSPECCIÓN — JsBOT", "Valor": ""},
-        {"Métrica / Parámetro": "Criterio de Auditoría", "Valor": f"{resultado.get('criterio_tipo', '').upper()}: {resultado.get('criterio_valor', '')}"},
-        {"Métrica / Parámetro": "Facilitador / Referencia", "Valor": resultado.get("facilitador_principal", "")},
-        {"Métrica / Parámetro": "Rango de Fechas Evaluado", "Valor": f"{resultado.get('f_ini', '')} al {resultado.get('f_fin', '')}"},
-        {"Métrica / Parámetro": "Fecha de Generación", "Valor": datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
-        {"Métrica / Parámetro": "Estado de Cuadre Matemático", "Valor": estado_cuadre},
-        {"Métrica / Parámetro": "---", "Valor": "---"},
-        {"Métrica / Parámetro": "Total Actividades en Plataforma", "Valor": resultado.get("total_actividades", 0)},
-        {"Métrica / Parámetro": "Total Actividades Procesadas", "Valor": resultado.get("total_procesadas", len(todas_act))},
-        {"Métrica / Parámetro": "Formaciones Académicas", "Valor": len(resultado.get("formaciones", []))},
-        {"Métrica / Parámetro": "Productos Comunicacionales", "Valor": len(resultado.get("productos", []))},
-        {"Métrica / Parámetro": "Otras Actividades / Gestión Comunal", "Valor": len(resultado.get("otras_actividades", []))},
-        {"Métrica / Parámetro": "Estudiantes Formados en Aula", "Valor": resultado.get("total_estudiantes", 0)},
-        {"Métrica / Parámetro": "Atenciones de Servicios Brindadas", "Valor": resultado.get("total_servicios", 0)},
-        {"Métrica / Parámetro": "Usuarios Cedulados Atendidos", "Valor": resultado.get("cedulados_serv", 0)},
-        {"Métrica / Parámetro": "Usuarios No Cedulados Atendidos", "Valor": resultado.get("no_cedulados_serv", 0)},
+    metadatos = [
+        ("Criterio de Auditoría", f"{resultado.get('criterio_tipo', '').upper()}: {resultado.get('criterio_valor', '')}"),
+        ("Facilitador / Referencia", resultado.get("facilitador_principal", "")),
+        ("Rango de Fechas Evaluado", f"{resultado.get('f_ini', '')} al {resultado.get('f_fin', '')}"),
+        ("Fecha de Generación", datetime.now().strftime("%d/%m/%Y %H:%M:%S")),
+        ("Estado de Cuadre Matemático", estado_cuadre),
     ]
+    for k, v in metadatos:
+        r_m = TableRow()
+        r_m.addElement(_celda(k, st_meta_k))
+        r_m.addElement(_celda(v, st_meta_v))
+        t_res.addElement(r_m)
+
+    # Fila vacía
+    t_res.addElement(TableRow())
+
+    # Cabecera de KPIs
+    r_kpi_head = TableRow()
+    r_kpi_head.addElement(_celda("MÉTRICA AUDITADA", st_header))
+    r_kpi_head.addElement(_celda("VALOR CONSOLIDADO", st_header))
+    t_res.addElement(r_kpi_head)
+
+    kpis = [
+        ("Total Actividades en Plataforma", resultado.get("total_actividades", 0)),
+        ("Total Actividades Procesadas", resultado.get("total_procesadas", len(todas_act))),
+        ("Formaciones Académicas", len(resultado.get("formaciones", []))),
+        ("Productos Comunicacionales", len(resultado.get("productos", []))),
+        ("Otras Actividades / Gestión Comunal", len(resultado.get("otras_actividades", []))),
+        ("Estudiantes Formados en Aula", resultado.get("total_estudiantes", 0)),
+        ("Atenciones de Servicios Brindadas", resultado.get("total_servicios", 0)),
+        ("Usuarios Cedulados Atendidos", resultado.get("cedulados_serv", 0)),
+        ("Usuarios No Cedulados Atendidos", resultado.get("no_cedulados_serv", 0)),
+    ]
+    for k, v in kpis:
+        r_k = TableRow()
+        r_k.addElement(_celda(k, st_cell_left))
+        r_k.addElement(_celda(v, st_cell_center))
+        t_res.addElement(r_k)
+
     if conciliacion.get("hallazgos"):
-        filas_resumen.append({"Métrica / Parámetro": "--- HALLAZGOS DE CONCILIACIÓN ---", "Valor": ""})
+        t_res.addElement(TableRow())
+        r_h_head = TableRow()
+        r_h_head.addElement(_celda("OBSERVACIONES / HALLAZGOS", st_header))
+        r_h_head.addElement(_celda("DETALLE DE AUDITORÍA", st_header))
+        t_res.addElement(r_h_head)
         for idx_h, hallazgo in enumerate(conciliacion["hallazgos"], 1):
-            filas_resumen.append({"Métrica / Parámetro": f"Hallazgo #{idx_h}", "Valor": hallazgo})
+            r_h = TableRow()
+            r_h.addElement(_celda(f"Hallazgo #{idx_h}", st_cell_left))
+            r_h.addElement(_celda(hallazgo, st_cell_left))
+            t_res.addElement(r_h)
 
-    df_resumen = pd.DataFrame(filas_resumen, columns=["Métrica / Parámetro", "Valor"])
+    doc.spreadsheet.addElement(t_res)
 
-    with pd.ExcelWriter(ruta_destino, engine='odf') as writer:
-        df_fac.to_excel(writer, sheet_name="Resumen por Facilitador", index=False)
-        df_act.to_excel(writer, sheet_name="Actividades", index=False)
-        df_serv.to_excel(writer, sheet_name="Servicios", index=False)
-        df_resumen.to_excel(writer, sheet_name="Resumen Ejecutivo", index=False)
-
+    doc.save(ruta_destino)
     return ruta_destino
 
 

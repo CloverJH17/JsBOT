@@ -195,8 +195,10 @@ class TestCuadreAntagonicoYReporteODS(unittest.TestCase):
 
                 # Validar contenido de Hoja 4 (Resumen Ejecutivo)
                 df_res = xl.parse("Resumen Ejecutivo")
-                self.assertIn("Métrica / Parámetro", df_res.columns)
-                self.assertIn("Valor", df_res.columns)
+                self.assertIn("INFORME OFICIAL", df_res.columns[0])
+                res_str = df_res.to_string()
+                self.assertIn("Total Actividades", res_str)
+                self.assertIn("MÉTRICA AUDITADA", res_str)
 
     def test_exportar_reporte_pdf_utf8_e_integridad(self):
         """Verifica la exportación del reporte PDF estructurado."""
