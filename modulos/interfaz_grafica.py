@@ -217,7 +217,7 @@ class JsBotGUI(ctk.CTk):
         self.var_fecha_hasta_aud = tk.StringVar(value=hoy_str)
         self.var_rol_auditor = tk.BooleanVar(value=False)
         self.var_modo_turbo = tk.BooleanVar(value=True)
-        self.var_exportar_formato = tk.StringVar(value="LibreOffice (.odt)")
+        self.var_exportar_formato = tk.StringVar(value="LibreOffice Calc (.ods)")
         self.ejecutando_auditoria = False
         self.resultado_auditoria_actual = None
         self.ruta_ultimo_reporte_auditoria = ""
@@ -2521,7 +2521,7 @@ class JsBotGUI(ctk.CTk):
         self.combo_aud_formato = ctk.CTkComboBox(
             box_exportacion,
             values=[
-                "LibreOffice (.odt)",
+                "LibreOffice Calc (.ods)",
                 "Excel (.xlsx)",
                 "Documento PDF (.pdf)",
                 "CSV plano (.csv)",
@@ -3104,8 +3104,8 @@ class JsBotGUI(ctk.CTk):
 
         if "consola" in formato or "pantalla" in formato:
             formato_exp = "consola"
-        elif "odt" in formato or "libreoffice" in formato:
-            formato_exp = "odt"
+        elif "ods" in formato or "libreoffice" in formato or "calc" in formato:
+            formato_exp = "ods"
         elif "pdf" in formato:
             formato_exp = "pdf"
         elif "csv" in formato:
@@ -3279,18 +3279,23 @@ class JsBotGUI(ctk.CTk):
             else:
                 self.lbl_kpi_servicios_det.configure(text=f"{tot_srv} atenciones registradas")
 
+        conciliacion = resultado.get("conciliacion")
+        if conciliacion:
+            cuadro_ok = conciliacion.get("cuadra", False)
+
         if cuadro_ok:
             self.lbl_kpi_cuadre.configure(text="● Cuadrado (100%)", text_color="#2ECC71")
             self.lbl_kpi_cuadre_sub.configure(text="Coincidencia exacta", text_color="#2ECC71")
             if hasattr(self, "lbl_kpi_cuadre_det"):
-                self.lbl_kpi_cuadre_det.configure(text="Diferencia: 0 • Balance verificado", text_color="#2ECC71")
+                self.lbl_kpi_cuadre_det.configure(text="Balance verificado sin anomalías", text_color="#2ECC71")
         else:
-            tot_proc = resultado.get("total_procesadas", n_form + n_prod + n_otr)
-            dif = tot_act - tot_proc
+            hallazgos = conciliacion.get("hallazgos", []) if conciliacion else []
+            txt_sub = f"{len(hallazgos)} hallazgo(s) detectado(s)" if hallazgos else "Discrepancia detectada"
             self.lbl_kpi_cuadre.configure(text="● Descuadre", text_color="#E74C3C")
-            self.lbl_kpi_cuadre_sub.configure(text=f"Diferencia: {dif} act.", text_color="#E74C3C")
+            self.lbl_kpi_cuadre_sub.configure(text=txt_sub, text_color="#E74C3C")
             if hasattr(self, "lbl_kpi_cuadre_det"):
-                self.lbl_kpi_cuadre_det.configure(text=f"Reportadas: {tot_act} | Auditadas: {tot_proc}", text_color="#E74C3C")
+                det_txt = (hallazgos[0][:38] + "...") if hallazgos else f"Actividades: {tot_act}"
+                self.lbl_kpi_cuadre_det.configure(text=det_txt, text_color="#E74C3C")
 
         self._poblar_tab_actividades(todas_act)
         self._poblar_tab_servicios(resultado.get("servicios", []))
@@ -3369,10 +3374,10 @@ class JsBotGUI(ctk.CTk):
             return
 
         fmt_low = formato_str.lower()
-        if "odt" in fmt_low or "libreoffice" in fmt_low:
-            def_ext = ".odt"
-            ftypes = [("Documento LibreOffice Writer", "*.odt"), ("Todos los archivos", "*.*")]
-            formato_clave = "odt"
+        if "ods" in fmt_low or "libreoffice" in fmt_low or "calc" in fmt_low:
+            def_ext = ".ods"
+            ftypes = [("Libro LibreOffice Calc", "*.ods"), ("Todos los archivos", "*.*")]
+            formato_clave = "ods"
         elif "pdf" in fmt_low:
             def_ext = ".pdf"
             ftypes = [("Documento Portable PDF", "*.pdf"), ("Todos los archivos", "*.*")]

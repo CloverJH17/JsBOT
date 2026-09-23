@@ -24,7 +24,7 @@
   - **Auditorías Multi-criterio:** Búsqueda por Facilitador (UID con aislamiento estricto de sede), por Infocentro (código de sede) o Resumen Estadal (Región completa).
   - **Dashboard Analítico:** 4 KPIs de alto impacto con promedios por aula, sedes únicas, trámites más demandados y control de cuadre matemático (100%).
   - **Ventanas Modales al Frente:** Inspección detallada con modalidad bloqueante estricta (`grab_set()`), buscador reactivo y cabeceras clickeables para ordenamiento instantáneo.
-  - **Exportación Multiformato:** Generación en 1 clic de reportes en Excel (.xlsx con auto-filtro en todas las hojas), LibreOffice (.odt), PDF (.pdf), CSV (.csv) o Consola con diálogo de guardado y apertura automática en el sistema operativo.
+  - **Exportación Multiformato:** Generación en 1 clic de reportes en Excel (.xlsx con auto-filtro en todas las hojas), LibreOffice Calc (.ods con 4 hojas), PDF (.pdf tabular en UTF-8), CSV (.csv) o Consola con diálogo de guardado y apertura automática en el sistema operativo.
 - **Verificador Post-Carga y Anti-Duplicados:**
   - Confirmación instantánea (0.5s) de participantes y servicios cargados contrastando directamente contra la base de datos de InfoApp (`verificador_cargas_export.py`).
   - Extracción previa de participantes existentes para prevenir duplicidades en aula.

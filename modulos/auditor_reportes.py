@@ -853,87 +853,341 @@ def generar_resumen_consola(resultado: dict) -> str:
     return "\n".join(lineas)
 
 
-def exportar_reporte_odt(resultado: dict, ruta_destino: str = None) -> str:
-    """Genera un documento oficial OpenDocument Text (.odt) para LibreOffice Writer."""
+def _parse_fecha_segura(f_str):
+    """Parsea una fecha en diversos formatos estándar de forma segura."""
+    if not f_str or not isinstance(f_str, str):
+        return None
+    f_str = f_str.strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(f_str, fmt).date()
+        except Exception:
+            continue
+    return None
+
+
+def conciliar_balance_auditoria(resultado: dict, total_declarado_servidor: int = None) -> dict:
+    """
+    Función de control antagónica e independiente para conciliar y auditar la integridad
+    de los datos procesados en la auditoría.
+
+    Verificaciones ejecutadas:
+    1. Doble partida de actividades: Suma de 'total_act' de facilitadores vs 'total_actividades'.
+    2. Doble partida de estudiantes: Suma de 'estudiantes' de facilitadores vs 'total_estudiantes'.
+    3. Doble partida de servicios: Suma de 'servicios' de facilitadores vs 'total_servicios'.
+    4. Integridad de clasificación: formaciones + productos + otras_actividades vs total_actividades.
+    5. Detección de actividades duplicadas (por ID de actividad).
+    6. Detección de fechas extemporáneas (actividades fuera del rango f_ini - f_fin).
+    7. Integridad de paginación/crawler: si se declara un total del servidor, comparar contra total_actividades.
+    """
+    res_facs = resultado.get("resumen_facilitadores", {})
+    tot_act = resultado.get("total_actividades", 0)
+    tot_est = resultado.get("total_estudiantes", 0)
+    tot_serv = resultado.get("total_servicios", 0)
+
+    forms = resultado.get("formaciones", [])
+    prods = resultado.get("productos", [])
+    otras = resultado.get("otras_actividades", [])
+    todas_act = forms + prods + otras
+
+    hallazgos = []
+
+    # 1. Doble partida de actividades por facilitador
+    suma_act_fac = sum(d.get("total_act", 0) for d in res_facs.values())
+    if res_facs and suma_act_fac != tot_act:
+        hallazgos.append(
+            f"Discrepancia en actividades: la suma de facilitadores ({suma_act_fac}) difiere del total general reportado ({tot_act})."
+        )
+
+    # 2. Doble partida de estudiantes formados
+    suma_est_fac = sum(d.get("estudiantes", 0) for d in res_facs.values())
+    if res_facs and suma_est_fac != tot_est:
+        hallazgos.append(
+            f"Discrepancia en estudiantes: la suma de facilitadores ({suma_est_fac}) difiere del total general reportado ({tot_est})."
+        )
+
+    # 3. Doble partida de servicios brindados
+    suma_serv_fac = sum(d.get("servicios", 0) for d in res_facs.values())
+    if res_facs and suma_serv_fac != tot_serv:
+        hallazgos.append(
+            f"Discrepancia en servicios: la suma de facilitadores ({suma_serv_fac}) difiere del total general reportado ({tot_serv})."
+        )
+
+    # 4. Consistencia interna de desglose de actividades
+    suma_desglose = len(forms) + len(prods) + len(otras)
+    if suma_desglose != tot_act:
+        hallazgos.append(
+            f"Discrepancia cualitativa: la suma de categorías ({suma_desglose}) difiere de total_actividades ({tot_act})."
+        )
+
+    # 5. Detección de duplicidad de IDs de actividades
+    ids_vistos = set()
+    ids_duplicados = set()
+    for act in todas_act:
+        aid = str(act.get("id") or act.get("id_activity") or "").strip()
+        if aid and aid != "0":
+            if aid in ids_vistos:
+                ids_duplicados.add(aid)
+            else:
+                ids_vistos.add(aid)
+    if ids_duplicados:
+        lista_dups = sorted(list(ids_duplicados))[:5]
+        hallazgos.append(
+            f"Se detectaron {len(ids_duplicados)} ID(s) de actividad duplicados en la muestra (ej: {', '.join(lista_dups)})."
+        )
+
+    # 6. Detección de fechas extemporáneas (fuera del rango de búsqueda)
+    f_ini_str = resultado.get("f_ini") or resultado.get("fecha_inicio")
+    f_fin_str = resultado.get("f_fin") or resultado.get("fecha_fin")
+    d_ini = _parse_fecha_segura(f_ini_str)
+    d_fin = _parse_fecha_segura(f_fin_str)
+    extemporaneas = []
+    if d_ini and d_fin:
+        for act in todas_act:
+            d_act = _parse_fecha_segura(act.get("fecha"))
+            if d_act and (d_act < d_ini or d_act > d_fin):
+                extemporaneas.append(str(act.get("id") or act.get("titulo") or d_act))
+    if extemporaneas:
+        hallazgos.append(
+            f"Se detectaron {len(extemporaneas)} actividad(es) con fechas extemporáneas fuera del período ({f_ini_str} al {f_fin_str})."
+        )
+
+    # 7. Integridad de captura del servidor / pérdida en paginación
+    srv_tot = total_declarado_servidor if total_declarado_servidor is not None else resultado.get("total_declarado_servidor")
+    if srv_tot is not None and srv_tot > tot_act:
+        hallazgos.append(
+            f"Pérdida en captura: el servidor reportó {srv_tot} registros pero solo se procesaron {tot_act} (diferencia: {srv_tot - tot_act})."
+        )
+
+    cuadra = (len(hallazgos) == 0)
+    dictamen = "CUADRADO (100%)" if cuadra else f"DISCREPANCIA ({len(hallazgos)} hallazgo(s) detectado(s))"
+    porcentaje = 100.0 if cuadra else max(0.0, 100.0 - (len(hallazgos) * 15.0))
+
+    return {
+        "cuadra": cuadra,
+        "porcentaje_cuadre": porcentaje,
+        "dictamen": dictamen,
+        "hallazgos": hallazgos,
+        "metricas_control": {
+            "suma_act_facilitadores": suma_act_fac,
+            "tot_act_declarado": tot_act,
+            "suma_est_facilitadores": suma_est_fac,
+            "tot_est_declarado": tot_est,
+            "suma_serv_facilitadores": suma_serv_fac,
+            "tot_serv_declarado": tot_serv,
+            "ids_duplicados": list(ids_duplicados),
+            "actividades_extemporaneas": len(extemporaneas)
+        }
+    }
+
+
+def exportar_reporte_ods(resultado: dict, ruta_destino: str = None) -> str:
+    """
+    Genera un libro oficial OpenDocument Spreadsheet (.ods) para LibreOffice Calc
+    con exactamente la misma estructura de 4 pestañas que el reporte de Excel:
+    1. 'Resumen por Facilitador' (con subtotales por sede y total general consolidado).
+    2. 'Actividades' (todas las actividades y sus 11 atributos institucionales).
+    3. 'Servicios' (todas las atenciones y sus 8 atributos institucionales).
+    4. 'Resumen Ejecutivo' (metadatos, balance antagónico y matriz consolidada de KPIs).
+    """
     os.makedirs(REPORTES_DIR, exist_ok=True)
     if not ruta_destino:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        crit_tag = f"{resultado['criterio_tipo']}_{resultado['criterio_valor']}".replace(" ", "_")
-        ruta_destino = os.path.join(REPORTES_DIR, f"Auditoria_{crit_tag}_{ts}.odt")
+        crit_tag = f"{resultado.get('criterio_tipo', 'audit')}_{resultado.get('criterio_valor', 'report')}".replace(" ", "_")
+        ruta_destino = os.path.join(REPORTES_DIR, f"Auditoria_{crit_tag}_{ts}.ods")
 
-    criterio = f"{resultado.get('criterio_tipo', '').upper()}: {resultado.get('criterio_valor', '')}"
-    f_ini = resultado.get('f_ini') or resultado.get('fecha_inicio', '')
-    f_fin = resultado.get('f_fin') or resultado.get('fecha_fin', '')
-    fac_prin = resultado.get('facilitador_principal', '')
-    tot_act = resultado.get('total_actividades', 0)
-    tot_est = resultado.get('total_estudiantes', 0)
-    tot_srv = resultado.get('total_servicios', 0)
-    cuadre = "Cuadrado (100%)" if resultado.get("cuadre_perfecto") else "Discrepancia"
+    import pandas as pd
 
-    manifest_xml = '''<?xml version="1.0" encoding="UTF-8"?>
-<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
- <manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.text"/>
- <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
-</manifest:manifest>'''
-
-    filas_xml = [
-        '<text:h text:outline-level="1">INFORME OFICIAL DE AUDITORÍA Y BALANCE OPERATIVO — JsBOT</text:h>',
-        f'<text:p><text:span text:style-name="Bold">Criterio evaluado:</text:span> {criterio} | <text:span text:style-name="Bold">Período:</text:span> {f_ini} al {f_fin}</text:p>',
-        f'<text:p><text:span text:style-name="Bold">Facilitador / Sede:</text:span> {fac_prin}</text:p>',
-        '<text:p></text:p>',
-        '<text:h text:outline-level="2">Métricas Principales</text:h>',
-        f'<text:p>• Total Actividades Registradas: {tot_act}</text:p>',
-        f'<text:p>• Estudiantes Formados en Aula: {tot_est}</text:p>',
-        f'<text:p>• Servicios a Usuarios: {tot_srv}</text:p>',
-        f'<text:p>• Balance Matemático: {cuadre}</text:p>',
-        '<text:p></text:p>'
+    # Hoja 1: Resumen por Facilitador
+    headers_fac = [
+        "UID", "Facilitador / Responsable", "Formaciones",
+        "Estudiantes", "Productos", "Otras Actividades", "Servicios", "Total Act."
     ]
-
     res_facs = resultado.get("resumen_facilitadores", {})
-    if res_facs:
-        filas_xml.append('<text:h text:outline-level="2">Desglose por Facilitador</text:h>')
-        for uid_k, d in res_facs.items():
-            filas_xml.append(f'<text:p>• [UID {uid_k}] {d.get("nombre", "")} (Sede: {d.get("info_id", "")}) — Formaciones: {d.get("formaciones", 0)} | Formados: {d.get("estudiantes", 0)} | Productos: {d.get("productos", 0)} | Otras: {d.get("otras", 0)} | Servicios: {d.get("servicios", 0)} | Total Act: {d.get("total_act", 0)}</text:p>')
+    sedes_dict = {}
+    for f_uid, f_data in res_facs.items():
+        sede = f_data.get("info_id") or "Sin Sede / S/D"
+        if sede not in sedes_dict:
+            sedes_dict[sede] = []
+        sedes_dict[sede].append((f_uid, f_data))
 
-    forms = resultado.get("formaciones", [])
-    if forms:
-        filas_xml.append('<text:p></text:p>')
-        filas_xml.append(f'<text:h text:outline-level="2">Detalle de Formaciones ({len(forms)})</text:h>')
-        for idx, act in enumerate(forms, 1):
-            filas_xml.append(f'<text:p>{idx}. [{act.get("fecha", "")}] {act.get("titulo", "")} — Taller: {act.get("taller", "")} ({act.get("participantes", 0)} participantes) — Facilitador: {act.get("responsable", "")}</text:p>')
+    filas_fac = []
+    tot_gral_form = 0
+    tot_gral_est = 0
+    tot_gral_prod = 0
+    tot_gral_otr = 0
+    tot_gral_serv = 0
+    tot_gral_act = 0
 
-    srvs = resultado.get("servicios", [])
-    if srvs:
-        filas_xml.append('<text:p></text:p>')
-        filas_xml.append(f'<text:h text:outline-level="2">Detalle de Servicios a Usuarios ({len(srvs)})</text:h>')
-        for idx, s in enumerate(srvs, 1):
-            filas_xml.append(f'<text:p>{idx}. [{s.get("fecha", "")}] Trámite: {s.get("servicio", "")} — Usuario: {s.get("usuario", "")} (Doc: {s.get("cedula", "")}) — Sede: {s.get("info_id", "")}</text:p>')
+    for codigo_sede, lista_f in sedes_dict.items():
+        filas_fac.append({
+            "UID": f"🏢 INFOCENTRO: {codigo_sede}",
+            "Facilitador / Responsable": "",
+            "Formaciones": "",
+            "Estudiantes": "",
+            "Productos": "",
+            "Otras Actividades": "",
+            "Servicios": "",
+            "Total Act.": ""
+        })
+        sub_form = sub_est = sub_prod = sub_otr = sub_serv = sub_act = 0
+        for f_uid, f_data in lista_f:
+            f_act = f_data.get("total_act", 0)
+            f_est = f_data.get("estudiantes", 0)
+            f_frm = f_data.get("formaciones", 0)
+            f_prd = f_data.get("productos", 0)
+            f_otr = f_data.get("otras", 0)
+            f_srv = f_data.get("servicios", 0)
 
-    content_body = "\n".join(filas_xml)
-    content_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2">
- <office:body>
-  <office:text>
-   {content_body}
-  </office:text>
- </office:body>
-</office:document-content>'''
+            sub_form += f_frm
+            sub_est += f_est
+            sub_prod += f_prd
+            sub_otr += f_otr
+            sub_serv += f_srv
+            sub_act += f_act
 
-    with zipfile.ZipFile(ruta_destino, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("mimetype", "application/vnd.oasis.opendocument.text", compress_type=zipfile.ZIP_STORED)
-        z.writestr("META-INF/manifest.xml", manifest_xml)
-        z.writestr("content.xml", content_xml.encode("utf-8"))
+            filas_fac.append({
+                "UID": f_uid,
+                "Facilitador / Responsable": f_data.get("nombre", f"UID {f_uid}"),
+                "Formaciones": f_frm,
+                "Estudiantes": f_est,
+                "Productos": f_prd,
+                "Otras Actividades": f_otr,
+                "Servicios": f_srv,
+                "Total Act.": f_act
+            })
+
+        tot_gral_form += sub_form
+        tot_gral_est += sub_est
+        tot_gral_prod += sub_prod
+        tot_gral_otr += sub_otr
+        tot_gral_serv += sub_serv
+        tot_gral_act += sub_act
+
+        filas_fac.append({
+            "UID": "",
+            "Facilitador / Responsable": f"Subtotal {codigo_sede}",
+            "Formaciones": sub_form,
+            "Estudiantes": sub_est,
+            "Productos": sub_prod,
+            "Otras Actividades": sub_otr,
+            "Servicios": sub_serv,
+            "Total Act.": sub_act
+        })
+
+    filas_fac.append({
+        "UID": "",
+        "Facilitador / Responsable": "TOTAL GENERAL CONSOLIDADO",
+        "Formaciones": tot_gral_form,
+        "Estudiantes": tot_gral_est,
+        "Productos": tot_gral_prod,
+        "Otras Actividades": tot_gral_otr,
+        "Servicios": tot_gral_serv,
+        "Total Act.": tot_gral_act
+    })
+    df_fac = pd.DataFrame(filas_fac, columns=headers_fac)
+
+    # Hoja 2: Actividades
+    headers_act = [
+        "Fecha", "ID InfoApp", "UID", "Infocentro", "Tipo Actividad",
+        "Área Formativa", "Taller Específico", "Título Pedagógico",
+        "Responsable", "Participantes", "Productos"
+    ]
+    todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
+    filas_act = []
+    for act in todas_act:
+        dims_lower = str(act.get("dimensiones", "")).lower()
+        if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
+            tipo_desc = "Formación"
+        elif act.get("productos", 0) > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
+            tipo_desc = "Producto"
+        else:
+            tipo_desc = "Otras Actividades"
+
+        filas_act.append({
+            "Fecha": act.get("fecha", ""),
+            "ID InfoApp": act.get("id") or act.get("id_activity", ""),
+            "UID": act.get("uid", ""),
+            "Infocentro": act.get("info_id", ""),
+            "Tipo Actividad": tipo_desc,
+            "Área Formativa": act.get("area", ""),
+            "Taller Específico": act.get("taller", ""),
+            "Título Pedagógico": act.get("titulo", ""),
+            "Responsable": act.get("responsable", ""),
+            "Participantes": act.get("participantes", 0),
+            "Productos": act.get("productos", 0)
+        })
+    df_act = pd.DataFrame(filas_act, columns=headers_act)
+
+    # Hoja 3: Servicios
+    headers_serv = [
+        "Fecha", "UID", "Infocentro", "Servicio / Trámite",
+        "Cédula", "ID Usuario", "Nombre del Usuario", "Profesión / Ocupación"
+    ]
+    servicios_list = resultado.get("servicios", [])
+    filas_serv = []
+    for serv in servicios_list:
+        filas_serv.append({
+            "Fecha": serv.get("fecha", ""),
+            "UID": serv.get("uid", ""),
+            "Infocentro": serv.get("info_id", ""),
+            "Servicio / Trámite": serv.get("servicio", ""),
+            "Cédula": serv.get("cedula", ""),
+            "ID Usuario": serv.get("id_usuario", ""),
+            "Nombre del Usuario": serv.get("usuario", ""),
+            "Profesión / Ocupación": serv.get("profesion", "")
+        })
+    df_serv = pd.DataFrame(filas_serv, columns=headers_serv)
+
+    # Hoja 4: Resumen Ejecutivo
+    conciliacion = resultado.get("conciliacion") or conciliar_balance_auditoria(resultado)
+    estado_cuadre = conciliacion.get("dictamen", "CUADRE EXACTO (100%)" if resultado.get("cuadre_perfecto") else "DISCREPANCIA DETECTADA")
+    filas_resumen = [
+        {"Métrica / Parámetro": "INFORME OFICIAL DE AUDITORÍA Y INSPECCIÓN — JsBOT", "Valor": ""},
+        {"Métrica / Parámetro": "Criterio de Auditoría", "Valor": f"{resultado.get('criterio_tipo', '').upper()}: {resultado.get('criterio_valor', '')}"},
+        {"Métrica / Parámetro": "Facilitador / Referencia", "Valor": resultado.get("facilitador_principal", "")},
+        {"Métrica / Parámetro": "Rango de Fechas Evaluado", "Valor": f"{resultado.get('f_ini', '')} al {resultado.get('f_fin', '')}"},
+        {"Métrica / Parámetro": "Fecha de Generación", "Valor": datetime.now().strftime("%d/%m/%Y %H:%M:%S")},
+        {"Métrica / Parámetro": "Estado de Cuadre Matemático", "Valor": estado_cuadre},
+        {"Métrica / Parámetro": "---", "Valor": "---"},
+        {"Métrica / Parámetro": "Total Actividades en Plataforma", "Valor": resultado.get("total_actividades", 0)},
+        {"Métrica / Parámetro": "Total Actividades Procesadas", "Valor": resultado.get("total_procesadas", len(todas_act))},
+        {"Métrica / Parámetro": "Formaciones Académicas", "Valor": len(resultado.get("formaciones", []))},
+        {"Métrica / Parámetro": "Productos Comunicacionales", "Valor": len(resultado.get("productos", []))},
+        {"Métrica / Parámetro": "Otras Actividades / Gestión Comunal", "Valor": len(resultado.get("otras_actividades", []))},
+        {"Métrica / Parámetro": "Estudiantes Formados en Aula", "Valor": resultado.get("total_estudiantes", 0)},
+        {"Métrica / Parámetro": "Atenciones de Servicios Brindadas", "Valor": resultado.get("total_servicios", 0)},
+        {"Métrica / Parámetro": "Usuarios Cedulados Atendidos", "Valor": resultado.get("cedulados_serv", 0)},
+        {"Métrica / Parámetro": "Usuarios No Cedulados Atendidos", "Valor": resultado.get("no_cedulados_serv", 0)},
+    ]
+    if conciliacion.get("hallazgos"):
+        filas_resumen.append({"Métrica / Parámetro": "--- HALLAZGOS DE CONCILIACIÓN ---", "Valor": ""})
+        for idx_h, hallazgo in enumerate(conciliacion["hallazgos"], 1):
+            filas_resumen.append({"Métrica / Parámetro": f"Hallazgo #{idx_h}", "Valor": hallazgo})
+
+    df_resumen = pd.DataFrame(filas_resumen, columns=["Métrica / Parámetro", "Valor"])
+
+    with pd.ExcelWriter(ruta_destino, engine='odf') as writer:
+        df_fac.to_excel(writer, sheet_name="Resumen por Facilitador", index=False)
+        df_act.to_excel(writer, sheet_name="Actividades", index=False)
+        df_serv.to_excel(writer, sheet_name="Servicios", index=False)
+        df_resumen.to_excel(writer, sheet_name="Resumen Ejecutivo", index=False)
 
     return ruta_destino
 
 
 def exportar_reporte_pdf(resultado: dict, ruta_destino: str = None) -> str:
-    """Genera un archivo PDF 1.4 oficial sin requerir librerías externas."""
+    """
+    Genera un informe PDF oficial estructurado, con tablas completas y saneamiento UTF-8
+    utilizando Playwright Chromium con fallback nativo en caso de entornos sin navegador.
+    """
     os.makedirs(REPORTES_DIR, exist_ok=True)
     if not ruta_destino:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        crit_tag = f"{resultado['criterio_tipo']}_{resultado['criterio_valor']}".replace(" ", "_")
+        crit_tag = f"{resultado.get('criterio_tipo', 'audit')}_{resultado.get('criterio_valor', 'report')}".replace(" ", "_")
         ruta_destino = os.path.join(REPORTES_DIR, f"Auditoria_{crit_tag}_{ts}.pdf")
+
+    import html
 
     criterio = f"{resultado.get('criterio_tipo', '').upper()}: {resultado.get('criterio_valor', '')}"
     f_ini = resultado.get('f_ini') or resultado.get('fecha_inicio', '')
@@ -945,69 +1199,501 @@ def exportar_reporte_pdf(resultado: dict, ruta_destino: str = None) -> str:
     n_form = len(resultado.get('formaciones', []))
     n_prod = len(resultado.get('productos', []))
     n_otr = len(resultado.get('otras_actividades', []))
-    cuadre = "Cuadrado (100%)" if resultado.get("cuadre_perfecto") else "Discrepancia"
+    ced_srv = resultado.get('cedulados_serv', 0)
+    noced_srv = resultado.get('no_cedulados_serv', 0)
 
-    lineas = [
-        "INFORME DE AUDITORIA Y BALANCE OPERATIVO - JsBOT",
-        "----------------------------------------------------------------",
-        f"Criterio: {criterio} | Periodo: {f_ini} al {f_fin}",
-        f"Facilitador / Sede: {fac_prin}",
-        f"Balance Matematico: {cuadre}",
-        "----------------------------------------------------------------",
-        "METRICAS CONSOLIDADAS:",
-        f" - Total Actividades: {tot_act} (Form: {n_form} | Prod: {n_prod} | Otr: {n_otr})",
-        f" - Estudiantes Formados en Aula: {tot_est}",
-        f" - Servicios a Usuarios Brindados: {tot_srv}",
-        "----------------------------------------------------------------",
-        "RESUMEN DE DESEMPENO POR FACILITADOR:"
-    ]
+    conciliacion = resultado.get("conciliacion") or conciliar_balance_auditoria(resultado)
+    cuadre_ok = conciliacion.get("cuadra", resultado.get("cuadre_perfecto", False))
+    dictamen_cuadre = conciliacion.get("dictamen", "CUADRADO (100%)" if cuadre_ok else "DISCREPANCIA DETECTADA")
 
-    for uid_k, d in resultado.get("resumen_facilitadores", {}).items():
-        lineas.append(f" UID {uid_k}: {d.get('nombre', '')} - Form: {d.get('formaciones', 0)}, Est: {d.get('estudiantes', 0)}, Serv: {d.get('servicios', 0)}, Tot: {d.get('total_act', 0)}")
+    # Construcción de tablas HTML con estilo profesional
+    # 1. Tabla Facilitadores agrupada por Sede
+    res_facs = resultado.get("resumen_facilitadores", {})
+    sedes_dict = {}
+    for f_uid, f_data in res_facs.items():
+        sede = f_data.get("info_id") or "Sin Sede / S/D"
+        if sede not in sedes_dict:
+            sedes_dict[sede] = []
+        sedes_dict[sede].append((f_uid, f_data))
 
-    forms = resultado.get("formaciones", [])
-    if forms:
-        lineas.append("----------------------------------------------------------------")
-        lineas.append("DETALLE FORMACIONES RECIENTES:")
-        for idx, act in enumerate(forms[:15], 1):
-            lineas.append(f" {idx}. [{act.get('fecha', '')}] {act.get('titulo', '')[:45]} ({act.get('participantes', 0)} part.)")
+    filas_fac_html = []
+    tot_gral_form = tot_gral_est = tot_gral_prod = tot_gral_otr = tot_gral_serv = tot_gral_act = 0
 
-    obj_offsets = []
-    content_lines = ['BT', '/F1 12 Tf', '40 760 Td']
-    first = True
-    for l in lineas:
-        sanitized = l.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
-        sanitized = sanitized.encode('ascii', 'replace').decode('ascii')
-        if first:
-            content_lines.append(f'({sanitized}) Tj')
-            first = False
+    for codigo_sede, lista_f in sedes_dict.items():
+        filas_fac_html.append(
+            f'<tr class="sede-row"><td colspan="8">🏢 INFOCENTRO: {html.escape(str(codigo_sede))}</td></tr>'
+        )
+        sub_form = sub_est = sub_prod = sub_otr = sub_serv = sub_act = 0
+        for f_uid, f_data in lista_f:
+            f_act = f_data.get("total_act", 0)
+            f_est = f_data.get("estudiantes", 0)
+            f_frm = f_data.get("formaciones", 0)
+            f_prd = f_data.get("productos", 0)
+            f_otr = f_data.get("otras", 0)
+            f_srv = f_data.get("servicios", 0)
+
+            sub_form += f_frm
+            sub_est += f_est
+            sub_prod += f_prd
+            sub_otr += f_otr
+            sub_serv += f_srv
+            sub_act += f_act
+
+            filas_fac_html.append(
+                f'<tr>'
+                f'<td class="text-center">{html.escape(str(f_uid))}</td>'
+                f'<td>{html.escape(str(f_data.get("nombre", f"UID {f_uid}")))}</td>'
+                f'<td class="text-center">{f_frm}</td>'
+                f'<td class="text-center">{f_est}</td>'
+                f'<td class="text-center">{f_prd}</td>'
+                f'<td class="text-center">{f_otr}</td>'
+                f'<td class="text-center">{f_srv}</td>'
+                f'<td class="text-center font-bold">{f_act}</td>'
+                f'</tr>'
+            )
+
+        tot_gral_form += sub_form
+        tot_gral_est += sub_est
+        tot_gral_prod += sub_prod
+        tot_gral_otr += sub_otr
+        tot_gral_serv += sub_serv
+        tot_gral_act += sub_act
+
+        filas_fac_html.append(
+            f'<tr class="subtotal-row">'
+            f'<td></td>'
+            f'<td>Subtotal {html.escape(str(codigo_sede))}</td>'
+            f'<td class="text-center">{sub_form}</td>'
+            f'<td class="text-center">{sub_est}</td>'
+            f'<td class="text-center">{sub_prod}</td>'
+            f'<td class="text-center">{sub_otr}</td>'
+            f'<td class="text-center">{sub_serv}</td>'
+            f'<td class="text-center font-bold">{sub_act}</td>'
+            f'</tr>'
+        )
+
+    filas_fac_html.append(
+        f'<tr class="total-row">'
+        f'<td></td>'
+        f'<td>TOTAL GENERAL CONSOLIDADO</td>'
+        f'<td class="text-center">{tot_gral_form}</td>'
+        f'<td class="text-center">{tot_gral_est}</td>'
+        f'<td class="text-center">{tot_gral_prod}</td>'
+        f'<td class="text-center">{tot_gral_otr}</td>'
+        f'<td class="text-center">{tot_gral_serv}</td>'
+        f'<td class="text-center">{tot_gral_act}</td>'
+        f'</tr>'
+    )
+
+    # 2. Detalle de Actividades (hasta 150 para mantener PDF compacto y legible)
+    todas_act = resultado.get("formaciones", []) + resultado.get("productos", []) + resultado.get("otras_actividades", [])
+    filas_act_html = []
+    for idx, act in enumerate(todas_act[:150], start=1):
+        dims_lower = str(act.get("dimensiones", "")).lower()
+        if "aprendizaje" in dims_lower or "robótica" in dims_lower or "robotica" in dims_lower or "taller" in dims_lower or act.get("tipo_clasificacion") == "formacion":
+            tipo_desc = "Formación"
+        elif act.get("productos", 0) > 0 or "contenido" in dims_lower or "medios digitales" in dims_lower or act.get("tipo_clasificacion") == "producto":
+            tipo_desc = "Producto"
         else:
-            content_lines.append(f'0 -13 Td ({sanitized}) Tj')
-    content_lines.append('ET')
-    content_stream = '\n'.join(content_lines).encode('latin-1', 'replace')
+            tipo_desc = "Otras"
 
-    body = b'%PDF-1.4\n'
-    obj_offsets.append(len(body))
-    body += b'1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
-    obj_offsets.append(len(body))
-    body += b'2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
-    obj_offsets.append(len(body))
-    body += b'3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
-    obj_offsets.append(len(body))
-    body += f'4 0 obj\n<< /Length {len(content_stream)} >>\nstream\n'.encode('ascii') + content_stream + b'\nendstream\nendobj\n'
-    obj_offsets.append(len(body))
-    body += b'5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+        filas_act_html.append(
+            f'<tr>'
+            f'<td class="text-center">{html.escape(str(act.get("fecha", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(act.get("id") or act.get("id_activity", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(act.get("uid", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(act.get("info_id", "")))}</td>'
+            f'<td class="text-center">{html.escape(tipo_desc)}</td>'
+            f'<td>{html.escape(str(act.get("taller", "")))}</td>'
+            f'<td>{html.escape(str(act.get("titulo", ""))[:50])}</td>'
+            f'<td>{html.escape(str(act.get("responsable", "")))}</td>'
+            f'<td class="text-center">{act.get("participantes", 0)}</td>'
+            f'<td class="text-center">{act.get("productos", 0)}</td>'
+            f'</tr>'
+        )
 
-    xref_start = len(body)
-    body += b'xref\n0 6\n0000000000 65535 f \n'
-    for offset in obj_offsets:
-        body += f'{offset:010d} 00000 n \n'.encode('ascii')
-    body += f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF'.encode('ascii')
+    # 3. Detalle de Servicios (hasta 100)
+    servicios_list = resultado.get("servicios", [])
+    filas_srv_html = []
+    for idx, serv in enumerate(servicios_list[:100], start=1):
+        filas_srv_html.append(
+            f'<tr>'
+            f'<td class="text-center">{html.escape(str(serv.get("fecha", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(serv.get("uid", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(serv.get("info_id", "")))}</td>'
+            f'<td>{html.escape(str(serv.get("servicio", "")))}</td>'
+            f'<td class="text-center">{html.escape(str(serv.get("cedula", "")))}</td>'
+            f'<td>{html.escape(str(serv.get("usuario", "")))}</td>'
+            f'<td>{html.escape(str(serv.get("profesion", "")))}</td>'
+            f'</tr>'
+        )
 
-    with open(ruta_destino, 'wb') as f:
-        f.write(body)
+    hallazgos_html = ""
+    if conciliacion.get("hallazgos"):
+        items_h = "".join(f"<li>{html.escape(h)}</li>" for h in conciliacion["hallazgos"])
+        hallazgos_html = f'''
+        <div class="hallazgos-box">
+            <h3>⚠️ Hallazgos y Observaciones de Auditoría ({len(conciliacion["hallazgos"])})</h3>
+            <ul>{items_h}</ul>
+        </div>
+        '''
 
-    return ruta_destino
+    badge_cls = "badge-success" if cuadre_ok else "badge-danger"
+
+    html_doc = f'''<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Informe de Auditoría — JsBOT</title>
+<style>
+  @page {{
+    size: A4 landscape;
+    margin: 10mm 12mm 10mm 12mm;
+  }}
+  body {{
+    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    color: #1E293B;
+    background-color: #FFFFFF;
+    margin: 0;
+    padding: 0;
+    font-size: 9px;
+    line-height: 1.35;
+  }}
+  .header-box {{
+    border-bottom: 2px solid #1F4E78;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }}
+  .header-title h1 {{
+    font-size: 14px;
+    color: #1F4E78;
+    margin: 0 0 2px 0;
+    font-weight: bold;
+    text-transform: uppercase;
+  }}
+  .header-title p {{
+    margin: 0;
+    color: #64748B;
+    font-size: 9px;
+  }}
+  .badge {{
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 9px;
+  }}
+  .badge-success {{ background-color: #DEF7EC; color: #03543F; border: 1px solid #31C48D; }}
+  .badge-danger {{ background-color: #FDE8E8; color: #9B1C1C; border: 1px solid #F98080; }}
+  
+  .meta-grid {{
+    display: table;
+    width: 100%;
+    background-color: #F8FAFC;
+    border: 1px solid #CBD5E1;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border-collapse: separate;
+  }}
+  .meta-cell {{
+    display: table-cell;
+    padding: 6px 10px;
+    border-right: 1px solid #E2E8F0;
+  }}
+  .meta-cell:last-child {{ border-right: none; }}
+  .meta-label {{ font-size: 8px; color: #64748B; text-transform: uppercase; font-weight: bold; }}
+  .meta-value {{ font-size: 10px; color: #0F172A; font-weight: bold; margin-top: 1px; }}
+
+  .kpi-row {{
+    display: table;
+    width: 100%;
+    margin-bottom: 10px;
+    border-spacing: 6px;
+  }}
+  .kpi-card {{
+    display: table-cell;
+    background-color: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 4px;
+    padding: 6px 8px;
+    text-align: center;
+    width: 16.66%;
+  }}
+  .kpi-num {{ font-size: 13px; font-weight: bold; color: #1F4E78; }}
+  .kpi-desc {{ font-size: 8px; color: #64748B; margin-top: 1px; }}
+
+  h2 {{
+    font-size: 10.5px;
+    color: #1F4E78;
+    border-left: 3px solid #1F4E78;
+    padding-left: 5px;
+    margin: 10px 0 6px 0;
+    text-transform: uppercase;
+  }}
+
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+    font-size: 8.5px;
+  }}
+  th {{
+    background-color: #1F4E78;
+    color: #FFFFFF;
+    font-weight: bold;
+    padding: 5px 6px;
+    text-align: left;
+    border: 1px solid #1F4E78;
+  }}
+  td {{
+    border: 1px solid #CBD5E1;
+    padding: 4px 6px;
+    vertical-align: middle;
+  }}
+  tr:nth-child(even) td {{ background-color: #F8FAFC; }}
+  .text-center {{ text-align: center; }}
+  .text-right {{ text-align: right; }}
+  .font-bold {{ font-weight: bold; }}
+  .sede-row td {{
+    background-color: #D9E1F2 !important;
+    color: #1F4E78;
+    font-weight: bold;
+    font-size: 9px;
+  }}
+  .subtotal-row td {{
+    background-color: #F1F5F9 !important;
+    font-weight: bold;
+    border-top: 1px solid #94A3B8;
+    border-bottom: 2px solid #94A3B8;
+  }}
+  .total-row td {{
+    background-color: #E2EFDA !important;
+    font-weight: bold;
+    font-size: 9.5px;
+    border-top: 2px solid #1F4E78;
+    border-bottom: 3px double #1F4E78;
+  }}
+  .hallazgos-box {{
+    background-color: #FFF5F5;
+    border: 1px solid #FEB2B2;
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin-bottom: 10px;
+  }}
+  .hallazgos-box h3 {{
+    margin: 0 0 4px 0;
+    color: #C53030;
+    font-size: 9.5px;
+  }}
+  .hallazgos-box ul {{
+    margin: 0;
+    padding-left: 18px;
+    color: #9B2C2C;
+  }}
+  .page-break {{ page-break-before: always; }}
+</style>
+</head>
+<body>
+  <div class="header-box">
+    <div class="header-title">
+      <h1>INFORME OFICIAL DE AUDITORÍA Y INSPECCIÓN ADMINISTRATIVA — JsBOT</h1>
+      <p>Generado el {datetime.now().strftime("%d/%m/%Y %H:%M:%S")} | Motor de Auditoría Acelerado v4.14.0</p>
+    </div>
+    <div>
+      <span class="badge {badge_cls}">{html.escape(dictamen_cuadre)}</span>
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-cell">
+      <div class="meta-label">Criterio Evaluado</div>
+      <div class="meta-value">{html.escape(criterio)}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">Facilitador / Sede</div>
+      <div class="meta-value">{html.escape(fac_prin or "Todos")}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">Período de Auditoría</div>
+      <div class="meta-value">{f_ini} al {f_fin}</div>
+    </div>
+    <div class="meta-cell">
+      <div class="meta-label">Balance Matemático</div>
+      <div class="meta-value">{html.escape(dictamen_cuadre)}</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-num">{tot_act}</div>
+      <div class="kpi-desc">Total Actividades</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">{n_form}</div>
+      <div class="kpi-desc">Formaciones</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">{n_prod}</div>
+      <div class="kpi-desc">Productos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">{tot_est}</div>
+      <div class="kpi-desc">Estudiantes Aula</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">{tot_srv}</div>
+      <div class="kpi-desc">Servicios Atendidos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-num">{ced_srv} / {noced_srv}</div>
+      <div class="kpi-desc">Cedulados / Sin Cédula</div>
+    </div>
+  </div>
+
+  {hallazgos_html}
+
+  <h2>1. Resumen Consolidado por Facilitador y Sede</h2>
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center" style="width: 70px;">UID</th>
+        <th>Facilitador / Responsable</th>
+        <th class="text-center" style="width: 75px;">Formaciones</th>
+        <th class="text-center" style="width: 75px;">Estudiantes</th>
+        <th class="text-center" style="width: 70px;">Productos</th>
+        <th class="text-center" style="width: 65px;">Otras</th>
+        <th class="text-center" style="width: 70px;">Servicios</th>
+        <th class="text-center" style="width: 75px;">Total Act.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {"".join(filas_fac_html)}
+    </tbody>
+  </table>
+
+  {"<div class='page-break'></div>" if len(todas_act) > 10 else ""}
+  <h2>2. Detalle de Actividades Registradas ({len(todas_act)} total{f', mostrando primeras {len(filas_act_html)}' if len(todas_act) > len(filas_act_html) else ''})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center" style="width: 65px;">Fecha</th>
+        <th class="text-center" style="width: 65px;">ID</th>
+        <th class="text-center" style="width: 50px;">UID</th>
+        <th class="text-center" style="width: 65px;">Sede</th>
+        <th class="text-center" style="width: 65px;">Tipo</th>
+        <th style="width: 110px;">Taller</th>
+        <th>Título Pedagógico</th>
+        <th style="width: 100px;">Responsable</th>
+        <th class="text-center" style="width: 40px;">Part.</th>
+        <th class="text-center" style="width: 40px;">Prod.</th>
+      </tr>
+    </thead>
+    <tbody>
+      {"".join(filas_act_html) if filas_act_html else "<tr><td colspan='10' class='text-center'>Sin actividades registradas</td></tr>"}
+    </tbody>
+  </table>
+
+  {"<div class='page-break'></div>" if len(servicios_list) > 10 else ""}
+  <h2>3. Detalle de Servicios a Usuarios ({len(servicios_list)} total{f', mostrando primeros {len(filas_srv_html)}' if len(servicios_list) > len(filas_srv_html) else ''})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th class="text-center" style="width: 65px;">Fecha</th>
+        <th class="text-center" style="width: 50px;">UID</th>
+        <th class="text-center" style="width: 65px;">Sede</th>
+        <th>Servicio / Trámite</th>
+        <th class="text-center" style="width: 80px;">Cédula</th>
+        <th>Nombre del Usuario</th>
+        <th>Profesión / Ocupación</th>
+      </tr>
+    </thead>
+    <tbody>
+      {"".join(filas_srv_html) if filas_srv_html else "<tr><td colspan='7' class='text-center'>Sin servicios registrados</td></tr>"}
+    </tbody>
+  </table>
+</body>
+</html>'''
+
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.set_content(html_doc, wait_until="domcontentloaded")
+            page.pdf(
+                path=ruta_destino,
+                format="A4",
+                landscape=True,
+                print_background=True,
+                margin={"top": "8mm", "bottom": "8mm", "left": "8mm", "right": "8mm"}
+            )
+            browser.close()
+        return ruta_destino
+    except Exception as e_pw:
+        # Fallback a PDF 1.4 básico si Playwright no estuviera disponible
+        lineas = [
+            "INFORME OFICIAL DE AUDITORIA Y BALANCE OPERATIVO - JsBOT",
+            "----------------------------------------------------------------",
+            f"Criterio: {criterio} | Periodo: {f_ini} al {f_fin}",
+            f"Facilitador / Sede: {fac_prin}",
+            f"Balance Matematico: {dictamen_cuadre}",
+            "----------------------------------------------------------------",
+            "METRICAS CONSOLIDADAS:",
+            f" - Total Actividades: {tot_act} (Form: {n_form} | Prod: {n_prod} | Otr: {n_otr})",
+            f" - Estudiantes Formados en Aula: {tot_est}",
+            f" - Servicios a Usuarios Brindados: {tot_srv}",
+            "----------------------------------------------------------------",
+            "RESUMEN DE DESEMPENO POR FACILITADOR:"
+        ]
+        for uid_k, d in resultado.get("resumen_facilitadores", {}).items():
+            lineas.append(f" UID {uid_k}: {d.get('nombre', '')} - Form: {d.get('formaciones', 0)}, Est: {d.get('estudiantes', 0)}, Serv: {d.get('servicios', 0)}, Tot: {d.get('total_act', 0)}")
+
+        if conciliacion.get("hallazgos"):
+            lineas.append("----------------------------------------------------------------")
+            lineas.append("HALLAZGOS DE AUDITORIA:")
+            for h in conciliacion["hallazgos"]:
+                lineas.append(f" * {h[:60]}")
+
+        obj_offsets = []
+        content_lines = ['BT', '/F1 10 Tf', '40 760 Td']
+        first = True
+        for l in lineas:
+            sanitized = l.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+            sanitized = sanitized.encode('ascii', 'replace').decode('ascii')
+            if first:
+                content_lines.append(f'({sanitized}) Tj')
+                first = False
+            else:
+                content_lines.append(f'0 -13 Td ({sanitized}) Tj')
+        content_lines.append('ET')
+        content_stream = '\n'.join(content_lines).encode('latin-1', 'replace')
+
+        body = b'%PDF-1.4\n'
+        obj_offsets.append(len(body))
+        body += b'1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'
+        obj_offsets.append(len(body))
+        body += b'2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n'
+        obj_offsets.append(len(body))
+        body += b'3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n'
+        obj_offsets.append(len(body))
+        body += f'4 0 obj\n<< /Length {len(content_stream)} >>\nstream\n'.encode('ascii') + content_stream + b'\nendstream\nendobj\n'
+        obj_offsets.append(len(body))
+        body += b'5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n'
+
+        xref_start = len(body)
+        body += b'xref\n0 6\n0000000000 65535 f \n'
+        for offset in obj_offsets:
+            body += f'{offset:010d} 00000 n \n'.encode('ascii')
+        body += f'trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF'.encode('ascii')
+
+        with open(ruta_destino, 'wb') as f:
+            f.write(body)
+
+        return ruta_destino
+
 
 
 def exportar_reporte_excel(resultado: dict, ruta_destino: str = None) -> str:
@@ -1324,15 +2010,15 @@ def exportar_reporte_csv(resultado: dict, ruta_destino: str = None) -> str:
     return ruta_destino
 
 
-def exportar_reporte_auditoria(resultado: dict, formato: str = "odt", ruta_destino: str = None) -> str:
-    """Despachador unificado para exportar auditoría en ODT, Excel, PDF, CSV o pantalla."""
-    fmt = (formato or "odt").lower().strip()
+def exportar_reporte_auditoria(resultado: dict, formato: str = "ods", ruta_destino: str = None) -> str:
+    """Despachador unificado para exportar auditoría en ODS (LibreOffice Calc), Excel, PDF, CSV o pantalla."""
+    fmt = (formato or "ods").lower().strip()
 
     if "consola" in fmt or "pantalla" in fmt:
         return generar_resumen_consola(resultado)
 
-    if "odt" in fmt or "libreoffice" in fmt:
-        return exportar_reporte_odt(resultado, ruta_destino=ruta_destino)
+    if "ods" in fmt or "libreoffice" in fmt or "calc" in fmt:
+        return exportar_reporte_ods(resultado, ruta_destino=ruta_destino)
 
     if "pdf" in fmt:
         return exportar_reporte_pdf(resultado, ruta_destino=ruta_destino)
@@ -1341,9 +2027,9 @@ def exportar_reporte_auditoria(resultado: dict, formato: str = "odt", ruta_desti
         return exportar_reporte_csv(resultado, ruta_destino=ruta_destino)
 
     if fmt == "ambos":
-        r_odt = exportar_reporte_odt(resultado)
+        r_ods = exportar_reporte_ods(resultado)
         exportar_reporte_csv(resultado)
-        return r_odt
+        return r_ods
 
     return exportar_reporte_excel(resultado, ruta_destino=ruta_destino)
 
@@ -1365,7 +2051,7 @@ def ejecutar_auditoria(
     finish_at=None,
     fecha_inicio=None,
     fecha_fin=None,
-    formato="odt",
+    formato="ods",
     exportar_formato=None,
     progreso_callback=None,
     browser_cfg=None,
@@ -1437,7 +2123,7 @@ def ejecutar_auditoria(
     fecha_fin_res = str(f_fin or finish_at or fecha_fin or "").strip() or datetime.now().strftime("%Y-%m-%d")
 
     # Resolución de formato
-    formato_exp = exportar_formato or formato or "odt"
+    formato_exp = exportar_formato or formato or "ods"
     if isinstance(formato_exp, str):
         formato_exp = formato_exp.lower().strip()
 
@@ -1518,7 +2204,6 @@ def ejecutar_auditoria(
                 otras_actividades.append(act)
 
         total_procesadas = len(formaciones) + len(productos) + len(otras_actividades)
-        cuadre_perfecto = (tot_act == total_procesadas)
 
         # Desglose de Servicios
         conteo_servicios = Counter([s.get("servicio", s.get("tipo_servicio", "Servicio Comunitario")) for s in lista_serv])
@@ -1601,12 +2286,16 @@ def ejecutar_auditoria(
             "cedulados_serv": cedulados_serv,
             "no_cedulados_serv": no_cedulados_serv,
             "resumen_facilitadores": resumen_facilitadores,
-            "cuadre_perfecto": cuadre_perfecto,
             "archivo_exportado": ""
         }
 
+        # Control antagónico de conciliación matemática
+        conciliacion = conciliar_balance_auditoria(resultado, total_declarado_servidor=tot_act)
+        resultado["conciliacion"] = conciliacion
+        resultado["cuadre_perfecto"] = conciliacion["cuadra"]
+
         # 5. Exportar si fue solicitado
-        if formato_exp in ("excel", "csv", "ambos", "odt", "pdf", "consola", "pantalla"):
+        if formato_exp in ("excel", "csv", "ambos", "ods", "pdf", "consola", "pantalla"):
             ruta_exp = exportar_reporte_auditoria(resultado, formato=formato_exp)
             resultado["archivo_exportado"] = ruta_exp
             if formato_exp in ("consola", "pantalla"):
@@ -1627,8 +2316,12 @@ def ejecutar_auditoria(
         else:
             log("\n" + "═" * 80)
             log("✅ AUDITORÍA INTEGRAL CONCLUIDA EXITOSAMENTE")
-            log(f" • Total Actividades: {tot_act} | Procesadas: {total_procesadas} (Cuadre: {'100%' if cuadre_perfecto else 'Discrepancia'})")
+            log(f" • Total Actividades: {tot_act} | Procesadas: {total_procesadas}")
             log(f" • Estudiantes Formados: {total_estudiantes} | Servicios: {tot_serv}")
+            log(f" • Balance Conciliado: {conciliacion['dictamen']}")
+            if conciliacion.get("hallazgos"):
+                for h in conciliacion["hallazgos"]:
+                    log(f"   ⚠️ {h}")
             log("═" * 80)
 
         return resultado

@@ -6,6 +6,31 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.14.0] — 23 de Septiembre de 2026 (Reporte ODS de 4 Hojas Idéntico a Excel, PDF Tabular UTF-8, Conciliación Antagónica y Sustitución de ODT)
+--------------------------------------------------------------------------------
+• MÓDULO DE AUDITORÍA (modulos/auditor_reportes.py):
+  - Nuevo Generador ODS Oficial (exportar_reporte_ods): Reemplazo total de exportar_reporte_odt por un generador de hojas de cálculo OpenDocument (.ods) con motor 'odf', replicando 1:1 las 4 pestañas de Excel:
+    1. 'Resumen por Facilitador': Agrupado por Infocentro con subtotales por sede y fila de total general consolidado.
+    2. 'Actividades': Detalle completo de actividades con sus 11 columnas institucionales (Fecha, ID InfoApp, UID, Infocentro, Tipo, Área, Taller, Título, Responsable, Part., Prod.).
+    3. 'Servicios': Detalle completo de atenciones con sus 8 columnas institucionales (Fecha, UID, Infocentro, Trámite, Cédula, ID Usuario, Nombre, Profesión).
+    4. 'Resumen Ejecutivo': Matriz de metadatos, dictamen de balance antagónico y resumen cuantitativo de métricas.
+  - Eliminación Completa de ODT: Erradicación de todas las referencias, variables y funciones relacionadas con .odt (Writer plano), estandarizando LibreOffice Calc (.ods) como la opción predeterminada.
+  - Generador PDF Tabular Estructurado (exportar_reporte_pdf): Reescritura del generador con renderizado HTML/CSS vectorial vía Playwright Chromium con fallback nativo, garantizando soporte completo de caracteres acentuados y ñ en UTF-8 (erradicando textos corruptos tipo 'Gonz?lez') y tablas formateadas.
+  - Conciliación Antagónica de Balance (conciliar_balance_auditoria): Función de auditoría independiente que sustituye la tautología previa por 7 verificaciones rigurosas:
+    1. Doble partida de actividades (suma por facilitador vs total reportado).
+    2. Doble partida de estudiantes en aula (suma por facilitador vs total reportado).
+    3. Doble partida de servicios a usuarios (suma por facilitador vs total reportado).
+    4. Integridad cualitativa interna (formaciones + productos + otras vs total actividades).
+    5. Detección automática de IDs de actividades duplicados.
+    6. Detección automática de fechas extemporáneas fuera del período de auditoría.
+    7. Detección de pérdida de registros en crawler/paginación respecto al servidor.
+• INTERFAZ GRÁFICA (modulos/interfaz_grafica.py):
+  - Actualización de opciones de exportación y valores por defecto a 'LibreOffice Calc (.ods)'.
+  - Tarjeta de Balance Matemático enriquecida para mostrar el dictamen y hallazgos específicos de la conciliación antagónica.
+• SUITE DE PRUEBAS AUTOMATIZADAS (tests/test_cuadre_antagonico_y_reporte_ods.py):
+  - 7 pruebas unitarias nuevas certificando el dictamen 100% en lotes limpios, detección de discrepancias por facilitador, IDs duplicados, fechas extemporáneas, pérdidas de captura, existencia de las 4 hojas ODS con sus respectivas columnas y generación PDF UTF-8.
+
+--------------------------------------------------------------------------------
 [v4.13.0] — 23 de Septiembre de 2026 (Diálogo Interactivo Multiformato en Planillas, Auditoría Bajo Demanda y Predeterminación ODT)
 --------------------------------------------------------------------------------
 • MÓDULO DE PLANILLAS (modulos/generador_planilla.py e interfaz_grafica.py):

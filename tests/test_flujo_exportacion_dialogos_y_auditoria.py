@@ -102,9 +102,9 @@ class TestFlujoExportacionDialogosYAuditoria(unittest.TestCase):
             self.assertTrue(res.get("exito"))
             self.assertEqual(res.get("archivo_exportado"), "")
 
-    def test_auditoria_formato_predeterminado_es_odt(self):
-        """Verifica que el formato por defecto en auditor_reportes sea 'odt'."""
-        with patch("modulos.auditor_reportes.exportar_reporte_odt", return_value="C:/Reportes_Auditoria/reporte.odt") as mock_odt:
+    def test_auditoria_formato_predeterminado_es_ods(self):
+        """Verifica que el formato por defecto en auditor_reportes sea 'ods'."""
+        with patch("modulos.auditor_reportes.exportar_reporte_ods", return_value="C:/Reportes_Auditoria/reporte.ods") as mock_ods:
             resultado_simulado = {
                 "exito": True,
                 "criterio_tipo": "uid",
@@ -112,10 +112,10 @@ class TestFlujoExportacionDialogosYAuditoria(unittest.TestCase):
                 "total_actividades": 0,
                 "total_servicios": 0
             }
-            # Al no especificar formato, debe delegar en exportar_reporte_odt
+            # Al no especificar formato, debe delegar en exportar_reporte_ods
             ruta = ar.exportar_reporte_auditoria(resultado_simulado)
-            self.assertEqual(ruta, "C:/Reportes_Auditoria/reporte.odt")
-            mock_odt.assert_called_once()
+            self.assertEqual(ruta, "C:/Reportes_Auditoria/reporte.ods")
+            mock_ods.assert_called_once()
 
 
 if __name__ == '__main__':

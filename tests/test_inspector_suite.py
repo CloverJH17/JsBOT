@@ -31,7 +31,7 @@ from modulos.auditor_reportes import (
     ejecutar_auditoria,
     exportar_reporte_auditoria,
     generar_resumen_consola,
-    exportar_reporte_odt,
+    exportar_reporte_ods,
     exportar_reporte_pdf,
     CACHE_INSPECTOR_PATH
 )
@@ -415,7 +415,7 @@ class TestInspectorSuite(unittest.TestCase):
         self.assertTrue(a2["id"].startswith("ACT_") or a2["id"] == "row_992")
 
     def test_exportar_reporte_multiformato(self):
-        """Verifica la exportación en los 5 formatos: Excel, ODT, PDF, CSV y Consola."""
+        """Verifica la exportación en los 5 formatos: Excel, ODS, PDF, CSV y Consola."""
         mock_resultado = {
             "exito": True,
             "criterio_tipo": "uid",
@@ -500,11 +500,11 @@ class TestInspectorSuite(unittest.TestCase):
             self.assertTrue(os.path.exists(res_xlsx))
             self.assertTrue(os.path.getsize(res_xlsx) > 100)
 
-            # 2. LibreOffice (.odt)
-            ruta_odt = os.path.join(tmpdir, "test.odt")
-            res_odt = exportar_reporte_auditoria(mock_resultado, formato="odt", ruta_destino=ruta_odt)
-            self.assertTrue(os.path.exists(res_odt))
-            self.assertTrue(os.path.getsize(res_odt) > 100)
+            # 2. LibreOffice (.ods)
+            ruta_ods = os.path.join(tmpdir, "test.ods")
+            res_ods = exportar_reporte_auditoria(mock_resultado, formato="ods", ruta_destino=ruta_ods)
+            self.assertTrue(os.path.exists(res_ods))
+            self.assertTrue(os.path.getsize(res_ods) > 100)
 
             # 3. Documento PDF (.pdf)
             ruta_pdf = os.path.join(tmpdir, "test.pdf")
@@ -539,8 +539,8 @@ class TestInspectorSuite(unittest.TestCase):
         # ComboBox 5 formatos
         valores_combo = self.app.combo_aud_formato.cget("values")
         formatos_esperados = [
+            "LibreOffice Calc (.ods)",
             "Excel (.xlsx)",
-            "LibreOffice (.odt)",
             "Documento PDF (.pdf)",
             "CSV plano (.csv)",
             "Vista en Pantalla (Consola)"
