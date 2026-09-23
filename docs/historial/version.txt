@@ -6,6 +6,15 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.10.2] — 23 de Septiembre de 2026 (Saneamiento Sintáctico en windows.bat y Flujo Lineal de Dependencias)
+--------------------------------------------------------------------------------
+• CORRECCIÓN SINTÁCTICA EN LANZADOR WINDOWS (windows.bat):
+  - Eliminación de paréntesis anidados en el bloque de verificación de Playwright que causaban el error fatal 'No se esperaba ... en este momento'.
+  - Adopción de flujo de control lineal con etiquetas de salto (goto :deps_ready) para máxima estabilidad y compatibilidad con cmd.exe.
+• COBERTURA DE PRUEBAS AUTOMATIZADAS:
+  - Inclusión de prueba de análisis sintáctico de windows.bat en tests/test_driver_factory_cascada.py para certificar ausencia de errores de parsing en Windows.
+
+--------------------------------------------------------------------------------
 [v4.10.1] — 23 de Septiembre de 2026 (Cascada Resiliente de Navegadores, Blindaje de Lanzador Windows y Tolerancia a Fallos)
 --------------------------------------------------------------------------------
 • FACTORÍA RESILIENTE DE NAVEGADORES (CASCADA INTELIGENTE):

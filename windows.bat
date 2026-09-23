@@ -130,7 +130,7 @@ if errorlevel 1 (
 REM -----------------------------------------------------------------------------
 REM 3. LECTURA DINAMICA DE VERSION
 REM -----------------------------------------------------------------------------
-set JSBOT_VER=4.10.1
+set JSBOT_VER=4.10.2
 for /f "delims=" %%V in ('"%PYTHON_EXE%" %PYTHON_ARGS% -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2^>nul') do set JSBOT_VER=%%V
 title JsBOT v%JSBOT_VER% — Verificador de Entorno
 echo ========================================================
@@ -157,28 +157,28 @@ if errorlevel 1 (
 :check_playwright_browser
 REM Verificar si los binarios de Chromium para Playwright estan disponibles
 "%PYTHON_EXE%" %PYTHON_ARGS% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
-if errorlevel 1 (
-    echo [INFO] Descargando binarios del navegador Playwright Chromium...
-    "%PYTHON_EXE%" %PYTHON_ARGS% -m playwright install chromium
-    REM Si la instalacion oficial falla por timeout de red (30s), activar fallback resiliente con curl
-    "%PYTHON_EXE%" %PYTHON_ARGS% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
-    if errorlevel 1 (
-        echo [AVISO] La descarga estandar de Playwright fallo o supero el tiempo limite.
-        echo [INFO] Activando descarga resiliente de Chromium con curl (sin limite de tiempo)...
-        set "PW_DEST=%LocalAppData%\ms-playwright\chromium-1243"
-        mkdir "!PW_DEST!" 2>nul
-        curl.exe -# -L -o "%TEMP%\chrome-win64.zip" "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip"
-        if exist "%TEMP%\chrome-win64.zip" (
-            echo [INFO] Descomprimiendo binarios del navegador...
-            tar.exe -xf "%TEMP%\chrome-win64.zip" -C "!PW_DEST!"
-            type nul > "!PW_DEST!\INSTALLATION_COMPLETE"
-            type nul > "!PW_DEST!\DEPENDENCIES_VALIDATED"
-            del "%TEMP%\chrome-win64.zip" 2>nul
-            echo [OK] Chromium configurado correctamente via fallback.
-        ) else (
-            echo [ALERTA] No se pudo completar la descarga automatica de Chromium.
-        )
-    )
+if not errorlevel 1 goto :deps_ready
+
+echo [INFO] Descargando binarios del navegador Playwright Chromium...
+"%PYTHON_EXE%" %PYTHON_ARGS% -m playwright install chromium
+
+"%PYTHON_EXE%" %PYTHON_ARGS% -c "import os, glob; base=os.path.expandvars(r'%%LOCALAPPDATA%%\ms-playwright'); exit(0 if glob.glob(os.path.join(base, 'chromium*')) else 1)" >nul 2>nul
+if not errorlevel 1 goto :deps_ready
+
+echo [AVISO] La descarga estandar de Playwright fallo o supero el tiempo limite.
+echo [INFO] Activando descarga resiliente de Chromium con curl - sin limite de tiempo...
+set "PW_DEST=%LocalAppData%\ms-playwright\chromium-1243"
+mkdir "!PW_DEST!" 2>nul
+curl.exe -# -L -o "%TEMP%\chrome-win64.zip" "https://cdn.playwright.dev/builds/cft/153.0.8010.12/win64/chrome-win64.zip"
+if exist "%TEMP%\chrome-win64.zip" (
+    echo [INFO] Descomprimiendo binarios del navegador...
+    tar.exe -xf "%TEMP%\chrome-win64.zip" -C "!PW_DEST!"
+    type nul > "!PW_DEST!\INSTALLATION_COMPLETE"
+    type nul > "!PW_DEST!\DEPENDENCIES_VALIDATED"
+    del "%TEMP%\chrome-win64.zip" 2>nul
+    echo [OK] Chromium configurado correctamente via fallback.
+) else (
+    echo [ALERTA] No se pudo completar la descarga automatica de Chromium.
 )
 
 :deps_ready

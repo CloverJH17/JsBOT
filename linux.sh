@@ -28,7 +28,7 @@ fi
 # 2. LECTURA DINÁMICA DE VERSIÓN
 # -----------------------------------------------------------------------------
 JSBOT_VER=$(python3 -c "import sys; sys.path.insert(0, '.'); import modulos.version as _v; print(_v.__version__)" 2>/dev/null)
-[ -z "$JSBOT_VER" ] && JSBOT_VER="4.10.1"
+[ -z "$JSBOT_VER" ] && JSBOT_VER="4.10.2"
 
 echo "========================================================"
 echo "  JsBOT v${JSBOT_VER} — Entorno Canaima / Debian GNU/Linux"

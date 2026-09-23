@@ -144,5 +144,25 @@ class TestAutomatizadorWebUnificacion(unittest.TestCase):
         self.assertEqual(context, mock_context)
 
 
+class TestWindowsBatSintaxis(unittest.TestCase):
+    """Verifica que el script windows.bat no contenga errores sintácticos de parsing en cmd.exe."""
+
+    def test_windows_bat_sin_parentesis_peligrosos_en_bloques(self):
+        """windows.bat no debe tener paréntesis sin escapar que rompan bloques if de cmd.exe."""
+        import os
+        ruta_bat = os.path.join(os.path.dirname(__file__), "..", "windows.bat")
+        with open(ruta_bat, "r", encoding="utf-8", errors="ignore") as f:
+            contenido = f.read()
+
+        # Verificar que no exista el error de eco con paréntesis que rompa bloques
+        self.assertNotIn("(sin limite de tiempo)...", contenido)
+        # Verificar que el salto lineal a deps_ready esté presente
+        self.assertIn("goto :deps_ready", contenido)
+        # Verificar CRLF estricto
+        raw = open(ruta_bat, "rb").read()
+        self.assertIn(b"\r\n", raw)
+        self.assertEqual(raw.count(b"\n"), raw.count(b"\r\n"))
+
+
 if __name__ == "__main__":
     unittest.main()
