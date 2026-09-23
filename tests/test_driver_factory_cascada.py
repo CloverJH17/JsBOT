@@ -93,11 +93,17 @@ class TestDriverFactoryConmutacion(unittest.TestCase):
         mock_context_chrome = MagicMock()
         mock_pw.chromium.launch_persistent_context.return_value = mock_context_chrome
 
-        pw, ctx = obtener_contexto_playwright(
-            headless=True,
-            navegador="firefox",
-            user_data_dir="tmp_user_data"
-        )
+        import tempfile
+        import shutil
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            pw, ctx = obtener_contexto_playwright(
+                headless=True,
+                navegador="firefox",
+                user_data_dir=tmp_dir
+            )
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
         # Debe haber intentado Firefox y luego haber conmutado a Chrome
         self.assertEqual(ctx, mock_context_chrome)

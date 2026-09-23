@@ -6,6 +6,24 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.12.0] — 23 de Septiembre de 2026 (Homologación Institucional 1:1 en XLSX y Blindaje de Compatibilidad ODS en Microsoft Excel)
+--------------------------------------------------------------------------------
+• GENERACIÓN DE PLANILLAS ODS (modulos/generador_planilla.py):
+  - Blindaje contra desbordamiento de filas en Microsoft Excel: ajuste dinámico del atributo table:number-rows-repeated en filas de relleno de footer, garantizando que el total de filas nunca exceda el límite absoluto de 1.048.576 filas (erradicando el error "el libro está dañado").
+  - Registro dinámico exhaustivo de namespaces canónicos ODF (table, text, office, style, svg, fo, calcext, loext), evitando prefijos sintetizados (ns1:, ns2:) rechazados por el parser estricto de Excel.
+  - Preservación íntegra de las 5 filas del pie de página institucional (nota legal de letra imprenta y custodia documental).
+• GENERACIÓN DE PLANILLAS XLSX (modulos/generador_planilla.py):
+  - Rediseño estructural 1:1 replicando con exactitud la plantilla institucional ODS:
+    * Encabezado superior con título 'Planilla de Inscripción' y fecha de emisión.
+    * Banners oficiales en azul institucional: 'INFORMACIÓN GENERAL DEL PROCESO FORMATIVO' y 'DATOS DE LOS PARTICIPANTES'.
+    * Matriz de metadatos enmarcados con bordes finos (Estado, Infocentro, Facilitador, Horarios, Módulo).
+    * Cabecera oficial con combinación de celdas B8:C8 ('Nombres y Apellidos*') y columna de firma física.
+    * Filas de participantes con nombres combinados en columnas B y C, alineaciones contextuales y enmarcado individual.
+    * Recuadro oficial inferior para nota legal con letra imprenta enmarcada en rango A:L.
+• SUITE DE PRUEBAS DE REGRESIÓN (tests/test_fidelidad_planillas_ods_xlsx.py):
+  - 5 pruebas automatizadas certificando el conteo de filas <= 1.048.576, namespaces canónicos en XML, presencia de nota legal, combinación de celdas B:C en XLSX y despacho multiformato (.ods, .xlsx, .pdf).
+
+--------------------------------------------------------------------------------
 [v4.11.0] — 23 de Septiembre de 2026 (Partición Inteligente de Nombres Combinados, Apertura Asistida en Excel y Recarga en GUI)
 --------------------------------------------------------------------------------
 • NORMALIZADOR DE DATOS Y EXTRACCIÓN ETL (modulos/normalizador_datos.py):

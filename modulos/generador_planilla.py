@@ -174,14 +174,18 @@ def generar_planilla_oficial_fallback_xml(participantes: list, id_actividad: str
     if os.path.exists(TEMPLATE_PATH):
         while True:
             try:
+                # Registrar dinámicamente todos los namespaces canónicos de la plantilla ODS
+                # para evitar prefijos no estándar (ns1, ns2) que rompen el importador de Microsoft Excel
+                with zipfile.ZipFile(TEMPLATE_PATH, 'r') as zin_pre:
+                    tmpl_xml_pre = zin_pre.read('content.xml').decode('utf-8', errors='ignore')
+                for prefix, uri in re.findall(r'xmlns:([a-zA-Z0-9_\-]+)="([^"]+)"', tmpl_xml_pre):
+                    ET.register_namespace(prefix, uri)
+
                 ns = {
                     'table': 'urn:oasis:names:tc:opendocument:xmlns:table:1.0',
                     'text': 'urn:oasis:names:tc:opendocument:xmlns:text:1.0',
                     'office': 'urn:oasis:names:tc:opendocument:xmlns:office:1.0'
                 }
-                ET.register_namespace('table', ns['table'])
-                ET.register_namespace('text', ns['text'])
-                ET.register_namespace('office', ns['office'])
 
                 with zipfile.ZipFile(TEMPLATE_PATH, 'r') as zin:
                     with zipfile.ZipFile(ruta_salida, 'w', zipfile.ZIP_DEFLATED) as zout:
@@ -226,7 +230,17 @@ def generar_planilla_oficial_fallback_xml(participantes: list, id_actividad: str
                                             cells_r5[6].find(f"{{{ns['text']}}}p").text = f"Hora de fin:* {limpiar_xml_texto(datos_act.get('hora_fin', '12:00 pm'))}"
 
                                     header_rows = rows[:8]
+                                    # Preservar íntegras las 5 filas oficiales de pie de página (fila 18 nota legal y firmas)
+                                    # ajustando la fila de relleno para que el total acumulado en la hoja nunca exceda 1.048.576 filas
                                     footer_rows = rows[18:] if len(rows) > 18 else []
+                                    delta_filas = len(participantes) - 10
+                                    if delta_filas > 0:
+                                        table_rep_attr = f"{{{ns['table']}}}number-rows-repeated"
+                                        for fr in footer_rows:
+                                            rep_val = fr.attrib.get(table_rep_attr)
+                                            if rep_val and int(rep_val) > delta_filas:
+                                                fr.attrib[table_rep_attr] = str(int(rep_val) - delta_filas)
+                                                break
 
                                     for r in list(table):
                                         if r.tag == f"{{{ns['table']}}}table-row":
@@ -408,8 +422,8 @@ def generar_planilla_ods_odfdo(participantes: list, id_actividad: str = "", url_
 
 def generar_planilla_xlsx(participantes: list, id_actividad: str = "", url_actividad: str = "", ruta_salida: str = "") -> str:
     """
-    Genera una planilla oficial en formato Microsoft Excel (.xlsx) con openpyxl,
-    aplicando formatos, cabeceras oficiales y bordes estilizados.
+    Genera la planilla oficial en formato Microsoft Excel (.xlsx) con openpyxl,
+    replicando fielmente la estructura, celdas combinadas y membretes de la plantilla institucional ODS.
     """
     if not participantes:
         print("\n⚠️ No hay participantes registrados para generar la planilla.")
@@ -430,99 +444,198 @@ def generar_planilla_xlsx(participantes: list, id_actividad: str = "", url_activ
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Planilla Participantes"
+    ws.title = "Planilla de Inscripción"
+    ws.views.sheetView[0].showGridLines = True
 
-    # Estilos
-    fuente_titulo = Font(name="Calibri", size=14, bold=True, color="003366")
-    fuente_subtitulo = Font(name="Calibri", size=10, bold=True, color="333333")
-    fuente_cabecera = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-    fuente_datos = Font(name="Calibri", size=10)
-    
-    fill_cabecera = PatternFill(start_color="003366", end_color="003366", fill_type="solid")
-    
+    # Definición de Estilos Oficiales
+    font_titulo_grande = Font(name="Arial", size=13, bold=True, color="000000")
+    font_fecha_sup = Font(name="Arial", size=10, bold=True, color="333333")
+    font_seccion_banner = Font(name="Arial", size=9, bold=True, color="002060")
+    font_campo_valor = Font(name="Arial", size=9, color="1F1F1F")
+    font_cabecera_tabla = Font(name="Arial", size=9, bold=True, color="000000")
+    font_datos_tabla = Font(name="Arial", size=9, color="000000")
+    font_nota_pie = Font(name="Arial", size=8, italic=True, color="333333")
+
+    fill_banner_seccion = PatternFill(start_color="E9EDF4", end_color="E9EDF4", fill_type="solid")
+    fill_cabecera_tabla = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+    fill_nota_pie = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
     borde_fino = Border(
-        left=Side(style='thin', color='CCCCCC'),
-        right=Side(style='thin', color='CCCCCC'),
-        top=Side(style='thin', color='CCCCCC'),
-        bottom=Side(style='thin', color='CCCCCC')
+        left=Side(style='thin', color='7F7F7F'),
+        right=Side(style='thin', color='7F7F7F'),
+        top=Side(style='thin', color='7F7F7F'),
+        bottom=Side(style='thin', color='7F7F7F')
     )
 
-    # Membrete
-    ws.merge_cells("A1:K1")
-    ws["A1"] = "REPÚBLICA BOLIVARIANA DE VENEZUELA — FUNDACIÓN INFOCENTRO"
-    ws["A1"].font = fuente_titulo
-    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    # 1. Fila 2: Título Principal y Fecha
+    ws.merge_cells("A2:E2")
+    ws["A2"] = "Planilla de Inscripción — PLANILLA OFICIAL"
+    ws["A2"].font = font_titulo_grande
+    ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
 
-    ws.merge_cells("A2:K2")
-    ws["A2"] = "PLANILLA OFICIAL DE CONTROL DE PARTICIPANTES"
-    ws["A2"].font = fuente_subtitulo
-    ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.merge_cells("I2:L2")
+    fecha_hoy = datetime.now().strftime("%d/%m/%Y")
+    ws["I2"] = f"Fecha: {fecha_hoy}"
+    ws["I2"].font = font_fecha_sup
+    ws["I2"].alignment = Alignment(horizontal="right", vertical="center")
 
-    # Metadatos
-    ws["A4"] = f"Estado: {datos_act.get('estado', 'Yaracuy')}"
-    ws["D4"] = f"Infocentro: {datos_act.get('nombre_infocentro', 'Felix Pifano')}"
-    ws["H4"] = f"Código: {datos_act.get('codigo_infocentro', 'Yar23')}"
-    
-    ws["A5"] = f"Facilitador: {datos_act.get('nombre_facilitador', '')}"
-    ws["D5"] = f"Contenido: {datos_act.get('contenido', '')}"
-    ws["H5"] = f"C.I. Facilitador: {datos_act.get('cedula_facilitador', '')}"
+    # 2. Fila 3: Banner Sección "INFORMACIÓN GENERAL DEL PROCESO FORMATIVO"
+    ws.merge_cells("A3:L3")
+    ws["A3"] = "información general del proceso formativo".upper()
+    ws["A3"].font = font_seccion_banner
+    ws["A3"].fill = fill_banner_seccion
+    ws["A3"].alignment = Alignment(horizontal="center", vertical="center")
+    for col_c in range(1, 13):
+        ws.cell(row=3, column=col_c).border = borde_fino
 
-    ws["A6"] = f"Módulo: {datos_act.get('modulo', '')}"
-    ws["D6"] = f"Período: {datos_act.get('fecha_desde', '')} al {datos_act.get('fecha_hasta', '')}"
-    ws["H6"] = f"Horario: {datos_act.get('hora_inicio', '9:00 am')} a {datos_act.get('hora_fin', '12:00 pm')}"
+    # 3. Filas 4 a 6: Metadatos del Curso e Institución
+    ws.merge_cells("A4:C4")
+    ws["A4"] = f"Estado:* {datos_act.get('estado', 'Yaracuy')}"
+    ws.merge_cells("D4:F4")
+    ws["D4"] = f"Nombre del Infocentro: {datos_act.get('nombre_infocentro', 'Felix Pifano')}"
+    ws.merge_cells("G4:L4")
+    ws["G4"] = f"Código: {datos_act.get('codigo_infocentro', 'Yar23')}"
 
-    for r in range(4, 7):
-        for col_letter in ["A", "D", "H"]:
-            ws[f"{col_letter}{r}"].font = fuente_subtitulo
+    ws.merge_cells("A5:C5")
+    ws["A5"] = f"Nombres y apellidos del facilitador (a): {datos_act.get('nombre_facilitador', '')}"
+    ws.merge_cells("D5:F5")
+    ws["D5"] = f"Contenido a desarrollar: {datos_act.get('contenido', '')}"
+    ws.merge_cells("G5:L5")
+    ws["G5"] = f"Cedula de identidad: {datos_act.get('cedula_facilitador', '')}"
 
-    # Encabezados de tabla
-    headers = [
-        "N°", "Nombres y Apellidos", "Documento / Cédula", "Fecha Nacimiento",
-        "Género", "Dirección", "Teléfono", "Correo Electrónico",
-        "Grado Instrucción", "Ocupación", "Firma"
-    ]
-    ws.append([])
-    ws.append(headers)
-    fila_cabecera = 8
+    ws.merge_cells("A6:C6")
+    ws["A6"] = f"Modulo de formación: {datos_act.get('modulo', '')}"
+    ws["D6"] = f"Desde:* {datos_act.get('fecha_desde', '')}"
+    ws["E6"] = f"Hasta:* {datos_act.get('fecha_hasta', '')}"
+    ws["F6"] = f"Hora de inicio: {datos_act.get('hora_inicio', '9:00 am')}"
+    ws.merge_cells("G6:L6")
+    ws["G6"] = f"Hora de fin:* {datos_act.get('hora_fin', '12:00 pm')}"
 
-    for col_idx, col_name in enumerate(headers, 1):
-        cell = ws.cell(row=fila_cabecera, column=col_idx)
-        cell.font = fuente_cabecera
-        cell.fill = fill_cabecera
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-
-    # Datos de participantes
-    for i, p in enumerate(participantes, 1):
-        nom_comp = f"{p.get('nombre', '')} {p.get('apellido', '')}".strip()
-        doc_str = p.get('cedula') or (f"CE:{p.get('cedula_escolar')}" if p.get('cedulado') == 'escolar' else (f"Rep:{p.get('cedula_padre')}" if p.get('cedula_padre') else "S/C"))
-        
-        row_data = [
-            i,
-            nom_comp,
-            doc_str,
-            limpiar_fecha_ods(p.get('nacimiento', '')),
-            p.get('genero', ''),
-            p.get('direccion', 'San Felipe') or 'San Felipe',
-            p.get('telefono', '0412-0000000') or '0412-0000000',
-            p.get('correo', '---') or '---',
-            p.get('nivel', 'Educación Básica') or 'Educación Básica',
-            p.get('ocupacion', 'Estudiante') or 'Estudiante',
-            ""
-        ]
-        ws.append(row_data)
-        curr_row = fila_cabecera + i
-        for c in range(1, len(row_data) + 1):
-            cell = ws.cell(row=curr_row, column=c)
-            cell.font = fuente_datos
+    for r_idx in range(4, 7):
+        ws.row_dimensions[r_idx].height = 20
+        for col_idx in range(1, 13):
+            cell = ws.cell(row=r_idx, column=col_idx)
+            cell.font = font_campo_valor
             cell.border = borde_fino
-            if c in (1, 3, 4, 5, 7):
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
 
-    # Ajustar ancho de columnas
-    for col_idx, col in enumerate(ws.columns, 1):
-        max_len = max(len(str(cell.value or '')) for cell in col)
-        col_letter = get_column_letter(col_idx)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+    # 4. Fila 7: Banner "DATOS DE LOS PARTICIPANTES"
+    ws.merge_cells("A7:L7")
+    ws["A7"] = "DATOS DE LOS PARTICIPANTES"
+    ws["A7"].font = font_seccion_banner
+    ws["A7"].fill = fill_banner_seccion
+    ws["A7"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[7].height = 20
+    for col_c in range(1, 13):
+        ws.cell(row=7, column=col_c).border = borde_fino
+
+    # 5. Fila 8: Cabeceras de la Tabla (idénticas a plantilla_base.ods)
+    ws.row_dimensions[8].height = 24
+    ws.merge_cells("B8:C8")
+
+    for col_i in range(1, 13):
+        cell = ws.cell(row=8, column=col_i)
+        cell.font = font_cabecera_tabla
+        cell.fill = fill_cabecera_tabla
+        cell.border = borde_fino
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    ws["A8"] = "N.º"
+    ws["B8"] = "Nombres y Apellidos*"
+    ws["D8"] = "Cedula *"
+    ws["E8"] = "Fecha"
+    ws["F8"] = "Sexo"
+    ws["G8"] = "Dirección*"
+    ws["H8"] = "Correo "
+    ws["I8"] = "Teléfono (s)*"
+    ws["J8"] = "Nivel de"
+    ws["K8"] = "Ocupación*"
+    ws["L8"] = "Firma*"
+
+    # 6. Filas de Participantes
+    fila_actual = 9
+    for i, p in enumerate(participantes, 1):
+        ws.row_dimensions[fila_actual].height = 20
+        nom_comp = limpiar_xml_texto(f"{p.get('nombre', '')} {p.get('apellido', '')}")
+
+        if p.get('cedula'):
+            doc_str = str(p.get('cedula', ''))
+        elif p.get('cedulado') == 'escolar' or p.get('cedula_escolar'):
+            doc_str = f"CE{p.get('cedula_escolar', '')}"
+        elif p.get('cedula_padre'):
+            doc_str = f"S/C (Rep: {p.get('cedula_padre', '')})"
+        else:
+            doc_str = "S/C"
+
+        f_nac = limpiar_fecha_ods(p.get('nacimiento', ''))
+        genero = limpiar_xml_texto(p.get('genero', ''))
+        dir_val = limpiar_xml_texto(p.get('direccion')) or "San Felipe"
+        corr_val = limpiar_xml_texto(p.get('correo')) or "---"
+        tlf_val = limpiar_xml_texto(p.get('telefono')) or "0412-0000000"
+        edad_num = p.get('edad') or 12
+        nivel_def = limpiar_xml_texto(p.get('nivel')) or ('Educación Media General' if edad_num >= 12 else 'Educación Básica')
+        ocup_val = limpiar_xml_texto(p.get('ocupacion')) or "Estudiante"
+
+        # Combinar columnas B y C para Nombres y Apellidos
+        ws.merge_cells(start_row=fila_actual, start_column=2, end_row=fila_actual, end_column=3)
+
+        valores_fila = {
+            1: (i, Alignment(horizontal="center", vertical="center")),
+            2: (nom_comp, Alignment(horizontal="left", vertical="center")),
+            4: (doc_str, Alignment(horizontal="center", vertical="center")),
+            5: (f_nac, Alignment(horizontal="center", vertical="center")),
+            6: (genero, Alignment(horizontal="center", vertical="center")),
+            7: (dir_val, Alignment(horizontal="left", vertical="center")),
+            8: (corr_val, Alignment(horizontal="left", vertical="center")),
+            9: (tlf_val, Alignment(horizontal="center", vertical="center")),
+            10: (nivel_def, Alignment(horizontal="left", vertical="center")),
+            11: (ocup_val, Alignment(horizontal="left", vertical="center")),
+            12: ("", Alignment(horizontal="center", vertical="center"))
+        }
+
+        for col_idx in range(1, 13):
+            cell = ws.cell(row=fila_actual, column=col_idx)
+            cell.font = font_datos_tabla
+            cell.border = borde_fino
+            val_align = valores_fila.get(col_idx)
+            if val_align:
+                val, align = val_align
+                if col_idx in (4, 9):
+                    cell.value = str(val)
+                else:
+                    cell.value = val
+                cell.alignment = align
+
+        fila_actual += 1
+
+    # 7. Fila de Pie de Página: Nota Legal Oficial Enmarcada
+    ws.row_dimensions[fila_actual].height = 26
+    ws.merge_cells(start_row=fila_actual, start_column=1, end_row=fila_actual, end_column=12)
+    celda_nota = ws.cell(row=fila_actual, column=1)
+    celda_nota.value = "Nota: Para ser llenado con letra Imprenta, sin enmiendas ni tachaduras / Documento soporte que debe reposar en los archivos del Infocentro."
+    celda_nota.font = font_nota_pie
+    celda_nota.fill = fill_nota_pie
+    celda_nota.alignment = Alignment(horizontal="center", vertical="center")
+    for c_i in range(1, 13):
+        ws.cell(row=fila_actual, column=c_i).border = borde_fino
+
+    # Anchos Oficiales de Columna
+    anchos_oficiales = {
+        'A': 6,    # N.º
+        'B': 20,   # Nombres parte 1
+        'C': 20,   # Nombres parte 2 (B+C combinadas = 40)
+        'D': 16,   # Cédula
+        'E': 14,   # Fecha
+        'F': 8,    # Sexo
+        'G': 22,   # Dirección
+        'H': 22,   # Correo
+        'I': 16,   # Teléfono
+        'J': 24,   # Nivel
+        'K': 16,   # Ocupación
+        'L': 18    # Firma
+    }
+    for col_let, ancho in anchos_oficiales.items():
+        ws.column_dimensions[col_let].width = ancho
 
     wb.save(ruta_salida)
     print(f"\n📊 Planilla oficial XLSX guardada con éxito en:\n   {ruta_salida}")
