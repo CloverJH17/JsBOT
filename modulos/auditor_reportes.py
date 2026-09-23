@@ -1324,9 +1324,9 @@ def exportar_reporte_csv(resultado: dict, ruta_destino: str = None) -> str:
     return ruta_destino
 
 
-def exportar_reporte_auditoria(resultado: dict, formato: str = "excel", ruta_destino: str = None) -> str:
-    """Despachador unificado para exportar auditoría en Excel, ODT, PDF, CSV o pantalla."""
-    fmt = (formato or "excel").lower().strip()
+def exportar_reporte_auditoria(resultado: dict, formato: str = "odt", ruta_destino: str = None) -> str:
+    """Despachador unificado para exportar auditoría en ODT, Excel, PDF, CSV o pantalla."""
+    fmt = (formato or "odt").lower().strip()
 
     if "consola" in fmt or "pantalla" in fmt:
         return generar_resumen_consola(resultado)
@@ -1341,9 +1341,9 @@ def exportar_reporte_auditoria(resultado: dict, formato: str = "excel", ruta_des
         return exportar_reporte_csv(resultado, ruta_destino=ruta_destino)
 
     if fmt == "ambos":
-        r_xlsx = exportar_reporte_excel(resultado)
+        r_odt = exportar_reporte_odt(resultado)
         exportar_reporte_csv(resultado)
-        return r_xlsx
+        return r_odt
 
     return exportar_reporte_excel(resultado, ruta_destino=ruta_destino)
 
@@ -1365,7 +1365,7 @@ def ejecutar_auditoria(
     finish_at=None,
     fecha_inicio=None,
     fecha_fin=None,
-    formato="excel",
+    formato="odt",
     exportar_formato=None,
     progreso_callback=None,
     browser_cfg=None,
@@ -1437,7 +1437,7 @@ def ejecutar_auditoria(
     fecha_fin_res = str(f_fin or finish_at or fecha_fin or "").strip() or datetime.now().strftime("%Y-%m-%d")
 
     # Resolución de formato
-    formato_exp = exportar_formato or formato or "excel"
+    formato_exp = exportar_formato or formato or "odt"
     if isinstance(formato_exp, str):
         formato_exp = formato_exp.lower().strip()
 

@@ -128,33 +128,45 @@ def parsear_metadatos_url(url: str) -> dict:
 
     return datos
 
-def seleccionar_ubicacion_guardado(id_actividad: str = "") -> str:
-    """Solicita la ruta de guardado para la planilla ODS asegurando la carpeta Planillas/."""
+def seleccionar_ubicacion_guardado(id_actividad: str = "", formato: str = "ods") -> str:
+    """Solicita la ruta de guardado interactiva para la planilla (ODS, XLSX o PDF) asegurando la carpeta Planillas/."""
     planillas_dir = os.path.join(BASE_DIR, "Planillas")
     os.makedirs(planillas_dir, exist_ok=True)
 
+    formato_limpio = (formato or "ods").lower().replace(".", "").strip()
+    ext = f".{formato_limpio}"
     ts = datetime.now().strftime("%Y%m%d_%H%M")
     id_s = f"_{id_actividad}" if id_actividad and id_actividad != "general" else ""
-    nombre_sugerido = f"Planilla_Participantes_Actividad{id_s}_{ts}.ods"
+    nombre_sugerido = f"Planilla_Participantes_Actividad{id_s}_{ts}{ext}"
 
     if TK_AVAILABLE:
         try:
+            tipos_archivos = {
+                "ods": [("OpenDocument Spreadsheet", "*.ods"), ("Todos los archivos", "*.*")],
+                "xlsx": [("Libro de Microsoft Excel", "*.xlsx"), ("Todos los archivos", "*.*")],
+                "pdf": [("Documento Portable PDF", "*.pdf"), ("Todos los archivos", "*.*")]
+            }
+            ftypes = tipos_archivos.get(formato_limpio, [("Archivo", f"*{ext}")])
+
             tiene_root = bool(getattr(tk, '_default_root', None))
             root = None if tiene_root else tk.Tk()
             if root:
                 root.withdraw()
                 root.attributes('-topmost', True)
             ruta = filedialog.asksaveasfilename(
-                title="Guardar Planilla Oficial de Participantes",
+                title=f"Guardar Planilla Oficial de Participantes ({formato_limpio.upper()})",
                 initialdir=planillas_dir,
                 initialfile=nombre_sugerido,
-                defaultextension=".ods",
-                filetypes=[("OpenDocument Spreadsheet", "*.ods")]
+                defaultextension=ext,
+                filetypes=ftypes
             )
             if root:
                 root.destroy()
             if ruta:
                 return ruta
+            else:
+                # Cancelación explícita del usuario
+                return ""
         except Exception:
             pass
 
@@ -167,7 +179,9 @@ def generar_planilla_oficial_fallback_xml(participantes: list, id_actividad: str
         datos_act['id_actividad'] = id_actividad
 
     if not ruta_salida:
-        ruta_salida = seleccionar_ubicacion_guardado(id_actividad)
+        ruta_salida = seleccionar_ubicacion_guardado(id_actividad, formato="ods")
+        if not ruta_salida:
+            return ""
     else:
         os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
 
@@ -407,7 +421,10 @@ def generar_planilla_ods_odfdo(participantes: list, id_actividad: str = "", url_
         datos_act['id_actividad'] = id_actividad
 
     if not ruta_salida:
-        ruta_salida = seleccionar_ubicacion_guardado(id_actividad)
+        ruta_salida = seleccionar_ubicacion_guardado(id_actividad, formato="ods")
+        if not ruta_salida:
+            print("\nℹ️ Generación de planilla ODS cancelada por el usuario.")
+            return ""
     else:
         os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
 
@@ -434,11 +451,10 @@ def generar_planilla_xlsx(participantes: list, id_actividad: str = "", url_activ
         datos_act['id_actividad'] = id_actividad
 
     if not ruta_salida:
-        planillas_dir = os.path.join(BASE_DIR, "Planillas")
-        os.makedirs(planillas_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M")
-        id_s = f"_{id_actividad}" if id_actividad and id_actividad != "general" else ""
-        ruta_salida = os.path.join(planillas_dir, f"Planilla_Participantes_Actividad{id_s}_{ts}.xlsx")
+        ruta_salida = seleccionar_ubicacion_guardado(id_actividad, formato="xlsx")
+        if not ruta_salida:
+            print("\nℹ️ Generación de planilla XLSX cancelada por el usuario.")
+            return ""
     else:
         os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
 
@@ -654,11 +670,10 @@ def generar_planilla_pdf(participantes: list, id_actividad: str = "", url_activi
         datos_act['id_actividad'] = id_actividad
 
     if not ruta_salida:
-        planillas_dir = os.path.join(BASE_DIR, "Planillas")
-        os.makedirs(planillas_dir, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M")
-        id_s = f"_{id_actividad}" if id_actividad and id_actividad != "general" else ""
-        ruta_salida = os.path.join(planillas_dir, f"Planilla_Participantes_Actividad{id_s}_{ts}.pdf")
+        ruta_salida = seleccionar_ubicacion_guardado(id_actividad, formato="pdf")
+        if not ruta_salida:
+            print("\nℹ️ Generación de planilla PDF cancelada por el usuario.")
+            return ""
     else:
         os.makedirs(os.path.dirname(os.path.abspath(ruta_salida)), exist_ok=True)
 

@@ -217,7 +217,7 @@ class JsBotGUI(ctk.CTk):
         self.var_fecha_hasta_aud = tk.StringVar(value=hoy_str)
         self.var_rol_auditor = tk.BooleanVar(value=False)
         self.var_modo_turbo = tk.BooleanVar(value=True)
-        self.var_exportar_formato = tk.StringVar(value="Excel (.xlsx)")
+        self.var_exportar_formato = tk.StringVar(value="LibreOffice (.odt)")
         self.ejecutando_auditoria = False
         self.resultado_auditoria_actual = None
         self.ruta_ultimo_reporte_auditoria = ""
@@ -2521,8 +2521,8 @@ class JsBotGUI(ctk.CTk):
         self.combo_aud_formato = ctk.CTkComboBox(
             box_exportacion,
             values=[
-                "Excel (.xlsx)",
                 "LibreOffice (.odt)",
+                "Excel (.xlsx)",
                 "Documento PDF (.pdf)",
                 "CSV plano (.csv)",
                 "Vista en Pantalla (Consola)"
@@ -3159,7 +3159,8 @@ class JsBotGUI(ctk.CTk):
             "fecha_inicio": f_desde,
             "fecha_fin": f_hasta,
             "rol_auditor": rol,
-            "exportar_formato": formato_exp,
+            "exportar_formato": "ninguno",
+            "formato": "ninguno",
             "modo_turbo": modo_turbo
         }
 
@@ -3182,8 +3183,8 @@ class JsBotGUI(ctk.CTk):
                 start_at=params.get("fecha_inicio"),
                 finish_at=params.get("fecha_fin"),
                 rol_auditor=params.get("rol_auditor", False),
-                exportar_formato=params.get("exportar_formato", "excel"),
-                formato=params.get("exportar_formato", "excel"),
+                exportar_formato="ninguno",
+                formato="ninguno",
                 modo_turbo=params.get("modo_turbo", True),
                 callback_log=callback_progreso,
                 progreso_callback=callback_progreso
@@ -5390,11 +5391,15 @@ class JsBotGUI(ctk.CTk):
                 url_actividad=url_act,
                 formato=formato
             )
-            if ruta_generada and os.path.exists(ruta_generada):
+            if not ruta_generada:
+                self._agregar_log("[INFO] Generación de planilla cancelada por el usuario.")
+                return
+
+            if os.path.exists(ruta_generada):
                 self._agregar_log(f"[OK] Planilla oficial generada exitosamente en:\n   {ruta_generada}")
                 self._mostrar_modal_exito_planilla(ruta_generada)
             else:
-                self._agregar_log("[ERROR] No se pudo generar el archivo de planilla.")
+                self._agregar_log("[ERROR] No se pudo encontrar el archivo de planilla generado.")
                 self._mostrar_modal_mensaje(
                     titulo="Error de Generación",
                     mensaje="No se pudo completar la generación del archivo de planilla.",

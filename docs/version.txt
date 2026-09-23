@@ -6,6 +6,19 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v4.13.0] — 23 de Septiembre de 2026 (Diálogo Interactivo Multiformato en Planillas, Auditoría Bajo Demanda y Predeterminación ODT)
+--------------------------------------------------------------------------------
+• MÓDULO DE PLANILLAS (modulos/generador_planilla.py e interfaz_grafica.py):
+  - Diálogo interactivo de guardado unificado: generalización de seleccionar_ubicacion_guardado para adaptar títulos, extensiones (.ods, .xlsx, .pdf) y filtros específicos del explorador de Windows a los 3 formatos soportados.
+  - Cancelación limpia: si el usuario cancela la ventana de guardado, la función aborta de forma segura sin generar archivos huérfanos y la interfaz gráfica registra un log informativo sin desplegar mensajes falsos de error.
+• MÓDULO DE AUDITORÍA (modulos/auditor_reportes.py e interfaz_grafica.py):
+  - Erradicación de auto-exportación no solicitada: la ejecución de auditoría en la GUI envía exportar_formato="ninguno", garantizando que la consulta sólo cargue los datos en pantalla y caché de telemetría sin generar archivos automáticos en Reportes_Auditoria/.
+  - Exportación estricta a demanda: los reportes físicos únicamente se generan cuando el usuario pulsa explícitamente "Exportar Reporte...".
+  - Formato predeterminado LibreOffice (.odt): adopción de .odt como primera opción estándar tanto en el combo de la interfaz gráfica como en el motor de exportación de auditoría.
+• SUITE DE PRUEBAS AUTOMATIZADAS (tests/test_flujo_exportacion_dialogos_y_auditoria.py):
+  - Creación de 7 pruebas unitarias certificando filtros multiformato, retorno vacío ante cancelación, control en generadores ODS/XLSX/PDF, ausencia de archivos en auditoría con formato 'ninguno' y delegación por defecto a ODT.
+
+--------------------------------------------------------------------------------
 [v4.12.0] — 23 de Septiembre de 2026 (Homologación Institucional 1:1 en XLSX y Blindaje de Compatibilidad ODS en Microsoft Excel)
 --------------------------------------------------------------------------------
 • GENERACIÓN DE PLANILLAS ODS (modulos/generador_planilla.py):
