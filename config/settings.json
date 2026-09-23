@@ -5,7 +5,8 @@
     },
     "telemetria": {
         "activa": true,
-        "google_sheets_url": ""
+        "google_sheets_url": "",
+        "token_seguridad": ""
     },
     "urls": {
         "base_login": "https://infoapp2.infocentro.gob.ve/admin/index.php"

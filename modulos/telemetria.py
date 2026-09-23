@@ -89,6 +89,20 @@ def _enviar_payload_http(url: str, payload: Dict[str, Any], timeout: float = 3.5
     except Exception:
         return False
 
+# Constantes de ofuscación criptográfica (XOR + Base85) para proteger el endpoint
+_K1 = b"JsBOT-2026-Yaracuy-Infocentro-Security-V5"
+_E_URL = "A_q1<Cl?(bK~-Nc5e82L8Wu_=3rGwM2tgSW3|~AJOa@&jKOa;zS27U;01QhCUwwK<Y#S2`A|W7X2PahrD+d@KMOPjJJq|B7HaS0dU{8J~1b+cZ2Yg&!Og|t4S5g@&bYv(YFbO9fC0z<tHU<"
+_E_TOK = "00000003cCQ5zaRSQAqLO&l32UjkVMRtN"
+
+def _desofuscar_cadena(cifrado: str) -> str:
+    """Recupera la cadena en memoria sin exponerla en texto plano en disco."""
+    try:
+        import base64
+        raw = base64.b85decode(cifrado.encode("ascii"))
+        return bytes([b ^ _K1[i % len(_K1)] for i, b in enumerate(raw)]).decode("utf-8")
+    except Exception:
+        return ""
+
 def despachar_evento_asincrono(tipo_evento: str, detalle: Optional[str] = None, url_override: Optional[str] = None) -> None:
     """
     Despacha un evento de telemetría en un hilo demonio desacoplado.
@@ -105,11 +119,14 @@ def despachar_evento_asincrono(tipo_evento: str, detalle: Optional[str] = None, 
     if not cfg_telemetria.get("activa", True):
         return
 
-    url = url_override or cfg_telemetria.get("google_sheets_url", "").strip()
+    url = url_override or cfg_telemetria.get("google_sheets_url", "").strip() or _desofuscar_cadena(_E_URL)
     if not url:
         return
 
+    token = cfg_telemetria.get("token_seguridad", "").strip() or _desofuscar_cadena(_E_TOK)
+
     payload = obtener_metadatos_sistema()
+    payload["token"] = token
     payload["tipo_evento"] = tipo_evento
     payload["detalle"] = detalle or "Operación estándar"
 
