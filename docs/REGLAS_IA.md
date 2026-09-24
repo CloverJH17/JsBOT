@@ -1,30 +1,38 @@
-# REGLAS ESTRICTAS PARA IAs Y AGENTES DE DESARROLLO - JsBOT
+# ⚠️ DIRECTRICES OPERATIVAS Y REGLAS ESTRICTAS PARA IAs — JsBOT
+# [LECTURA OBLIGATORIA PREVIA A CUALQUIER ACCIÓN O INSTRUCCIÓN]
 
-Todo agente, IA o desarrollador que modifique este repositorio DEBE acatar obligatoriamente estas reglas antes de ejecutar cualquier comando o edición de código:
+Todo agente, subagente o modelo de Inteligencia Artificial que opere en este repositorio DEBE leer, acatar y validar obligatoriamente estas 6 directrices antes de ejecutar cualquier comando, herramienta o edición de código:
 
-## 1. PRINCIPIO DE PRESERVACIÓN DE CÓDIGO (NO ROMPER LO QUE FUNCIONA)
-- **Regla:** Bajo ningún concepto se debe editar, eliminar o alterar código que actualmente es funcional, a menos que el usuario lo exija explícitamente.
-- **Acción:** Si una nueva función (feature) requiere tocar una función existente que ya funciona, se debe realizar una **Pregunta Crítica** al usuario para confirmar si la modificación de ese código validado está autorizada.
+## 1. Aprobación Obligatoria para `git push`
+- NUNCA ejecutar comandos de subida remota (`git push`) sin el consentimiento y la autorización explícita del usuario.
+- Todo cambio debe quedar verificado y probado localmente antes de consultar si se autoriza el push.
 
-## 2. ESTILO VISUAL ESTRICTO (NORMALIZACIÓN DE INTERFAZ)
-- **Regla:** Todos los menús de terminal, banners y elementos visuales deben mantener la uniformidad y el diseño preestablecido.
-- **Formato del Banner:**
-  ```text
-  ╔══════════════════════════════════════════════════════════════════════════╗
-  ║   JsBOT v3.5.2 — GESTIÓN MASIVA DE ACTIVIDADES Y SERVICIOS INFOCENTRO    ║
-  ╚══════════════════════════════════════════════════════════════════════════╝
-  ```
-- **Formato InquirerPy:** El InquirerPy debe usar `qmark=""` para evitar mostrar `? ¿Qué acción...` y en su lugar mostrar un estilo limpio:
-  ```text
-  ¿Qué acción deseas realizar? (Usa flechas o presiona número)
-  ❯  [1] Formación (Carga de Estudiantes y Planillas ODS)
-  ```
-- Ninguna IA tiene permiso de rediseñar o cambiar este estilo.
+## 2. Aprobación Previa de Planes de Cambio (Planning Mode Estricto)
+- NUNCA modificar archivos de código, configuración ni ejecutar acciones destructivas sin que el usuario haya revisado y aprobado formalmente el plan de implementación.
+- Solo proceder a la edición cuando el usuario responda con un "sí", "adelante" o "procede".
 
-## 3. APROBACIÓN PREVIA OBLIGATORIA (PLANNING MODE)
-- **Regla:** SIEMPRE se debe mostrar al usuario el código o explicarle claramente las funciones nuevas que se pretenden inyectar.
-- **Acción:** Pedir permiso explícito antes de reemplazar código complejo. Solo proceder cuando el usuario diga "sí" o "procede".
+## 3. Generación Obligatoria de Planes Detallados
+- Ante cualquier solicitud que requiera cambios técnicos o refactorizaciones, generar siempre un plan técnico claro, modular y detallado con las acciones específicas a realizar antes de tocar cualquier archivo.
 
-## 4. CONTROL DE VERSIONES LOCAL (version.txt)
-- **Regla:** Siempre que un cambio significativo sea implementado, probado y validado (aprobado por el usuario con un "sí funciona" o "todo bien"), se DEBE actualizar obligatoriamente el archivo `version.txt`.
-- **Formato:** Se debe mantener el formato actual del archivo `version.txt` (usualmente detallando la versión, la fecha, y los *changelogs* o cambios realizados en esa iteración).
+## 4. Comunicación Proactiva de Estado y Progreso
+- Informar continuamente al usuario sobre el avance del trabajo mientras se está ejecutando, detallando qué parte de la tarea se está procesando (especialmente en ejecuciones largas, pruebas o análisis).
+
+## 5. Versionado Semántico (SemVer) y Sistematización Obligatoria
+- Cada cambio aprobado debe sistematizarse y actualizar la versión del proyecto siguiendo estrictamente SemVer (`MAJOR.MINOR.PATCH`):
+  - `MAJOR`: Cambios que rompen compatibilidad con versiones anteriores.
+  - `MINOR`: Nuevas funcionalidades, módulos o capacidades compatibles hacia atrás (ej. nuevas opciones en GUI, mejoras en ingesta ETL).
+  - `PATCH`: Corrección de bugs menores y ajustes internos sin nuevas funcionalidades.
+- Presentar SIEMPRE el plan de versionado al usuario para su aprobación previa.
+- Al cambiar la versión, sincronizar obligatoriamente en todos los archivos del sistema:
+  - `modulos/version.py` (`__version__`)
+  - `config/settings.json` (`app.version`)
+  - `docs/version.txt` y `docs/historial/version.txt`
+  - `docs/PROJECT.md` y `README.md`
+
+## 6. Pruebas Unitarias Obligatorias por Cada Cambio
+- Al realizar cualquier modificación de código o lógica, crear o ampliar una prueba unitaria específica en `tests/test_*.py`.
+- El test debe certificar el nuevo comportamiento o corrección para evitar regresiones futuras en el sistema.
+
+---
+### Principio Fundamental: Preservación de Código
+- Bajo ningún concepto se debe alterar, eliminar o reescribir lógica que actualmente es funcional a menos que el usuario lo solicite explícitamente. Ante cualquier duda, formular una pregunta crítica antes de proceder.

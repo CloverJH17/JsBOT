@@ -1,6 +1,6 @@
 {
     "app": {
-        "version": "5.2.0",
+        "version": "5.3.0",
         "interfaz_predeterminada": "gui"
     },
     "telemetria": {
@@ -21,10 +21,5 @@
     "validation": {
         "default_phone": "0412-0000000",
         "capture_screenshots_on_error": true
-    },
-    "timeouts": {
-        "login_wait_seconds": 20,
-        "ajax_wait_seconds": 18,
-        "element_wait_seconds": 12
     }
 }

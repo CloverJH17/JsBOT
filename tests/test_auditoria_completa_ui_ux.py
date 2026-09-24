@@ -486,17 +486,22 @@ class TestOraculoEstadoBackend(_GuiTestBase):
 
     def test_48_guardar_ajustes_persiste_settings(self):
         settings_path = os.path.join(BASE_DIR, "config", "settings.json")
-        self.app.var_login_timeout.set(20)
-        self.app.var_ajax_timeout.set(18)
+        self.app.var_default_phone.set("0412-9876543")
         _flush(self.app, 80)
         self.app.btn_guardar_ajustes.invoke()
         _flush(self.app, 200)
-        if os.path.exists(settings_path):
-            with open(settings_path, encoding="utf-8") as f:
-                data = json.load(f)
-            self.assertEqual(data.get("timeouts", {}).get("login_wait_seconds"), 20)
-        else:
-            self.assertEqual(self.app.defaults_ajustes["login"], 20)
+        try:
+            if os.path.exists(settings_path):
+                with open(settings_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                self.assertEqual(data.get("validation", {}).get("default_phone"), "0412-9876543")
+            else:
+                self.assertEqual(self.app.defaults_ajustes["phone"], "0412-9876543")
+        finally:
+            self.app.var_default_phone.set("0412-0000000")
+            _flush(self.app, 80)
+            self.app.btn_guardar_ajustes.invoke()
+            _flush(self.app, 200)
 
     def test_49_finalizar_auditoria_kpis(self):
         resultado_mock = {

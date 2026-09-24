@@ -1,4 +1,4 @@
-# Project: JsBOT v5.1.0 Architecture & Robustness Specification
+# Project: JsBOT v5.3.0 Architecture & Robustness Specification
 
 ## Architecture
 - **GUI Engine**: CustomTkinter on top of Tkinter / Tcl.
@@ -33,8 +33,11 @@
 | 18 | Crawler & Export Decoupling | Decouple `consultar_actividades_infoapp_http_crawler` and `consultar_servicios_infoapp_http_crawler` eliminating circular fallback | M6 | Architecture | DONE |
 | 19 | Centralized Activity Classification | Unified `obtener_tipo_clasificacion_actividad` consumed across ODS, XLSX, PDF, and GUI views | M6 | Architecture | DONE |
 | 20 | SQLite Recovery & Exception Logging | Replace silent passes with SQLite recovery fallback and detailed logging in session manager | M6 | Architecture | DONE |
-| 21 | Placebo Config Purge | Eradicate non-functional configuration switches (`start_maximized`) across UI and JSON settings | M6 | Architecture | DONE |
+| 21 | Placebo Config Purge | Eradicate non-functional configuration controls (`start_maximized`, dead timeouts sliders card, and dead normalizacion.log switch) across UI and JSON settings | M6 | Architecture | DONE |
 | 22 | Cloud Telemetry & One-Line Deployers | Multi-platform unattended deployment (`install.ps1`, `install.sh`) and Google Apps Script telemetry | M7 | Operations | DONE |
+| 23 | UI Hygiene & Real Verification | Elimination of placebo cards from Settings view, real post-upload verification, and zero dummy preview data | M8 | UI/UX & Quality | DONE |
+| 24 | Numbered Column Header Normalization | Robust extraction of columns with numeric prefixes/bullets (`1.N°`, `3.Nombres`, `5.Cédula...`) in `normalizar_col_nombre` | M9 | ETL Robustness | DONE |
+| 25 | GUI Direct File Access & Assisted Opening | Quick file access badge button (`✎ Abrir`) and assisted opening modal (`✎ Abrir en Excel / Calc`) via `abrir_archivo_asistido` | M9 | UI/UX & Workflow | DONE |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status | Key Verification Output |
@@ -45,7 +48,9 @@
 | 4 | M4: Canaima GNU/Linux Compatibility (R4) | Early `LIBGL_ALWAYS_SOFTWARE=1` injection, `DISPLAY` checking in `modulos/entorno.py` and `main.py` | None | DONE | Early injection verified in main.py, entorno.py, interfaz_grafica.py; display check verified |
 | 5 | M5: Acceptance & Full Suite Regression Verification | Run all 65 audit tests in `tests/test_auditoria_completa_ui_ux.py` + full test suite, verify no regressions | M1, M2, M3, M4 | DONE | 391/391 comprehensive unit, stress, and GUI tests passed (100%); 0 regressions; Forensic Audit CLEAN |
 | 6 | M6: Security Hardening & Crawler Decoupling | SQL parameter sanitization, safe JS evaluate payloads, decoupled crawlers, centralized classification, SQLite fallback, placebo purge | M1-M5 | DONE | 9 new unit tests in `test_blindaje_refactor.py`; 452/452 tests passed (100%) |
-| 7 | M7: One-Line Deployers & Cloud Telemetry | Unattended install/uninstall scripts (`.ps1`, `.sh`), desktop/menu integration, cloud telemetry to Google Sheets | M1-M6 | DONE | `test_instaladores_y_telemetria.py` passing; verified SemVer v5.1.0 consistency |
+| 7 | M7: One-Line Deployers & Cloud Telemetry | Unattended install/uninstall scripts (`.ps1`, `.sh`), desktop/menu integration, cloud telemetry to Google Sheets | M1-M6 | DONE | `test_instaladores_y_telemetria.py` passing; verified SemVer consistency |
+| 8 | M8: UI Hygiene & Isolated Capabilities Integration (v5.2.0) | Complete purge of placebo cards (timeouts, normalizacion switch), clean settings UI, post-upload verification, 460 certified tests | M1-M7 | DONE | 460/460 tests passed (100%); 0 regressions; verified SemVer v5.2.0 |
+| 9 | M9: Robust Column Ingestion & Interactive Assisted File Opening (v5.3.0) | Stripping of numeric prefixes/bullets in column headers, interactive `✎ Abrir` badge & assisted modal opening | M1-M8 | DONE | Verified on Florangel sheet (30/30 participants extracted); 460 tests passing |
 
 ## Interface Contracts
 ### Modal Registry ↔ `JsBotGUI`

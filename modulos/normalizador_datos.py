@@ -263,8 +263,10 @@ def normalizar_col_nombre(txt: str) -> str:
     replacements = (("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"), ("ñ", "n"))
     for a, b in replacements:
         txt = txt.replace(a, b)
-    txt = re.sub(r'(?<=\w)\.(?=\w)', '', txt)
-    txt = re.sub(r'[\*\:\.\,\n\r#\-\/]', ' ', txt)
+    # Limpiar prefijos numéricos o de viñetas de columnas (ej. '1.', '1-', '1)', '(1)', '01.', '3.Nombres')
+    txt = re.sub(r'^\s*[\(\[]?\d+(?:[\.\-]\d+)*[\)\.\-\:\s_]+', '', txt)
+    txt = re.sub(r'(?<=[a-z])\.(?=[a-z])', '', txt)
+    txt = re.sub(r'[\*\:\.\,\n\r#\-\/\(\)\[\]\{\}\"\']', ' ', txt)
     return re.sub(r'[_\s]+', ' ', txt).strip()
 
 def limpiar_cedula(val) -> str:
@@ -689,7 +691,7 @@ def detectar_cabecera_avanzada(filas_o_matriz):
             # =================================================================
             # FILTRO ESTRICTO DE EXCLUSIÓN (IGNORAR AUTORIDADES Y FIJOS)
             # =================================================================
-            if any(palabra in txt_norm.split() for palabra in CABECERAS_IGNORADAS):
+            if any(re.search(r'\b' + re.escape(palabra) + r'\b', txt_norm) for palabra in CABECERAS_IGNORADAS):
                 continue
 
             es_rep = any(k in txt_norm for k in ['representante', 'padre', 'madre', 'tutor', 'rep'])

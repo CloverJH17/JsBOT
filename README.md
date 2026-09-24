@@ -1,10 +1,10 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.2.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.3.0)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
-[![Tests](https://img.shields.io/badge/Tests-452%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-460%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 [![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
@@ -36,13 +36,15 @@
   - Registro de eventos y auditorías en tabla indexada `app_logs` dentro de `data/jsbot.db` con transacciones ACID y modo WAL.
   - Purga automática y retención inteligente a 30 días, eliminando archivos de texto redundantes en disco.
 - **Motor ETL de Normalización Inteligente:**
-  - Ingesta multi-formato (`.xlsx`, `.ods`, `.csv`, `.txt`).
+  - Ingesta multi-formato (`.xlsx`, `.ods`, `.csv`, `.txt`) con Calamine Workbook y Pandas fallback en milisegundos.
+  - Ingesta tolerante a numeración y viñetas en cabeceras (`1.N°`, `3.Nombres`, `4.Apellidos`, `5.Cédula de Identidad (si aplica)`, etc.) con limpieza de prefijos y límites de palabra (`\b`).
+  - Apertura asistida e interactiva en la suite ofimática local (`✎ Abrir en Excel / Calc`) accesible desde el chip de archivo y desde el modal preventivo para corrección inmediata.
   - Detección automática de Cédulas SAIME (`V-`), generación de Cédulas Escolares estructuradas (`CE`), corrección de claves truncadas y protección ante menores sin documento.
   - Limpieza de cadenas a formato Title Case institucional y saneamiento telefónico estandarizado a 11 dígitos.
 - **Blindaje y Concurrencia:**
   - Cerrojo de exclusión mutua (`file lock`) para prevenir instancias duplicadas.
   - Fuente única de versión centralizada en `modulos/version.py` sincronizada con `config/settings.json`.
-  - Suite certificada con más de 280 pruebas unitarias, de estrés y de regresión ante cortes abruptos de red o fallos eléctricos.
+  - Suite certificada con 460 pruebas unitarias, de estrés, de regresión y de interfaz gráfica (100% aprobadas).
 
 ---
 
@@ -52,11 +54,11 @@
 | :--- | :--- |
 | **Diagnóstico** | Matriz de tarjetas en tiempo real (Python, SO, librerías, conectividad y navegador). |
 | **Credenciales** | Administración segura de usuario y contraseña para la plataforma InfoApp. |
-| **Formación** | Carga masiva de participantes en actividades y cursos formativos. |
+| **Formación** | Carga masiva de participantes con apertura asistida y pre-vuelo ETL. |
 | **Servicios** | Carga automatizada de beneficiarios con catálogo desplegable institucional ("Actividades de educación o aprendizaje"). |
 | **Reportes** | Auditoría ultra rápida (50x), balances operativos, inspector modal y exportación multiformato. |
 | **Planillas** | Generación directa multiformato (ODS, XLSX, PDF), pre-vuelo ETL y Ficha Formativa sin requerir RPA web. |
-| **Ajustes** | Calibración de timeouts de red (Login, AJAX, DOM) y conmutador visual de navegador. |
+| **Ajustes** | Preferencia de navegador (Chrome / Edge / Chromium) y personalización operativa limpia sin placebos. |
 | **Créditos** | Ficha técnica, licencias y autoría del proyecto. |
 
 ---

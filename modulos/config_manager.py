@@ -96,14 +96,13 @@ def obtener_url_login() -> str:
 
 
 def obtener_browser_cfg() -> dict:
-    """Configuración de navegadores Playwright: prioridad y ventana maximizada."""
+    """Configuración de navegadores Playwright: prioridad."""
     cfg = cargar_settings().get("browser", {})
     prioridad = cfg.get("priority") or DEFAULTS["browser"]["priority"]
     if not isinstance(prioridad, (list, tuple)) or not prioridad:
         prioridad = DEFAULTS["browser"]["priority"]
     return {
-        "priority": [str(p).strip().lower() for p in prioridad],
-        "start_maximized": bool(cfg.get("start_maximized", True))
+        "priority": [str(p).strip().lower() for p in prioridad]
     }
 
 

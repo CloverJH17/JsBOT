@@ -133,6 +133,54 @@ class TestAperturaAsistidaYRecarga(unittest.TestCase):
         self.assertEqual(app._obtener_ruta_seccion("Servicios"), "servicios.xlsx")
         self.assertEqual(app._obtener_ruta_seccion("Planillas"), "planillas.ods")
 
+    def test_detectar_cabecera_columnas_numeradas_estilo_florangel(self):
+        """Verifica que detectar_cabecera_avanzada resuelva correctamente filas con columnas numeradas."""
+        from modulos.normalizador_datos import detectar_cabecera_avanzada
+
+        matriz = [
+            ["", "", "PLAN DE MASIFICACION"],
+            ["", "", ""],
+            [
+                "1.N°", "2.Nombre de la Institución", "3.Nombres", "4.Apellidos",
+                "5.Cédula de Identidad (si aplica)", "6.Edad", "7.Sexo (Masculino o Femenino)",
+                "8.Grado que cursa", "Teléfono celular", "Cédula de Identidad representante"
+            ],
+            ["1", "EP ESCUELA", "JUAN", "PEREZ", "12345678", "10", "M", "5", "04121234567", "12345678"]
+        ]
+        mejor_fila, mapeo = detectar_cabecera_avanzada(matriz)
+        self.assertEqual(mejor_fila, 2)
+        self.assertEqual(mapeo.get("nombre"), 2)
+        self.assertEqual(mapeo.get("apellido"), 3)
+        self.assertEqual(mapeo.get("cedula_alumno"), 4)
+        self.assertEqual(mapeo.get("edad"), 5)
+        self.assertEqual(mapeo.get("genero"), 6)
+        self.assertEqual(mapeo.get("telefono"), 8)
+        self.assertEqual(mapeo.get("cedula_padre"), 9)
+
+    def test_modal_mensaje_con_boton_accion(self):
+        """Verifica que _mostrar_modal_mensaje soporte botón de acción y ejecute callback."""
+        from modulos.interfaz_grafica import JsBotGUI
+        app = JsBotGUI.__new__(JsBotGUI)
+        app.modales_activos = {}
+        app.registrar_modal = MagicMock()
+        app.cerrar_modal = MagicMock()
+        app.update_idletasks = MagicMock()
+        app.winfo_x = MagicMock(return_value=100)
+        app.winfo_y = MagicMock(return_value=100)
+        app.winfo_width = MagicMock(return_value=800)
+        app.winfo_height = MagicMock(return_value=600)
+
+        accion_ejecutada = []
+        with patch.dict("sys.modules", {"CTkMessagebox": None}):
+            with patch("customtkinter.CTkToplevel"):
+                app._mostrar_modal_mensaje(
+                    titulo="Sin registros válidos",
+                    mensaje="Mensaje de prueba",
+                    tipo="aviso",
+                    boton_accion_texto="✎ Abrir en Excel / Calc",
+                    accion_callback=lambda: accion_ejecutada.append(True)
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

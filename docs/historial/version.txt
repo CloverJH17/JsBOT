@@ -6,6 +6,23 @@ Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
 
 --------------------------------------------------------------------------------
+[v5.3.0] — 23 de Septiembre de 2026 (Ingesta Universal de Cabeceras Numeradas, Apertura Asistida en GUI y Purga de Placebos)
+--------------------------------------------------------------------------------
+• NORMALIZACIÓN ETL ROBUSTA DE CABECERAS (modulos/normalizador_datos.py):
+  - Ingesta Universal de Columnas Numeradas y Viñetas: Soporte completo para cabeceras institucionales precedidas por números, puntos o paréntesis (ej. '1.N°', '3.Nombres', '4.Apellidos', '5.Cédula de Identidad (si aplica)', '6.Edad', '7.Sexo (Masculino o Femenino)').
+  - Saneamiento de Prefijos: Implementada limpieza mediante `re.sub(r'^\s*[\(\[]?\d+(?:[\.\-]\d+)*[\)\.\-\:\s_]+', '', txt)` y preservación estricta de abreviaturas alfabéticas ('c.i.', 'f.nac').
+  - Filtro Delimitado de Cabeceras Ignoradas: Evaluación por límite de palabra `\b` para prevenir exclusiones erróneas ante paréntesis y signos pegados a autoridades o instituciones.
+• APERTURA ASISTIDA DE ARCHIVOS EN GUI (modulos/interfaz_grafica.py):
+  - Botón de Apertura Rápida en Chip de Archivo: Incorporado botón interactivo '✎ Abrir' junto al botón de descarte '✕' en las pestañas de Formación, Servicios y Planillas.
+  - Enlace Clickeable en Etiqueta: Cursor tipo mano ('hand2') y evento de clic sobre el nombre del archivo para abrirlo directamente en la suite ofimática predeterminada (Excel / LibreOffice Calc).
+  - Acción Asistida en Modal Preventivo: Integrado botón '✎ Abrir en Excel / Calc' en el diálogo modal que se despliega cuando un archivo no arroja registros válidos, guiando al usuario a la corrección y guardado inmediato (Ctrl+G).
+• PURGA DEFINITIVA DE OPCIONES PLACEBO:
+  - Erradicación de Sliders y Switches Placebo: Eliminada la tarjeta de timeouts de red (Login, AJAX, DOM) y el interruptor no funcional 'normalizacion.log' de la vista de Ajustes y de config/settings.json.
+• SUITE DE PRUEBAS UNITARIAS:
+  - tests/test_normalizador.py & tests/test_normalizador_nombres_y_gui_edicion.py: Pruebas unitarias que validan la ingesta de cabeceras numeradas estilo Florangel y los botones de acción asistida en modales.
+  - 460 pruebas certificadas en total con 100% de éxito.
+
+--------------------------------------------------------------------------------
 [v5.2.0] — 23 de Septiembre de 2026 (Integración de Capacidades Aisladas, Higiene UI y Verificación Post-Carga)
 --------------------------------------------------------------------------------
 • INTEGRACIÓN DE CAPACIDADES AISLADAS EN PRODUCCIÓN:

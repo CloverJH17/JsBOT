@@ -101,6 +101,17 @@ class TestNormalizarColNombre(unittest.TestCase):
         self.assertEqual(normalizar_col_nombre(None), "")
         self.assertEqual(normalizar_col_nombre(123), "")
 
+    def test_prefijos_numericos_y_viñetas(self):
+        self.assertEqual(normalizar_col_nombre("1.N°"), "n°")
+        self.assertEqual(normalizar_col_nombre("3.Nombres"), "nombres")
+        self.assertEqual(normalizar_col_nombre("4.Apellidos"), "apellidos")
+        self.assertEqual(normalizar_col_nombre("5.Cédula de Identidad (si aplica)"), "cedula de identidad si aplica")
+        self.assertEqual(normalizar_col_nombre("6.Edad"), "edad")
+        self.assertEqual(normalizar_col_nombre("7.Sexo (Masculino o Femenino)"), "sexo masculino o femenino")
+        self.assertEqual(normalizar_col_nombre("1.- Nombres"), "nombres")
+        self.assertEqual(normalizar_col_nombre("(1) Nombres"), "nombres")
+        self.assertEqual(normalizar_col_nombre("01. Cédula"), "cedula")
+
 
 class TestLimpiarCedula(unittest.TestCase):
     def test_cedula_limpia(self):

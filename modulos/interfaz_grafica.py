@@ -1531,6 +1531,21 @@ class JsBotGUI(ctk.CTk):
             anchor="w"
         )
         self.lbl_archivo_formacion.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+        self.lbl_archivo_formacion.bind(
+            "<Button-1>",
+            lambda e: self._accion_abrir_archivo_excel("Formación") if self._obtener_ruta_seccion("Formación") else None
+        )
+
+        self.btn_abrir_chip_formacion = ctk.CTkButton(
+            self.chip_frame_formacion,
+            text="✎ Abrir",
+            width=65,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Formación")
+        )
 
         self.btn_descartar_formacion = ctk.CTkButton(
             self.chip_frame_formacion,
@@ -1542,7 +1557,7 @@ class JsBotGUI(ctk.CTk):
             hover_color="#962D22",
             command=self._descartar_archivo_formacion
         )
-        # Oculto por defecto hasta que se elija un archivo
+        # Ocultos por defecto hasta que se elija un archivo
 
         # 1.5 Tarjeta de Pre-vuelo (Resumen Inmediato ETL - Inicialmente oculta)
         self.card_prevuelo_formacion = ctk.CTkFrame(
@@ -1743,6 +1758,21 @@ class JsBotGUI(ctk.CTk):
             anchor="w"
         )
         self.lbl_archivo_servicios.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+        self.lbl_archivo_servicios.bind(
+            "<Button-1>",
+            lambda e: self._accion_abrir_archivo_excel("Servicios") if self._obtener_ruta_seccion("Servicios") else None
+        )
+
+        self.btn_abrir_chip_servicios = ctk.CTkButton(
+            self.chip_frame_servicios,
+            text="✎ Abrir",
+            width=65,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Servicios")
+        )
 
         self.btn_descartar_servicios = ctk.CTkButton(
             self.chip_frame_servicios,
@@ -2032,6 +2062,21 @@ class JsBotGUI(ctk.CTk):
             anchor="w"
         )
         self.lbl_archivo_planillas.pack(side="left", fill="x", expand=True, padx=(10, 6), pady=4)
+        self.lbl_archivo_planillas.bind(
+            "<Button-1>",
+            lambda e: self._accion_abrir_archivo_excel("Planillas") if self._obtener_ruta_seccion("Planillas") else None
+        )
+
+        self.btn_abrir_chip_planillas = ctk.CTkButton(
+            self.chip_frame_planillas,
+            text="✎ Abrir",
+            width=65,
+            height=22,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color="#27AE60",
+            hover_color="#1E8449",
+            command=lambda: self._accion_abrir_archivo_excel("Planillas")
+        )
 
         self.btn_descartar_planillas = ctk.CTkButton(
             self.chip_frame_planillas,
@@ -3928,23 +3973,11 @@ class JsBotGUI(ctk.CTk):
         self.scroll_ajustes.grid(row=2, column=0, sticky="nsew", padx=12, pady=(2, 10))
         frame.grid_rowconfigure(2, weight=1)
 
-        # 1. BLOQUE: Timeouts y Esperas
-        card_timeouts = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
-        card_timeouts.pack(fill="x", pady=4)
-
-        t_lbl = ctk.CTkLabel(card_timeouts, text="Timeouts y Esperas de Red (Segundos)", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
-        t_lbl.pack(anchor="w", padx=12, pady=(6, 4))
-
-        self._crear_control_timeout(card_timeouts, "Login Timeout:", "login", self.var_login_timeout, 5, 30)
-        self._crear_control_timeout(card_timeouts, "Espera AJAX / Peticiones:", "ajax", self.var_ajax_timeout, 5, 30)
-        self._crear_control_timeout(card_timeouts, "Búsqueda de Elementos DOM:", "element", self.var_element_timeout, 5, 30)
-        ctk.CTkLabel(card_timeouts, text="", height=2).pack()
-
-        # 2. BLOQUE: Preferencia de Navegador
+        # 1. BLOQUE: Preferencia de Navegador
         card_browser = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
         card_browser.pack(fill="x", pady=4)
 
-        b_lbl = ctk.CTkLabel(card_browser, text="Preferencia de Navegador y Ventana", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
+        b_lbl = ctk.CTkLabel(card_browser, text="Preferencia de Navegador", font=ctk.CTkFont(size=11, weight="bold"), text_color="#3B8ED0")
         b_lbl.pack(anchor="w", padx=12, pady=(6, 4))
 
         row_nav = ctk.CTkFrame(card_browser, fg_color="transparent")
@@ -3962,7 +3995,7 @@ class JsBotGUI(ctk.CTk):
         combo_nav.pack(side="right")
         ctk.CTkLabel(card_browser, text="", height=4).pack()
 
-        # 3. BLOQUE: Opciones de Captura y Logs
+        # 2. BLOQUE: Opciones de Captura y Validación
         card_logs = ctk.CTkFrame(self.scroll_ajustes, fg_color="#161620", corner_radius=10, border_width=1, border_color="#292938")
         card_logs.pack(fill="x", pady=4)
 
@@ -3979,17 +4012,6 @@ class JsBotGUI(ctk.CTk):
             command=self._al_modificar_parametro
         )
         sw_cap.pack(side="left")
-
-        row_sw2 = ctk.CTkFrame(card_logs, fg_color="transparent")
-        row_sw2.pack(fill="x", padx=12, pady=2)
-        sw_det = ctk.CTkSwitch(
-            row_sw2,
-            text="Habilitar trazas detalladas de normalización en disco (normalizacion.log)",
-            variable=self.var_detailed_logs,
-            font=ctk.CTkFont(size=10),
-            command=self._al_modificar_parametro
-        )
-        sw_det.pack(side="left")
 
         row_tlf = ctk.CTkFrame(card_logs, fg_color="transparent")
         row_tlf.pack(fill="x", padx=12, pady=3)
@@ -4113,11 +4135,6 @@ class JsBotGUI(ctk.CTk):
             prioridad = ["firefox", "chrome", "edge"]
 
         nuevos_settings = {
-            "timeouts": {
-                "login_wait_seconds": int(self.var_login_timeout.get()),
-                "ajax_wait_seconds": int(self.var_ajax_timeout.get()),
-                "element_wait_seconds": int(self.var_element_timeout.get())
-            },
             "browser": {
                 "priority": prioridad
             },
@@ -4134,7 +4151,7 @@ class JsBotGUI(ctk.CTk):
                 self._agregar_log(f"[ADVERTENCIA] Error guardando ajustes: {e}")
 
         self._ocultar_banner_advertencia_inmediato()
-        self._agregar_log(f"[AJUSTES] Parámetros guardados y persistidos en config/settings.json: Login={self.defaults_ajustes['login']}s, AJAX={self.defaults_ajustes['ajax']}s, Element={self.defaults_ajustes['element']}s, Navegador={self.defaults_ajustes['browser']}.")
+        self._agregar_log(f"[AJUSTES] Parámetros guardados y persistidos en config/settings.json: Navegador={self.defaults_ajustes['browser']}, Capturas={self.defaults_ajustes['screenshots']}, Teléfono={self.defaults_ajustes['phone']}.")
 
     def _restaurar_defaults_ajustes(self):
         """Restaura los valores por defecto, los persiste en disco y retira el banner inmediatamente sin dejar espacios."""
@@ -4258,15 +4275,32 @@ class JsBotGUI(ctk.CTk):
         self.textbox_logs.delete("0.0", tk.END)
         self._agregar_log("[CONSOLA] Registro de eventos vaciado.")
 
-    def _mostrar_modal_mensaje(self, titulo: str, mensaje: str, tipo: str = "aviso"):
+    def _mostrar_modal_mensaje(self, titulo: str, mensaje: str, tipo: str = "aviso",
+                               boton_accion_texto: str = None, accion_callback=None):
         """
         Muestra un diálogo modal visual mediante CTkMessagebox si está disponible,
         o mediante una ventana secundaria CTkToplevel vinculada a la ventana principal.
         Evita volcar excepciones o advertencias en sys.stdout.
+        Permite opcionalmente un botón de acción secundaria (ej. abrir archivo asistido).
         """
         try:
             from CTkMessagebox import CTkMessagebox
             icon_map = {"error": "cancel", "aviso": "warning", "info": "info", "ok": "check"}
+            if boton_accion_texto and accion_callback:
+                msg = CTkMessagebox(
+                    master=self,
+                    title=titulo,
+                    message=mensaje,
+                    icon=icon_map.get(tipo, "info"),
+                    option_1="Cerrar",
+                    option_2=boton_accion_texto
+                )
+                if msg.get() == boton_accion_texto:
+                    try:
+                        accion_callback()
+                    except Exception:
+                        pass
+                return
             CTkMessagebox(master=self, title=titulo, message=mensaje, icon=icon_map.get(tipo, "info"))
             return
         except ImportError:
@@ -4274,8 +4308,8 @@ class JsBotGUI(ctk.CTk):
 
         try:
             self.update_idletasks()
-            ancho = 500
-            alto = 230
+            ancho = 520
+            alto = 240
             pos_x = max(0, self.winfo_x() + (self.winfo_width() - ancho) // 2)
             pos_y = max(0, self.winfo_y() + (self.winfo_height() - alto) // 2)
 
@@ -4315,13 +4349,36 @@ class JsBotGUI(ctk.CTk):
                 font=ctk.CTkFont(size=11),
                 text_color="#E0E0E8",
                 justify="left",
-                wraplength=450
+                wraplength=470
             )
             lbl_msg.pack(anchor="w", pady=(4, 8))
 
+            f_btns = ctk.CTkFrame(modal, fg_color="transparent")
+            f_btns.pack(side="bottom", pady=(0, 14))
+
+            if boton_accion_texto and accion_callback:
+                def _ejecutar_accion():
+                    self.cerrar_modal(modal)
+                    try:
+                        accion_callback()
+                    except Exception:
+                        pass
+
+                btn_acc = ctk.CTkButton(
+                    f_btns,
+                    text=boton_accion_texto,
+                    width=160,
+                    height=32,
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    fg_color="#27AE60",
+                    hover_color="#1E8449",
+                    command=_ejecutar_accion
+                )
+                btn_acc.pack(side="left", padx=6)
+
             btn_ok = ctk.CTkButton(
-                modal,
-                text="Aceptar",
+                f_btns,
+                text="Aceptar" if not (boton_accion_texto and accion_callback) else "Cerrar",
                 width=110,
                 height=32,
                 font=ctk.CTkFont(size=11, weight="bold"),
@@ -4329,7 +4386,7 @@ class JsBotGUI(ctk.CTk):
                 hover_color="#14375e",
                 command=lambda: self.cerrar_modal(modal)
             )
-            btn_ok.pack(side="bottom", pady=(0, 14))
+            btn_ok.pack(side="left", padx=6)
         except Exception:
             pass
 
@@ -4597,8 +4654,9 @@ class JsBotGUI(ctk.CTk):
         self.archivo_ruta_formacion = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_formacion.set(f"📄 {nombre}")
-        self.lbl_archivo_formacion.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
-        self.btn_descartar_formacion.pack(side="right", padx=(6, 4))
+        self.lbl_archivo_formacion.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"), cursor="hand2")
+        self.btn_abrir_chip_formacion.pack(side="right", padx=(4, 2))
+        self.btn_descartar_formacion.pack(side="right", padx=(2, 4))
 
         self._agregar_log(f"[ARCHIVO] Archivo seleccionado: {nombre}")
         self._procesar_archivo_en_frio(ruta, seccion="Formacion")
@@ -4612,7 +4670,9 @@ class JsBotGUI(ctk.CTk):
         self.datos_normalizados_actuales = []
         self.reporte_deduplicacion_actual = None
         self.archivo_seleccionado_formacion.set("Ningún archivo seleccionado")
-        self.lbl_archivo_formacion.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.lbl_archivo_formacion.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"), cursor="")
+        if hasattr(self, "btn_abrir_chip_formacion"):
+            self.btn_abrir_chip_formacion.pack_forget()
         self.btn_descartar_formacion.pack_forget()
         if hasattr(self, "card_prevuelo_formacion") and self.card_prevuelo_formacion.winfo_manager() == "pack":
             self.card_prevuelo_formacion.pack_forget()
@@ -4640,8 +4700,9 @@ class JsBotGUI(ctk.CTk):
         self.archivo_ruta_servicios = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_servicios.set(f"📄 {nombre}")
-        self.lbl_archivo_servicios.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
-        self.btn_descartar_servicios.pack(side="right", padx=(6, 4))
+        self.lbl_archivo_servicios.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"), cursor="hand2")
+        self.btn_abrir_chip_servicios.pack(side="right", padx=(4, 2))
+        self.btn_descartar_servicios.pack(side="right", padx=(2, 4))
 
         self._agregar_log(f"[ARCHIVO] Archivo de servicios seleccionado: {nombre}")
         self._procesar_archivo_en_frio(ruta, seccion="Servicios")
@@ -4655,7 +4716,9 @@ class JsBotGUI(ctk.CTk):
         self.datos_normalizados_actuales = []
         self.reporte_deduplicacion_actual = None
         self.archivo_seleccionado_servicios.set("Ningún archivo seleccionado")
-        self.lbl_archivo_servicios.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.lbl_archivo_servicios.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"), cursor="")
+        if hasattr(self, "btn_abrir_chip_servicios"):
+            self.btn_abrir_chip_servicios.pack_forget()
         self.btn_descartar_servicios.pack_forget()
         if hasattr(self, "card_prevuelo_servicios") and self.card_prevuelo_servicios.winfo_manager() == "pack":
             self.card_prevuelo_servicios.pack_forget()
@@ -4683,8 +4746,9 @@ class JsBotGUI(ctk.CTk):
         self.archivo_ruta_planillas = ruta
         nombre = os.path.basename(ruta)
         self.archivo_seleccionado_planillas.set(f"📄 {nombre}")
-        self.lbl_archivo_planillas.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"))
-        self.btn_descartar_planillas.pack(side="right", padx=(6, 4))
+        self.lbl_archivo_planillas.configure(text_color="#FFFFFF", font=ctk.CTkFont(size=11, weight="bold"), cursor="hand2")
+        self.btn_abrir_chip_planillas.pack(side="right", padx=(4, 2))
+        self.btn_descartar_planillas.pack(side="right", padx=(2, 4))
 
         self._agregar_log(f"[ARCHIVO] Archivo para planillas seleccionado: {nombre}")
         self._procesar_archivo_en_frio(ruta, seccion="Planillas")
@@ -4698,7 +4762,9 @@ class JsBotGUI(ctk.CTk):
         self.datos_normalizados_planillas = []
         self.reporte_deduplicacion_planillas = None
         self.archivo_seleccionado_planillas.set("Ningún archivo seleccionado")
-        self.lbl_archivo_planillas.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"))
+        self.lbl_archivo_planillas.configure(text_color="#8E8E98", font=ctk.CTkFont(size=11, weight="normal"), cursor="")
+        if hasattr(self, "btn_abrir_chip_planillas"):
+            self.btn_abrir_chip_planillas.pack_forget()
         self.btn_descartar_planillas.pack_forget()
         if hasattr(self, "card_prevuelo_planillas") and self.card_prevuelo_planillas.winfo_manager() == "pack":
             self.card_prevuelo_planillas.pack_forget()
@@ -4725,8 +4791,10 @@ class JsBotGUI(ctk.CTk):
                 self._agregar_log(f"[ADVERTENCIA] No se detectaron participantes válidos en '{os.path.basename(ruta)}'.")
                 self._mostrar_modal_mensaje(
                     titulo="Sin registros válidos",
-                    mensaje=f"No se detectaron registros válidos en '{os.path.basename(ruta)}'.\n\nVerifica que contenga cabeceras claras (Nombres, Apellidos, Cédula) y filas con datos.",
-                    tipo="aviso"
+                    mensaje=f"No se detectaron registros válidos en '{os.path.basename(ruta)}'.\n\nPosibles causas: Las cabeceras (Nombres, Apellidos, Cédula) contienen caracteres no reconocidos o hay filas vacías.\n\nPuedes abrir el archivo para revisar y corregir sus columnas.",
+                    tipo="aviso",
+                    boton_accion_texto="✎ Abrir en Excel / Calc",
+                    accion_callback=lambda: self._accion_abrir_archivo_excel(seccion)
                 )
                 return
 
