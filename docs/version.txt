@@ -1,9 +1,26 @@
 ================================================================================
           HISTORIAL DE VERSIONES Y REGISTRO DE CAMBIOS — JsBOT
 ================================================================================
-Fecha Última   : 23 de Septiembre de 2026
+Fecha Última   : 24 de Septiembre de 2026
 Autor Principal: Jair Alejandro Hernández González
 Ubicación      : San Felipe, Yaracuy, Venezuela
+
+--------------------------------------------------------------------------------
+[v5.3.1] — 24 de Septiembre de 2026 (Suite de regresión y seguridad)
+--------------------------------------------------------------------------------
+• SUITE NUEVA DE PRUEBAS AISLADAS:
+  - 43 pruebas nuevas en `tests/test_nuevas_*.py` para ETL, configuración, seguridad, sesiones, auditoría, GUI, integraciones e instaladores.
+  - Las pruebas cubren datos sintéticos, memoria, red simulada, errores y límites sin modificar credenciales ni artefactos reales.
+• CORRECCIONES DETECTADAS POR LAS PRUEBAS:
+  - Escrituras JSON de configuración ahora usan reemplazo atómico.
+  - Ingesta CSV flexible para membretes y filas con diferente número de columnas.
+  - Recuperación desde SQLite cuando el JSON de checkpoint está corrupto.
+  - Login utiliza la URL configurada y el RPA conserva el perfil persistente.
+  - Escape de contenido no confiable en el HTML del PDF.
+  - Validación de representante antes de abrir el formulario de usuario.
+• SUITE:
+  - 505 métodos de prueba detectados; la verificación completa queda sujeta al informe final de ejecución.
+  - Las expectativas antiguas del sanitizador SQL se actualizaron a la política estricta allowlist.
 
 --------------------------------------------------------------------------------
 [v5.3.0] — 23 de Septiembre de 2026 (Ingesta Universal de Cabeceras Numeradas, Apertura Asistida en GUI y Purga de Placebos)

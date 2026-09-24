@@ -1,14 +1,14 @@
-# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.3.0)
+# 🤖 JsBOT — Sistema RPA, Normalización ETL y Analítica de Auditoría (v5.3.1)
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
-[![Tests](https://img.shields.io/badge/Tests-460%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-505%20passed-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 [![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
-> **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección masiva de participantes, generación de actas formativas ODS/XLSX, auditoría operativa de alto rendimiento y telemetría atómica en la plataforma institucional InfoApp (Fundación Infocentro).
+> **JsBOT** es una suite integral de Automatización Robótica de Procesos (RPA), procesamiento ETL y Analítica de Auditoría diseñada para la normalización, validación documental, inyección masiva de participantes, generación de actas formativas ODS/XLSX y auditoría operativa de alto rendimiento en la plataforma institucional InfoApp (Fundación Infocentro).
 
 ---
 
@@ -32,7 +32,7 @@
   - Generación de planillas oficiales ODS y XLSX de asistencia con datos reales descargados desde cualquier ID de actividad en InfoApp.
 - **Diagnóstico Preventivo del Facilitador:**
   - Detección proactiva de actividades creadas sin participantes cargados o inconsistencias de registro (`diagnostico_facilitador.py`).
-- **Telemetría y Bitácora Atómica en SQLite:**
+- **Bitácora Atómica en SQLite:**
   - Registro de eventos y auditorías en tabla indexada `app_logs` dentro de `data/jsbot.db` con transacciones ACID y modo WAL.
   - Purga automática y retención inteligente a 30 días, eliminando archivos de texto redundantes en disco.
 - **Motor ETL de Normalización Inteligente:**
@@ -44,7 +44,7 @@
 - **Blindaje y Concurrencia:**
   - Cerrojo de exclusión mutua (`file lock`) para prevenir instancias duplicadas.
   - Fuente única de versión centralizada en `modulos/version.py` sincronizada con `config/settings.json`.
-  - Suite certificada con 460 pruebas unitarias, de estrés, de regresión y de interfaz gráfica (100% aprobadas).
+  - Suite certificada con 505 pruebas unitarias, de estrés, de regresión, seguridad e interfaz gráfica (100% aprobadas).
 
 ---
 

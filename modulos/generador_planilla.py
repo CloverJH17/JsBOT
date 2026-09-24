@@ -303,7 +303,7 @@ def generar_planilla_oficial_fallback_xml(participantes: list, id_actividad: str
                                         })
                                         ET.SubElement(c3, f"{{{ns['text']}}}p").text = limpiar_xml_texto(doc_str)
 
-                                        f_nac = limpiar_fecha_ods(p.get('nacimiento', ''))
+                                        f_nac = limpiar_fecha_ods(p.get('nacimiento', '') or p.get('f_nacimiento', ''))
                                         c4 = ET.SubElement(row, f"{{{ns['table']}}}table-cell", {
                                             f"{{{ns['table']}}}style-name": "ce11",
                                             f"{{{ns['office']}}}value-type": "string"
@@ -394,7 +394,7 @@ def generar_planilla_oficial_fallback_xml(participantes: list, id_actividad: str
                 "Documento / Cédula": limpiar_xml_texto(doc_str),
                 "Tipo": p.get('cedulado', '').upper(),
                 "Nombres y Apellidos": limpiar_xml_texto(f"{p.get('nombre', '')} {p.get('apellido', '')}"),
-                "Fecha Nacimiento": limpiar_fecha_ods(p.get('nacimiento', '')),
+                "Fecha Nacimiento": limpiar_fecha_ods(p.get('nacimiento', '') or p.get('f_nacimiento', '')),
                 "Edad": p.get('edad', ''),
                 "Teléfono": limpiar_xml_texto(p.get('telefono', '')),
                 "Género": limpiar_xml_texto(p.get('genero', ''))
@@ -583,7 +583,7 @@ def generar_planilla_xlsx(participantes: list, id_actividad: str = "", url_activ
         else:
             doc_str = "S/C"
 
-        f_nac = limpiar_fecha_ods(p.get('nacimiento', ''))
+        f_nac = limpiar_fecha_ods(p.get('nacimiento', '') or p.get('f_nacimiento', ''))
         genero = limpiar_xml_texto(p.get('genero', ''))
         dir_val = limpiar_xml_texto(p.get('direccion')) or "San Felipe"
         corr_val = limpiar_xml_texto(p.get('correo')) or "---"
@@ -721,7 +721,7 @@ def generar_planilla_pdf(participantes: list, id_actividad: str = "", url_activi
             <td style="text-align:center;">{i}</td>
             <td>{nom_comp}</td>
             <td style="text-align:center;">{doc_str}</td>
-            <td style="text-align:center;">{limpiar_fecha_ods(p.get('nacimiento', ''))}</td>
+            <td style="text-align:center;">{limpiar_fecha_ods(p.get('nacimiento', '') or p.get('f_nacimiento', ''))}</td>
             <td style="text-align:center;">{p.get('genero', '')}</td>
             <td>{p.get('direccion', 'San Felipe') or 'San Felipe'}</td>
             <td style="text-align:center;">{p.get('telefono', '0412-0000000')}</td>
@@ -847,13 +847,15 @@ def generar_planilla_desde_actividad_infoapp(session, id_activity: str, ruta_sal
 
     parts_adaptados = []
     for p in participantes:
+        f_nac = p.get("f_nacimiento", "") or p.get("nacimiento", "")
         parts_adaptados.append({
             "nombre": p.get("nombre", ""),
             "apellido": p.get("apellido", ""),
             "cedula": p.get("dni", ""),
             "nacionalidad": "V",
             "genero": p.get("genero", ""),
-            "f_nacimiento": p.get("f_nacimiento", ""),
+            "nacimiento": f_nac,
+            "f_nacimiento": f_nac,
             "telefono": p.get("telefono", ""),
             "correo": p.get("correo", "")
         })

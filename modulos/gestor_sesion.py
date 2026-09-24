@@ -469,31 +469,34 @@ def guardar_estado_sesion(config: dict, participantes: list, indice_ultimo: int)
         os.fsync(f.fileno())
     os.replace(temp_file, SESSION_STATE_FILE)
 
-def leer_estado_sesion() -> dict:
-    """Lee el checkpoint de formación si existe y no está completado."""
-    if not os.path.exists(SESSION_STATE_FILE):
-        # Intentar desde SQLite si el archivo físico no está presente
-        try:
-            cp = obtener_checkpoint_db(tipo="formacion")
-            if cp and cp.get("datos_json"):
-                datos = json.loads(cp["datos_json"])
-                total = len(datos.get("participantes", []))
-                ult = datos.get("indice_ultimo_procesado", 0)
-                if total > 0 and ult < total:
-                    return datos
-        except Exception as err:
-            logger.error(f"Error al leer checkpoint desde SQLite: {err}")
-        return None
+def _recuperar_checkpoint_sqlite(tipo: str, coleccion: str) -> dict:
+    """Recupera un checkpoint válido desde SQLite como respaldo del JSON."""
     try:
-        with open(SESSION_STATE_FILE, "r", encoding="utf-8") as f:
-            datos = json.load(f)
-        total = len(datos.get("participantes", []))
-        ult = datos.get("indice_ultimo_procesado", 0)
-        if total > 0 and ult < total:
-            return datos
+        cp = obtener_checkpoint_db(tipo=tipo)
+        if cp and cp.get("datos_json"):
+            datos = json.loads(cp["datos_json"])
+            elementos = datos.get(coleccion, [])
+            indice = datos.get("indice_ultimo_procesado", 0)
+            if elementos and indice < len(elementos):
+                return datos
     except Exception as err:
-        logger.warning(f"Archivo JSON de checkpoint corrupto o ilegible: {err}")
+        logger.error(f"Error al leer checkpoint {tipo} desde SQLite: {err}")
     return None
+
+
+def leer_estado_sesion() -> dict:
+    """Lee el checkpoint de formación desde JSON o, si está dañado, desde SQLite."""
+    if os.path.exists(SESSION_STATE_FILE):
+        try:
+            with open(SESSION_STATE_FILE, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+            total = len(datos.get("participantes", []))
+            ult = datos.get("indice_ultimo_procesado", 0)
+            if total > 0 and ult < total:
+                return datos
+        except Exception as err:
+            logger.warning(f"Archivo JSON de checkpoint corrupto o ilegible: {err}")
+    return _recuperar_checkpoint_sqlite("formacion", "participantes")
 
 def limpiar_estado_sesion():
     """Elimina el checkpoint de formación tras completar con éxito la carga."""
@@ -688,29 +691,18 @@ def guardar_estado_sesion_servicios(config_bot: dict, config_servicio: dict, per
     os.replace(temp_file, SESSION_STATE_SERV_FILE)
 
 def leer_estado_sesion_servicios() -> dict:
-    """Lee el checkpoint de servicios si existe."""
-    if not os.path.exists(SESSION_STATE_SERV_FILE):
+    """Lee el checkpoint de servicios desde JSON o, si está dañado, desde SQLite."""
+    if os.path.exists(SESSION_STATE_SERV_FILE):
         try:
-            cp = obtener_checkpoint_db(tipo="servicios")
-            if cp and cp.get("datos_json"):
-                datos = json.loads(cp["datos_json"])
-                personas = datos.get("personas", [])
-                idx = datos.get("indice_ultimo_procesado", 0)
-                if personas and idx < len(personas):
-                    return datos
+            with open(SESSION_STATE_SERV_FILE, "r", encoding="utf-8") as f:
+                datos = json.load(f)
+            personas = datos.get("personas", [])
+            idx = datos.get("indice_ultimo_procesado", 0)
+            if personas and idx < len(personas):
+                return datos
         except Exception as err:
-            logger.error(f"Error al leer checkpoint de servicios desde SQLite: {err}")
-        return None
-    try:
-        with open(SESSION_STATE_SERV_FILE, "r", encoding="utf-8") as f:
-            datos = json.load(f)
-        personas = datos.get("personas", [])
-        idx = datos.get("indice_ultimo_procesado", 0)
-        if personas and idx < len(personas):
-            return datos
-    except Exception as err:
-        logger.warning(f"Archivo JSON de checkpoint de servicios corrupto o ilegible: {err}")
-    return None
+            logger.warning(f"Archivo JSON de checkpoint de servicios corrupto o ilegible: {err}")
+    return _recuperar_checkpoint_sqlite("servicios", "personas")
 
 def limpiar_estado_sesion_servicios():
     """Elimina el checkpoint de servicios al concluir exitosamente."""

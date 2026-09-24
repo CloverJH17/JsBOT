@@ -16,6 +16,7 @@ de modo que el bot nunca deja de arrancar por un problema de configuración.
 
 import os
 import json
+import tempfile
 import modulos.entorno as entorno
 
 BASE_DIR = str(entorno.RAIZ_PROYECTO)
@@ -44,6 +45,28 @@ def _fusionar(base: dict, extra: dict) -> dict:
         else:
             resultado[clave] = valor
     return resultado
+
+
+def _guardar_json_atomico(ruta: str, datos: dict) -> None:
+    """Escribe JSON en un archivo temporal y lo publica con reemplazo atómico."""
+    directorio = os.path.dirname(os.path.abspath(ruta))
+    os.makedirs(directorio, exist_ok=True)
+    descriptor, temporal = tempfile.mkstemp(
+        prefix=f".{os.path.basename(ruta)}.",
+        suffix=".tmp",
+        dir=directorio,
+        text=True,
+    )
+    os.close(descriptor)
+    try:
+        with open(temporal, "w", encoding="utf-8") as archivo:
+            json.dump(datos, archivo, indent=4, ensure_ascii=False)
+            archivo.flush()
+            os.fsync(archivo.fileno())
+        os.replace(temporal, ruta)
+    finally:
+        if os.path.exists(temporal):
+            os.unlink(temporal)
 
 
 def cargar_settings(ruta: str = None) -> dict:
@@ -78,9 +101,7 @@ def guardar_settings(nuevos_settings: dict, ruta: str = None) -> bool:
             actuales = dict(DEFAULTS)
 
         fusionado = _fusionar(actuales, nuevos_settings)
-        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
-        with open(ruta, "w", encoding="utf-8") as f:
-            json.dump(fusionado, f, indent=4, ensure_ascii=False)
+        _guardar_json_atomico(ruta, fusionado)
         return True
     except Exception as e:
         print(f"⚠️ Error al guardar settings en {ruta}: {e}")
@@ -184,9 +205,7 @@ def guardar_config_servicios(datos: dict, ruta: str = None) -> bool:
     """
     ruta = ruta or str(getattr(entorno, "ARCHIVO_CONFIG_SERVICIOS", CONFIG_SERVICIOS_PATH))
     try:
-        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
-        with open(ruta, "w", encoding="utf-8") as f:
-            json.dump(datos, f, indent=4, ensure_ascii=False)
+        _guardar_json_atomico(ruta, datos)
         return True
     except Exception as e:
         print(f"⚠️ Error al guardar config_servicios en {ruta}: {e}")
@@ -234,10 +253,8 @@ def guardar_datos_actividad(datos: dict, ruta: str = None) -> bool:
     """
     ruta = ruta or str(getattr(entorno, "ARCHIVO_DATOS_ACTIVIDAD", CONFIG_DATOS_ACTIVIDAD_PATH))
     try:
-        os.makedirs(os.path.dirname(os.path.abspath(ruta)), exist_ok=True)
         fusionado = {**DEFAULTS_DATOS_ACTIVIDAD, **datos}
-        with open(ruta, "w", encoding="utf-8") as f:
-            json.dump(fusionado, f, indent=4, ensure_ascii=False)
+        _guardar_json_atomico(ruta, fusionado)
         return True
     except Exception as e:
         print(f"⚠️ Error al guardar datos_actividad en {ruta}: {e}")

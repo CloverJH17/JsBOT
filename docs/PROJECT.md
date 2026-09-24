@@ -1,4 +1,4 @@
-# Project: JsBOT v5.3.0 Architecture & Robustness Specification
+# Project: JsBOT v5.3.1 Architecture & Robustness Specification
 
 ## Architecture
 - **GUI Engine**: CustomTkinter on top of Tkinter / Tcl.
@@ -38,6 +38,7 @@
 | 23 | UI Hygiene & Real Verification | Elimination of placebo cards from Settings view, real post-upload verification, and zero dummy preview data | M8 | UI/UX & Quality | DONE |
 | 24 | Numbered Column Header Normalization | Robust extraction of columns with numeric prefixes/bullets (`1.N°`, `3.Nombres`, `5.Cédula...`) in `normalizar_col_nombre` | M9 | ETL Robustness | DONE |
 | 25 | GUI Direct File Access & Assisted Opening | Quick file access badge button (`✎ Abrir`) and assisted opening modal (`✎ Abrir en Excel / Calc`) via `abrir_archivo_asistido` | M9 | UI/UX & Workflow | DONE |
+| 26 | Expanded Regression & Security Test Matrix | Add isolated tests for configuration atomicity, ETL, network contracts, session recovery, GUI contracts, installers and report escaping | M10 | Quality Engineering | DONE |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status | Key Verification Output |
@@ -51,6 +52,8 @@
 | 7 | M7: One-Line Deployers & Cloud Telemetry | Unattended install/uninstall scripts (`.ps1`, `.sh`), desktop/menu integration, cloud telemetry to Google Sheets | M1-M6 | DONE | `test_instaladores_y_telemetria.py` passing; verified SemVer consistency |
 | 8 | M8: UI Hygiene & Isolated Capabilities Integration (v5.2.0) | Complete purge of placebo cards (timeouts, normalizacion switch), clean settings UI, post-upload verification, 460 certified tests | M1-M7 | DONE | 460/460 tests passed (100%); 0 regressions; verified SemVer v5.2.0 |
 | 9 | M9: Robust Column Ingestion & Interactive Assisted File Opening (v5.3.0) | Stripping of numeric prefixes/bullets in column headers, interactive `✎ Abrir` badge & assisted modal opening | M1-M8 | DONE | Verified on Florangel sheet (30/30 participants extracted); 460 tests passing |
+| 10 | M10: Security Hardening & Zero-Telemetry Privacy (v5.3.0) | Enforce SSL verify=True, strict SQL id_activity validation, eliminate cloud telemetry, resilient daily crawler, birth date mapping fix, dynamic installer versioning | M1-M9 | DONE | All tests passed (100%); zero verify=False in repo |
+| 11 | M11: Regression Test Matrix Expansion (v5.3.1) | Add 43 isolated tests across ETL, configuration, security, sessions, audit, GUI, integration and installers; align legacy SQL expectations with strict validation | M1-M10 | DONE | New suite: 43/43 passed; legacy focused suites aligned and passing |
 
 ## Interface Contracts
 ### Modal Registry ↔ `JsBotGUI`
@@ -115,7 +118,6 @@ def obtener_tipo_clasificacion_actividad(tipo_raw: str, area_formacion_raw: str 
 - `modulos/generador_planilla.py`: ODS and XLSX official document generator.
 - `modulos/verificador_cargas_export.py`: Instant post-upload verification and duplicate prevention.
 - `modulos/diagnostico_facilitador.py`: Proactive facilitator activity health scanner.
-- `modulos/telemetria.py`: Asynchronous cloud telemetry to Google Sheets.
 - `modulos/entorno.py`: Environment verification, `LIBGL_ALWAYS_SOFTWARE=1` configuration, and display checks.
 - `main.py`: Main application entry point with Canaima software rendering guard.
 - `tests/test_blindaje_refactor.py`: 9-test unit suite verifying SQL sanitization, JS safety, and uncoupled crawlers.

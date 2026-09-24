@@ -13,6 +13,7 @@ Ubicación : San Felipe, Estado Yaracuy, República Bolivariana de Venezuela
 import os
 import sys
 import re
+import csv
 import subprocess
 import pandas as pd
 from datetime import datetime, timedelta
@@ -818,12 +819,14 @@ def procesar_archivo(ruta_archivo: str, hoja_especifica: str = None) -> list:
                 log_etl(f"Error abriendo hoja {ext}: {e_fb}")
                 return []
     elif ext == '.csv':
-        for enc in ('utf-8', 'utf-8-sig', 'latin1', 'cp1252'):
+        for enc in ('utf-8-sig', 'utf-8', 'latin1', 'cp1252'):
             try:
-                df = pd.read_csv(ruta_archivo, header=None, encoding=enc)
-                hojas_matrices["CSV"] = [list(r) for _, r in df.iterrows()]
+                with open(ruta_archivo, "r", encoding=enc, newline="") as archivo:
+                    filas_csv = [list(fila) for fila in csv.reader(archivo)]
+                if filas_csv:
+                    hojas_matrices["CSV"] = filas_csv
                 break
-            except Exception:
+            except (UnicodeDecodeError, csv.Error, OSError):
                 continue
 
     participantes = []

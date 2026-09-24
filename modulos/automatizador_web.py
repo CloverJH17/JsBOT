@@ -120,7 +120,10 @@ def asegurar_sesion_activa(contexto_contenedor: dict, config: dict):
 
         cfg_browser = cm.obtener_browser_cfg()
         nav = cfg_browser["priority"][0] if cfg_browser["priority"] else "chromium"
-        pw, context = iniciar_contexto_playwright(navegador=nav)
+        pw, context = iniciar_contexto_playwright(
+            navegador=nav,
+            user_data_dir=str(entorno.CARPETA_DATA / "playwright_context"),
+        )
         page = context.new_page()
 
         contexto_contenedor['pw'] = pw
@@ -654,6 +657,11 @@ def ejecutar_carga_infoapp(
 
 def registrar_nuevo_usuario_perfil(page: Page, persona: dict, config_servicio: dict) -> tuple:
     """Registra a un usuario nuevo en 'userform_new' cuando no existe previamente."""
+    es_cedulado = (persona.get('cedulado') == 'si' and bool(persona.get('cedula')))
+    cedula_padre_num = re.sub(r'\D', '', str(persona.get('cedula_padre', '')))
+    if not es_cedulado and not (cedula_padre_num and len(cedula_padre_num) >= 5):
+        return False, "Menor sin documento propio ni cédula de representante válida"
+
     url_new = "https://infoapp2.infocentro.gob.ve/index.php?view=userform_new&new=1"
     page.goto(url_new, wait_until="domcontentloaded")
     esperar_desbloqueo_ajax(page)
@@ -666,9 +674,6 @@ def registrar_nuevo_usuario_perfil(page: Page, persona: dict, config_servicio: d
     partes_ape = str(persona.get('apellido', '')).strip().split()
     ape_1 = partes_ape[0] if partes_ape else "Infocentro"
     ape_2 = " ".join(partes_ape[1:]) if len(partes_ape) > 1 else ""
-
-    es_cedulado = (persona.get('cedulado') == 'si' and bool(persona.get('cedula')))
-    cedula_padre_num = re.sub(r'\D', '', str(persona.get('cedula_padre', '')))
 
     if es_cedulado:
         cedula_raw = str(persona.get('cedula', '')).strip()

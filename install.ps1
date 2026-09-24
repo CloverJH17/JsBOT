@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 ===============================================================================
-INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.2.0 (Microsoft Windows)
+INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.3.1 (Microsoft Windows)
 ===============================================================================
 Uso en PowerShell (1 sola línea):
 irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.ps1 | iex
@@ -12,7 +12,7 @@ irm https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================================" -ForegroundColor Cyan
-Write-Host "   JsBOT RPA v5.2.0 — Instalador Express Autónomo" -ForegroundColor Cyan
+Write-Host "   JsBOT RPA — Instalador Express Autónomo" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -166,19 +166,21 @@ if ($userPath -notlike "*$InstallDir*") {
 }
 
 # -----------------------------------------------------------------------------
-# 6. TELEMETRÍA DE INSTALACIÓN Y ARRANQUE INICIAL
+# 6. VERIFICACIÓN FINAL Y ARRANQUE INICIAL
 # -----------------------------------------------------------------------------
 Write-Host "[6/6] Finalizando configuración y despachando inicio..." -ForegroundColor Yellow
 
+$AppVersion = "v5.3.1"
 if ($PythonCmd) {
     try {
-        & $PythonCmd -c "import sys; sys.path.insert(0, r'$InstallDir'); from modulos.telemetria import registrar_evento_instalacion; registrar_evento_instalacion()" 2>$null
+        $DetectedVer = & $PythonCmd -c "import sys; sys.path.insert(0, r'$InstallDir'); from modulos.version import ETIQUETA_VERSION; print(ETIQUETA_VERSION)" 2>$null
+        if ($DetectedVer) { $AppVersion = $DetectedVer.Trim() }
     } catch {}
 }
 
 Write-Host ""
 Write-Host "========================================================" -ForegroundColor Green
-Write-Host "   ¡JsBOT v5.2.0 instalado y configurado con éxito!" -ForegroundColor Green
+Write-Host "   ¡JsBOT $AppVersion instalado y configurado con éxito!" -ForegroundColor Green
 Write-Host "   • Acceso creado en el Escritorio" -ForegroundColor Gray
 Write-Host "   • Acceso creado en el Menú de Inicio" -ForegroundColor Gray
 Write-Host "   • Comando 'jsbot' disponible en cualquier terminal" -ForegroundColor Gray

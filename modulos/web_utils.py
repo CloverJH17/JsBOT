@@ -99,7 +99,7 @@ def realizar_login_infoapp(
     """
     try:
         # 1. Navegar primero a la raíz donde está el formulario de login de InfoApp
-        page.goto("https://infoapp2.infocentro.gob.ve/index.php", wait_until="domcontentloaded", timeout=25000)
+        page.goto(url_login, wait_until="domcontentloaded", timeout=25000)
         esperar_desbloqueo_ajax(page)
 
         email_input = page.locator("input[name='email'], input#email").first
@@ -142,7 +142,7 @@ def realizar_login_infoapp(
             limpiar_overlays(page)
 
         # 2. Navegar al panel de administración para confirmar sesión
-        page.goto("https://infoapp2.infocentro.gob.ve/admin/index.php", wait_until="domcontentloaded", timeout=15000)
+        page.goto(url_login, wait_until="domcontentloaded", timeout=15000)
         esperar_desbloqueo_ajax(page)
         limpiar_overlays(page)
 

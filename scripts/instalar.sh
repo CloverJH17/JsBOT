@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-echo "========================================================"
-echo "  JsBOT v4.10.0 — Descarga e Instalación Automatizada"
-echo "========================================================"
-
 DESTINO="$HOME/JsBOT"
 
 if [ -d "$DESTINO" ]; then
@@ -15,6 +11,12 @@ else
     git clone https://github.com/CloverJH17/JsBOT.git "$DESTINO"
     cd "$DESTINO"
 fi
+
+VERSION=$(python3 -c "import sys; sys.path.insert(0, '$DESTINO'); from modulos.version import ETIQUETA_VERSION; print(ETIQUETA_VERSION)" 2>/dev/null || echo "RPA")
+
+echo "========================================================"
+echo "  JsBOT $VERSION — Descarga e Instalación Automatizada"
+echo "========================================================"
 
 chmod +x "$DESTINO/linux.sh"
 echo "[✓] Instalación lista. Iniciando aplicación..."

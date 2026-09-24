@@ -33,8 +33,10 @@ def sanitizar_texto_sql(val: str) -> str:
     """Escapa comillas simples y remueve caracteres de inyección para SQL seguro."""
     if not val:
         return ""
-    # Escapar comilla simple duplicándola y eliminar caracteres de control
-    s = str(val).replace("'", "''").replace(";", "").replace("--", "")
+    # Remover secuencias peligrosas de comentarios y delimitadores SQL
+    s = re.sub(r'(--|/\*|\*/|;|\x00)', '', str(val))
+    # Permitir únicamente caracteres alfanuméricos, acentos, espacios y signos básicos seguros
+    s = re.sub(r'[^\w\s\.\-áéíóúÁÉÍÓÚñÑüÜ]', '', s, flags=re.UNICODE)
     return s.strip()
 
 def validar_codigo_sql(val: str) -> str:
@@ -46,13 +48,13 @@ def validar_codigo_sql(val: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_\-]', '', s).strip()
 
 def validar_fecha_sql(val: str) -> str:
-    """Valida y extrae formato de fecha seguro YYYY-MM-DD."""
+    """Valida y asegura formato estricto de fecha seguro YYYY-MM-DD."""
     if not val:
         return ""
     s = str(val).strip()
     if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
         return s
-    return re.sub(r'[^0-9\-]', '', s)[:10]
+    return ""
 
 def clasificar_actividad_datos(line_action: str, report_type: str, taller: str, title: str, prod_val: int) -> str:
     """
@@ -319,7 +321,7 @@ def consultar_actividades_infoapp_export(
     
     log("📥 Descargando archivo consolidado oficial de Actividades desde InfoApp...")
     try:
-        r_csv = session.get(url_csv, params=params, verify=False, timeout=45)
+        r_csv = session.get(url_csv, params=params, verify=True, timeout=45)
         if r_csv.status_code == 200 and r_csv.content and b"Fatal error" not in r_csv.content:
             actividades_csv = parsear_csv_actividades_infoapp(r_csv.content)
             if actividades_csv:
@@ -384,7 +386,7 @@ def consultar_servicios_infoapp_export(
     
     log("📥 Descargando archivo consolidado oficial de Servicios desde InfoApp...")
     try:
-        r_csv = session.get(url_csv, params=params, verify=False, timeout=45)
+        r_csv = session.get(url_csv, params=params, verify=True, timeout=45)
         if r_csv.status_code == 200 and r_csv.content and b"Fatal error" not in r_csv.content:
             servicios_csv = parsear_csv_servicios_infoapp(r_csv.content)
             t_tot = time.time() - t0

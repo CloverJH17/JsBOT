@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ===============================================================================
-# INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.2.0 (Canaima / Debian / Linux)
+# INSTALADOR EXPRESS ONE-LINE — JsBOT RPA v5.3.1 (Canaima / Debian / Linux)
 # ===============================================================================
 # Uso en Terminal (1 sola línea):
 # curl -sSL https://raw.githubusercontent.com/CloverJH17/JsBOT/main/install.sh | bash
@@ -9,7 +9,7 @@
 set -e
 
 echo -e "\033[1;36m========================================================\033[0m"
-echo -e "\033[1;36m   JsBOT RPA v5.2.0 — Instalador Express Autónomo       \033[0m"
+echo -e "\033[1;36m   JsBOT RPA — Instalador Express Autónomo              \033[0m"
 echo -e "\033[1;36m========================================================\033[0m"
 echo ""
 
@@ -137,15 +137,15 @@ if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 6. TELEMETRÍA DE INSTALACIÓN Y ARRANQUE INICIAL
+# 6. VERIFICACIÓN FINAL Y ARRANQUE INICIAL
 # -----------------------------------------------------------------------------
 echo -e "\033[1;33m[6/6] Finalizando configuración y despachando inicio...\033[0m"
 
-python3 -c "import sys; sys.path.insert(0, '$INSTALL_DIR'); from modulos.telemetria import registrar_evento_instalacion; registrar_evento_instalacion()" 2>/dev/null || true
+APP_VERSION=$(python3 -c "import sys; sys.path.insert(0, '$INSTALL_DIR'); from modulos.version import ETIQUETA_VERSION; print(ETIQUETA_VERSION)" 2>/dev/null || echo "v5.3.1")
 
 echo ""
 echo -e "\033[1;32m========================================================\033[0m"
-echo -e "\033[1;32m   ¡JsBOT v5.2.0 instalado y configurado con éxito!     \033[0m"
+echo -e "\033[1;32m   ¡JsBOT ${APP_VERSION} instalado y configurado con éxito!     \033[0m"
 echo -e "\033[1;37m   • Acceso creado en el Menú de Aplicaciones          \033[0m"
 echo -e "\033[1;37m   • Acceso creado en el Escritorio                    \033[0m"
 echo -e "\033[1;37m   • Comando 'jsbot' disponible en cualquier terminal  \033[0m"

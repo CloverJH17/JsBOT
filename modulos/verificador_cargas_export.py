@@ -28,17 +28,18 @@ def obtener_participantes_existentes_actividad(session: requests.Session, id_act
     Descarga en ~0.4s la lista completa de participantes ya registrados en una actividad.
     Retorna una lista de diccionarios con cédula, nombres, teléfono, fecha nacimiento y género.
     """
-    if not id_activity:
+    id_act_str = str(id_activity or "").strip()
+    if not id_act_str.isdigit():
         return []
         
     url_xlsx = (
         f"https://infoapp2.infocentro.gob.ve/core/app/view/exportxlsx_2.php?"
-        f"param=SELECT * from participants_list where id_activity={id_activity} order by id desc"
+        f"param=SELECT * from participants_list where id_activity={id_act_str} order by id desc"
         f"&param_sql=true&filename=participants_list"
     )
     
     try:
-        r = session.get(url_xlsx, verify=False, timeout=25)
+        r = session.get(url_xlsx, verify=True, timeout=25)
         if r.status_code != 200 or not r.content:
             return []
             

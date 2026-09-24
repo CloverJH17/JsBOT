@@ -32,10 +32,7 @@ if [[ "$backup_confirm" =~ ^[sSyY]$ ]]; then
     echo "Respaldo completado en $BACKUP_DIR."
 fi
 
-# 1. Telemetría de desinstalación
-python3 -c "import sys; sys.path.insert(0, '$INSTALL_DIR'); from modulos.telemetria import registrar_evento_desinstalacion; registrar_evento_desinstalacion()" 2>/dev/null || true
-
-# 2. Eliminar accesos directos
+# 1. Eliminar accesos directos
 echo "Eliminando accesos directos y entradas de menú..."
 rm -f "$HOME/.local/share/applications/jsbot.desktop"
 rm -f "$HOME/Escritorio/jsbot.desktop"

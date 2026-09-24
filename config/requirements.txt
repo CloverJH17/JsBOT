@@ -16,3 +16,5 @@ customtkinter>=5.2.0
 CTkMessagebox>=2.5
 pillow>=9.5.0
 loguru>=0.7.0
+pytest>=8.0.0
+pytest-mock>=3.12.0

@@ -44,12 +44,7 @@ if ($backupConfirm -match "^[sSyY]$") {
     Write-Host "Respaldo completado con éxito en: $backupDir" -ForegroundColor Green
 }
 
-# 1. Telemetría de desinstalación antes de purgar
-try {
-    & python -c "import sys; sys.path.insert(0, r'$InstallDir'); from modulos.telemetria import registrar_evento_desinstalacion; registrar_evento_desinstalacion()" 2>$null
-} catch {}
-
-# 2. Eliminar accesos directos
+# 1. Eliminar accesos directos
 Write-Host "Eliminando accesos directos del sistema..." -ForegroundColor Yellow
 $desktopShortcut = "$([System.Environment]::GetFolderPath('Desktop'))\JsBOT.lnk"
 $startShortcut   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\JsBOT.lnk"

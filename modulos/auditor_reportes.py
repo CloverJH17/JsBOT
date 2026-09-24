@@ -448,6 +448,7 @@ def consultar_actividades_infoapp_http_crawler(session: requests.Session, info_i
         log(f"⚡ [Auditoría Acelerada] Escaneando {len(dias)} días en paralelo ({start_at} al {finish_at})...")
         mapa_actividades = {}
         sin_id = []
+        dias_fallidos = []
 
         def descargar_dia(dia_str):
             acts_dia = []
@@ -456,32 +457,40 @@ def consultar_actividades_infoapp_http_crawler(session: requests.Session, info_i
                 f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
                 f"&start_at={dia_str}&finish_at={dia_str}&id_act=&pag=1"
             )
-            try:
-                r = session.get(url_dia, timeout=25)
-                html_dia = r.text
-                m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html_dia, re.IGNORECASE)
-                pags_dia = int(m_pag.group(1)) if m_pag else 1
-                parsed = parsear_pagina_actividades_bs4(html_dia, default_info_id=info_id, default_uid=uid)
-                acts_dia.extend(parsed)
+            for intento in range(1, 4):
+                try:
+                    r = session.get(url_dia, timeout=25)
+                    html_dia = r.text
+                    m_pag = re.search(r'dividió a\s+(\d+)\s+páginas', html_dia, re.IGNORECASE)
+                    pags_dia = int(m_pag.group(1)) if m_pag else 1
+                    parsed = parsear_pagina_actividades_bs4(html_dia, default_info_id=info_id, default_uid=uid)
+                    acts_dia.extend(parsed)
 
-                if pags_dia > 1:
-                    for p_sub in range(2, pags_dia + 1):
-                        url_sub = (
-                            f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=report"
-                            f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
-                            f"&start_at={dia_str}&finish_at={dia_str}&id_act=&pag={p_sub}"
-                        )
-                        r_sub = session.get(url_sub, timeout=25)
-                        acts_dia.extend(parsear_pagina_actividades_bs4(r_sub.text, default_info_id=info_id, default_uid=uid))
-            except Exception:
-                pass
-            return dia_str, acts_dia
+                    if pags_dia > 1:
+                        for p_sub in range(2, pags_dia + 1):
+                            url_sub = (
+                                f"https://infoapp2.infocentro.gob.ve/admin/index.php?view=report"
+                                f"&linea_accion=&q=&info_id={info_id}&uid={uid}&estado={estado}"
+                                f"&start_at={dia_str}&finish_at={dia_str}&id_act=&pag={p_sub}"
+                            )
+                            r_sub = session.get(url_sub, timeout=25)
+                            acts_dia.extend(parsear_pagina_actividades_bs4(r_sub.text, default_info_id=info_id, default_uid=uid))
+                    return dia_str, acts_dia, True
+                except Exception as e_dia:
+                    if intento < 3:
+                        time.sleep(0.4 * intento)
+                    else:
+                        log(f"⚠️ [Crawler Día {dia_str}] Error persistente tras 3 intentos: {e_dia}")
+                        return dia_str, [], False
+            return dia_str, acts_dia, True
 
         max_workers = min(15, max(4, len(dias)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futuros = [executor.submit(descargar_dia, d) for d in dias]
             for fut in concurrent.futures.as_completed(futuros):
-                d_str, acts = fut.result()
+                d_str, acts, ok = fut.result()
+                if not ok:
+                    dias_fallidos.append(d_str)
                 for a in acts:
                     id_act = a.get("id") or a.get("id_actividad") or a.get("id_activity")
                     if id_act:
@@ -489,6 +498,10 @@ def consultar_actividades_infoapp_http_crawler(session: requests.Session, info_i
                             mapa_actividades[id_act] = a
                     else:
                         sin_id.append(a)
+
+        if dias_fallidos:
+            dias_fallidos.sort()
+            log(f"⚠️ [Auditor HTTP] Falló la descarga en {len(dias_fallidos)} fecha(s): {', '.join(dias_fallidos)}. Considere reintentar la auditoría.")
 
         todas_actividades = list(mapa_actividades.values()) + sin_id
         # Ordenar por fecha cronológica descendente si es posible
@@ -1748,7 +1761,7 @@ def exportar_reporte_pdf(resultado: dict, ruta_destino: str = None) -> str:
     </div>
     <div class="meta-cell">
       <div class="meta-label">Período de Auditoría</div>
-      <div class="meta-value">{f_ini} al {f_fin}</div>
+      <div class="meta-value">{html.escape(str(f_ini))} al {html.escape(str(f_fin))}</div>
     </div>
     <div class="meta-cell">
       <div class="meta-label">Balance Matemático</div>
