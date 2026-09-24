@@ -53,7 +53,7 @@
 | 8 | M8: UI Hygiene & Isolated Capabilities Integration (v5.2.0) | Complete purge of placebo cards (timeouts, normalizacion switch), clean settings UI, post-upload verification, 460 certified tests | M1-M7 | DONE | 460/460 tests passed (100%); 0 regressions; verified SemVer v5.2.0 |
 | 9 | M9: Robust Column Ingestion & Interactive Assisted File Opening (v5.3.0) | Stripping of numeric prefixes/bullets in column headers, interactive `✎ Abrir` badge & assisted modal opening | M1-M8 | DONE | Verified on Florangel sheet (30/30 participants extracted); 460 tests passing |
 | 10 | M10: Security Hardening & Zero-Telemetry Privacy (v5.3.0) | Enforce SSL verify=True, strict SQL id_activity validation, eliminate cloud telemetry, resilient daily crawler, birth date mapping fix, dynamic installer versioning | M1-M9 | DONE | All tests passed (100%); zero verify=False in repo |
-| 11 | M11: Regression Test Matrix Expansion (v5.3.1) | Add 43 isolated tests across ETL, configuration, security, sessions, audit, GUI, integration and installers; align legacy SQL expectations with strict validation | M1-M10 | DONE | New suite: 43/43 passed; legacy focused suites aligned and passing |
+| 11 | M11: Regression Test Matrix Expansion (v5.3.1) | Add 43 isolated tests across ETL, configuration, security, sessions, audit, GUI, integration and installers; align legacy SQL expectations with strict validation; isolate SQLite fixtures and mock GUI fallbacks | M1-M10 | DONE | New suite: 43/43 passed; all 505 collected test methods completed in per-file isolated mode: 504 passed, 1 environment-dependent skip |
 
 ## Interface Contracts
 ### Modal Registry ↔ `JsBotGUI`

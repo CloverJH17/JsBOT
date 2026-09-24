@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-TEST SUITE: INTEGRACIÓN DE CAPACIDADES AISLADAS Y TESTS REALES (v5.2.0)
+TEST SUITE: INTEGRACIÓN DE CAPACIDADES AISLADAS Y TESTS REALES (versión dinámica)
 ===============================================================================
 Valida:
 1. Modal preventivo al previsualizar sin participantes (cero datos demo).
@@ -12,7 +12,7 @@ Valida:
 5. Diagnóstico preventivo de facilitador y detección de actividades en borrador.
 6. Generación física de planilla ODS desde actividad remota InfoApp.
 7. Resolución robusta de sede en facilitadores de auditoría (info_filtro fallback).
-8. Coherencia integral SemVer 5.2.0.
+8. Coherencia integral SemVer dinámica.
 ===============================================================================
 """
 
@@ -212,20 +212,20 @@ class TestCapacidadesIntegradasV520(unittest.TestCase):
 
         self.assertEqual(resumen_facilitadores["1325"]["info_id"], "NRYAR24")
 
-    def test_08_coherencia_semver_v520(self):
-        """Valida la coherencia de versión 5.2.0 en modulos/version.py y config/settings.json."""
-        self.assertEqual(version.__version__, "5.2.0")
-        self.assertEqual(version.ETIQUETA_VERSION, "v5.2.0")
+    def test_08_coherencia_semver_v5(self):
+        """Valida la coherencia de versión dinámica entre modulos/version.py, config/settings.json y docs."""
+        self.assertTrue(version.__version__, "La versión no debe estar vacía")
+        self.assertEqual(version.ETIQUETA_VERSION, f"v{version.__version__}")
 
         settings_path = Path(entorno.ARCHIVO_SETTINGS)
         with open(settings_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        self.assertEqual(cfg.get("app", {}).get("version"), "5.2.0")
+        self.assertEqual(cfg.get("app", {}).get("version"), version.__version__)
 
         version_txt_path = Path(entorno.RAIZ_PROYECTO) / "docs" / "version.txt"
         with open(version_txt_path, "r", encoding="utf-8") as f:
             contenido_v = f.read()
-        self.assertIn("[v5.2.0]", contenido_v)
+        self.assertIn(f"[{version.ETIQUETA_VERSION}]", contenido_v)
 
 
 if __name__ == "__main__":

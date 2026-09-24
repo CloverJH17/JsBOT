@@ -4,7 +4,7 @@
 [![UI](https://img.shields.io/badge/GUI-CustomTkinter-blueviolet.svg)](https://customtkinter.tomschimansky.com/)
 [![CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20InquirerPy-cyan.svg)](https://github.com/Textualize/rich)
 [![Automation](https://img.shields.io/badge/Engine-Playwright%20%2B%20HTTP%20Turbo-green.svg)](https://playwright.dev/python/)
-[![Tests](https://img.shields.io/badge/Tests-505%20passed-success.svg)](#calidad-y-resiliencia)
+[![Tests](https://img.shields.io/badge/Tests-504%20passed%20%2F%201%20skipped-success.svg)](#calidad-y-resiliencia)
 [![OS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20(Canaima%20%2F%20Mint)-lightgrey.svg)](#requisitos-e-instalación)
 [![Architecture](https://img.shields.io/badge/Memory-Codebase%20Memory%203D-orange.svg)](#-arquitectura-y-grafo-de-conocimiento)
 
@@ -44,7 +44,7 @@
 - **Blindaje y Concurrencia:**
   - Cerrojo de exclusión mutua (`file lock`) para prevenir instancias duplicadas.
   - Fuente única de versión centralizada en `modulos/version.py` sincronizada con `config/settings.json`.
-  - Suite certificada con 505 pruebas unitarias, de estrés, de regresión, seguridad e interfaz gráfica (100% aprobadas).
+  - Suite certificada con 505 pruebas unitarias, de estrés, de regresión, seguridad e interfaz gráfica: 504 aprobadas y 1 omitida por dependencia externa de entorno.
 
 ---
 

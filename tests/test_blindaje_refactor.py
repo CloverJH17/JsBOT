@@ -31,7 +31,11 @@ import modulos.gestor_sesion as gs
 
 class TestSanitizacionSQL(unittest.TestCase):
     def test_sanitizar_texto_sql_comillas_y_comentarios(self):
-        self.assertEqual(sanitizar_texto_sql("Yaracuy' OR '1'='1"), "Yaracuy'' OR ''1''=''1")
+        resultado = sanitizar_texto_sql("Yaracuy' OR '1'='1")
+        self.assertEqual(resultado, "Yaracuy OR 11")
+        self.assertNotIn("'", resultado)
+        self.assertNotIn(";", resultado)
+        self.assertNotIn("--", resultado)
         self.assertEqual(sanitizar_texto_sql("Lara; DROP TABLE reports;--"), "Lara DROP TABLE reports")
         self.assertEqual(sanitizar_texto_sql(""), "")
         self.assertEqual(sanitizar_texto_sql(None), "")
@@ -43,7 +47,7 @@ class TestSanitizacionSQL(unittest.TestCase):
 
     def test_validar_fecha_sql(self):
         self.assertEqual(validar_fecha_sql("2026-09-23"), "2026-09-23")
-        self.assertEqual(validar_fecha_sql("2026-09-23' OR 1=1"), "2026-09-23")
+        self.assertEqual(validar_fecha_sql("2026-09-23' OR 1=1"), "")
         self.assertEqual(validar_fecha_sql("mal_formato"), "")
 
 

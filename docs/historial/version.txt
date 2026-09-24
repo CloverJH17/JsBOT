@@ -19,7 +19,7 @@ Ubicación      : San Felipe, Yaracuy, Venezuela
   - Escape de contenido no confiable en el HTML del PDF.
   - Validación de representante antes de abrir el formulario de usuario.
 • SUITE:
-  - 505 métodos de prueba detectados; la verificación completa queda sujeta al informe final de ejecución.
+  - 505 métodos de prueba recolectados; ejecución segura por archivo completada sin fallos: 504 passed y 1 skipped por dependencia externa de validación documental.
   - Las expectativas antiguas del sanitizador SQL se actualizaron a la política estricta allowlist.
 
 --------------------------------------------------------------------------------

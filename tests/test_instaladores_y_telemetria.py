@@ -2,13 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 ===============================================================================
-TEST SUITE: INSTALADORES ONE-LINE Y TELEMETRÍA CLOUD (JsBOT v5.1.0)
+TEST SUITE: INSTALADORES AUTÓNOMOS Y VERIFICACIÓN DE PRIVACIDAD / SEMVER
 ===============================================================================
 Pruebas unitarias para:
-1. Recolección de metadatos de sistema e identificación de máquina.
-2. Tolerancia a fallos offline y resiliencia asíncrona de telemetría.
-3. Coherencia SemVer triple (version.py, settings.json, docs/version.txt).
-4. Integridad de los instaladores autónomos y desinstaladores (Windows y Linux).
+1. Coherencia SemVer dinámica entre modulos/version.py, settings.json y docs.
+2. Integridad de los instaladores autónomos y desinstaladores (Windows y Linux).
+3. Verificación de privacidad: ausencia total de módulos o hooks de telemetría remota.
 ===============================================================================
 """
 
@@ -21,72 +20,27 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-from modulos.version import __version__
-from modulos.telemetria import (
-    obtener_identificador_maquina,
-    obtener_metadatos_sistema,
-    despachar_evento_asincrono,
-    registrar_evento_instalacion,
-    registrar_evento_inicio,
-    registrar_evento_desinstalacion
-)
+from modulos.version import __version__, ETIQUETA_VERSION
 
-class TestInstaladoresYTelemetria(unittest.TestCase):
-    
-    def test_metadatos_sistema_completitud(self):
-        """Valida que la recolección de metadatos del sistema sea completa y segura."""
-        meta = obtener_metadatos_sistema()
-        
-        campos_requeridos = [
-            "marca_temporal",
-            "id_maquina",
-            "equipo",
-            "usuario",
-            "sistema_operativo",
-            "version_jsbot",
-            "python_version"
-        ]
-        for campo in campos_requeridos:
-            self.assertIn(campo, meta, f"El campo {campo} debe estar presente en los metadatos")
-            self.assertIsNotNone(meta[campo], f"El campo {campo} no puede ser nulo")
-        
-        self.assertEqual(meta["version_jsbot"], "v5.2.0")
 
-    def test_identificador_maquina_estabilidad(self):
-        """Valida que el identificador anónimo de máquina sea consistente y tenga formato hash."""
-        id1 = obtener_identificador_maquina()
-        id2 = obtener_identificador_maquina()
-        self.assertEqual(id1, id2)
-        self.assertGreaterEqual(len(id1), 8)
+class TestInstaladoresYVersion(unittest.TestCase):
 
-    def test_telemetria_tolerancia_fallos_offline(self):
-        """Valida que el envío de eventos sea 100% tolerante a fallos de red sin excepciones."""
-        try:
-            despachar_evento_asincrono("TEST_OFFLINE", "Simulación sin internet", url_override="http://127.0.0.1:59999/dummy")
-            registrar_evento_instalacion(url_override="http://127.0.0.1:59999/dummy")
-            registrar_evento_inicio(modo="TEST")
-            registrar_evento_desinstalacion(url_override="http://127.0.0.1:59999/dummy")
-        except Exception as e:
-            self.fail(f"La telemetría no debe arrojar excepciones ante fallas de red: {e}")
+    def test_coherencia_version_dinamica(self):
+        """Valida la coherencia estricta de versión entre version.py, settings.json y docs."""
+        self.assertTrue(__version__, "La versión no debe estar vacía")
+        self.assertEqual(ETIQUETA_VERSION, f"v{__version__}")
 
-    def test_coherencia_version_triple_v5(self):
-        """Valida la coherencia estricta de versión v5.2.0 entre version.py, settings.json y docs."""
-        # 1. version.py
-        self.assertEqual(__version__, "5.2.0")
-        
-        # 2. settings.json
+        # 1. settings.json
         settings_path = os.path.join(BASE_DIR, "config", "settings.json")
         with open(settings_path, "r", encoding="utf-8") as f:
             settings = json.load(f)
-        self.assertEqual(settings["app"]["version"], "5.2.0")
-        self.assertIn("telemetria", settings)
-        self.assertTrue(settings["telemetria"]["activa"])
-        
-        # 3. docs/version.txt
+        self.assertEqual(settings["app"]["version"], __version__)
+
+        # 2. docs/version.txt
         docs_path = os.path.join(BASE_DIR, "docs", "version.txt")
         with open(docs_path, "r", encoding="utf-8") as f:
             docs_content = f.read()
-        self.assertIn("[v5.2.0]", docs_content)
+        self.assertIn(f"[{ETIQUETA_VERSION}]", docs_content)
 
     def test_archivos_instaladores_existencia_y_estructura(self):
         """Valida la presencia y estructura esencial de los instaladores y desinstaladores."""
@@ -95,27 +49,50 @@ class TestInstaladoresYTelemetria(unittest.TestCase):
         self.assertTrue(os.path.exists(ps1_path))
         with open(ps1_path, "r", encoding="utf-8") as f:
             ps1_content = f.read()
-        self.assertIn("JsBOT RPA v5.2.0", ps1_content)
         self.assertIn("$InstallDir", ps1_content)
         self.assertIn("JsBOT.lnk", ps1_content)
         self.assertIn("jsbot.cmd", ps1_content)
-        
+
         # 2. install.sh
         sh_path = os.path.join(BASE_DIR, "install.sh")
         self.assertTrue(os.path.exists(sh_path))
         with open(sh_path, "r", encoding="utf-8") as f:
             sh_content = f.read()
-        self.assertIn("JsBOT RPA v5.2.0", sh_content)
         self.assertIn("INSTALL_DIR", sh_content)
         self.assertIn("jsbot.desktop", sh_content)
         self.assertIn("~/.local/bin/jsbot", sh_content)
-        
-        # 3. uninstall.ps1 & uninstall.sh
+
+        # 3. scripts/instalar.sh
+        instalar_sh_path = os.path.join(BASE_DIR, "scripts", "instalar.sh")
+        self.assertTrue(os.path.exists(instalar_sh_path))
+        with open(instalar_sh_path, "r", encoding="utf-8") as f:
+            instalar_content = f.read()
+        self.assertIn("ETIQUETA_VERSION", instalar_content)
+
+        # 4. uninstall.ps1 & uninstall.sh
         self.assertTrue(os.path.exists(os.path.join(BASE_DIR, "uninstall.ps1")))
         self.assertTrue(os.path.exists(os.path.join(BASE_DIR, "uninstall.sh")))
-        
-        # 4. docs/telemetria_google_sheets.md
-        self.assertTrue(os.path.exists(os.path.join(BASE_DIR, "docs", "telemetria_google_sheets.md")))
+
+    def test_ausencia_total_telemetria_remota(self):
+        """Valida que la telemetría remota esté completamente eliminada por privacidad y seguridad."""
+        # 1. El módulo telemetria.py no debe existir
+        telemetria_py = os.path.join(BASE_DIR, "modulos", "telemetria.py")
+        self.assertFalse(os.path.exists(telemetria_py), "modulos/telemetria.py debe haber sido eliminado")
+
+        # 2. settings.json no debe tener sección de telemetría
+        settings_path = os.path.join(BASE_DIR, "config", "settings.json")
+        with open(settings_path, "r", encoding="utf-8") as f:
+            settings = json.load(f)
+        self.assertNotIn("telemetria", settings, "settings.json no debe contener sección telemetria")
+
+        # 3. Ni install ni uninstall deben invocar telemetria
+        for fname in ["install.ps1", "install.sh", "uninstall.ps1", "uninstall.sh", "main.py"]:
+            fpath = os.path.join(BASE_DIR, fname)
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.assertNotIn("from modulos.telemetria", content, f"{fname} no debe importar telemetria")
+            self.assertNotIn("registrar_evento", content, f"{fname} no debe invocar eventos de telemetria")
+
 
 if __name__ == "__main__":
     unittest.main()

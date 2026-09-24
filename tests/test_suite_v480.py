@@ -26,7 +26,7 @@ from modulos.generador_planilla import generar_planilla_desde_actividad_infoapp
 class TestSuiteV480(unittest.TestCase):
 
     def test_01_consistencia_version_v480(self):
-        """Verifica que la versión 4.10.0 esté perfectamente sincronizada."""
+        """Verifica que la versión actual esté sincronizada con sus manifestos."""
         current_v = ver.__version__
         self.assertEqual(ver.ETIQUETA_VERSION, f"v{current_v}")
         

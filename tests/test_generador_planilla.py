@@ -229,6 +229,17 @@ class TestGeneracionPlanillaReal(unittest.TestCase):
         self.assertIn(" | CE | ", todo)
         self.assertIn("---", todo)          # correo placeholder
 
+    def test_participante_con_f_nacimiento_se_imprime_correctamente(self):
+        """Valida que un participante con clave 'f_nacimiento' se imprima en la planilla ODS."""
+        part = {
+            "nombre": "Carlos", "apellido": "Gómez", "cedula": "20111222",
+            "f_nacimiento": "2005-11-20", "genero": "M", "telefono": "0416-9998877"
+        }
+        ruta = self._generar([part])
+        _, textos = self._leer_filas(ruta)
+        todo = "\n".join(textos)
+        self.assertIn("2005-11-20", todo)
+
     def test_sin_participantes_no_genera_nada(self):
         fd, ruta = tempfile.mkstemp(suffix=".ods")
         os.close(fd)

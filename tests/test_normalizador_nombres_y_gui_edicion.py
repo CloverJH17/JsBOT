@@ -171,15 +171,21 @@ class TestAperturaAsistidaYRecarga(unittest.TestCase):
         app.winfo_height = MagicMock(return_value=600)
 
         accion_ejecutada = []
-        with patch.dict("sys.modules", {"CTkMessagebox": None}):
-            with patch("customtkinter.CTkToplevel"):
-                app._mostrar_modal_mensaje(
-                    titulo="Sin registros válidos",
-                    mensaje="Mensaje de prueba",
-                    tipo="aviso",
-                    boton_accion_texto="✎ Abrir en Excel / Calc",
-                    accion_callback=lambda: accion_ejecutada.append(True)
-                )
+        fake_messagebox = MagicMock()
+        fake_messagebox.return_value.get.return_value = "Cerrar"
+        fake_module = MagicMock()
+        fake_module.CTkMessagebox = fake_messagebox
+        with patch.dict("sys.modules", {"CTkMessagebox": fake_module}):
+            app._mostrar_modal_mensaje(
+                titulo="Sin registros válidos",
+                mensaje="Mensaje de prueba",
+                tipo="aviso",
+                boton_accion_texto="✎ Abrir en Excel / Calc",
+                accion_callback=lambda: accion_ejecutada.append(True)
+            )
+
+        fake_messagebox.assert_called_once()
+        self.assertEqual(accion_ejecutada, [])
 
 
 if __name__ == "__main__":

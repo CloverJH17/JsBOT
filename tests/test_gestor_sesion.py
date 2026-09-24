@@ -22,6 +22,7 @@ import sys
 import json
 import tempfile
 import unittest
+import shutil
 from unittest.mock import patch
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -49,6 +50,7 @@ class _Aislado(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
         self.patches = [
             patch.object(gs, "CONFIG_DIR", self.tmp),
             patch.object(gs, "LOGS_DIR", self.tmp),
@@ -56,6 +58,7 @@ class _Aislado(unittest.TestCase):
             patch.object(gs, "CONFIG_SERV_PATH", os.path.join(self.tmp, "config_servicios.json")),
             patch.object(gs, "SESSION_STATE_FILE", os.path.join(self.tmp, "session_state.json")),
             patch.object(gs, "SESSION_STATE_SERV_FILE", os.path.join(self.tmp, "session_state_servicios.json")),
+            patch.object(gs, "DB_FILE", os.path.join(self.tmp, "jsbot.db")),
         ]
         for p in self.patches:
             p.start()
